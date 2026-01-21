@@ -7,7 +7,7 @@ object Elaborate extends App {
             // see https://github.com/llvm/circt/blob/main/docs/VerilogGeneration.md
             "disallowLocalVariables",
             "disallowPackedArrays",
-            "locationInfoStyle=wrapInAtSquareBracket",
+            "locationInfoStyle=wrapInAtSquareBracket"
         ).reduce(_ + "," + _)
     )
     circt.stage.ChiselStage.emitSystemVerilogFile(new MySyncReadMem, args, firtoolOptions)
