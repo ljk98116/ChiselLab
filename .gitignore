@@ -2,4 +2,5 @@
 out
 .mill-version
 build/**
+build_sim/**
 verilog/**
