@@ -1,5 +1,5 @@
 .bsp
 out
 .mill-version
-build
-verilog
+build/**
+verilog/**
