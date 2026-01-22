@@ -3,6 +3,7 @@
 #            		   dpicpp   -> obj_file
 PROJ=MyCPU
 ARCH=RV32E
+TOP=DualPortSram2R1W
 
 CC = g++
 VERILATOR = verilator
@@ -54,7 +55,7 @@ cpp: $(VSRC)
 	@mkdir $(OBJ_DIR)
 	$(VERILATOR) $(VERILATOR_FLAGS) \
 	--cc $(VSRC)  \
-	--top MySyncReadMem \
+	--top $(TOP) \
 	--Mdir $(OBJ_DIR)
 
 .PHONY: sim_cpp
@@ -63,14 +64,14 @@ sim_cpp: $(VSRC)
 	@mkdir $(SIM_OBJ_DIR)
 	$(VERILATOR) $(VERILATOR_FLAGS) $(SIMFLAGS) \
 	--cc $(VSRC)  \
-	--top MySyncReadMem \
+	--top $(TOP) \
 	--Mdir $(SIM_OBJ_DIR)
 
 $(TARGET): $(VERILATOR_CSRC)
 	$(CC) $(CXXFLAG) $(LDFLAGS) -o $@ $(VERILATOR_CSRC) $(CXXSRC)
 
 $(SIM_TARGET): $(VERILATOR_SIM_CSRC)
-	$(CC) $(CXXFLAG) $(LDFLAGS) -o $@ $(VERILATOR_SIM_CSRC) $(CXXSRC)
+	$(CC) $(CXXFLAG) -DSIMFLAG=1 $(LDFLAGS) -o $@ $(VERILATOR_SIM_CSRC) $(CXXSRC)
 
 .PHONY: clean
 clean:

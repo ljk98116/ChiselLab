@@ -1,2 +1,2 @@
-mem_32x64.sv
-MySyncReadMem.sv
+./BlackBoxDualPortSram2R1W.v
+DualPortSram2R1W.sv
