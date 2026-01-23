@@ -1,5 +1,8 @@
 import MyCPU.utils._
+import MyCPU._
+
 import chisel3._
+
 object Elaborate extends App {
     val firtoolOptions = Array(
         "--lowering-options=" + List(
@@ -10,5 +13,5 @@ object Elaborate extends App {
             "locationInfoStyle=wrapInAtSquareBracket"
         ).reduce(_ + "," + _)
     )
-    circt.stage.ChiselStage.emitSystemVerilogFile(new DualPortSram2R1W("Test2R1W", 32, 32), args, firtoolOptions)
+    circt.stage.ChiselStage.emitSystemVerilogFile(new PRF, args, firtoolOptions)
 }

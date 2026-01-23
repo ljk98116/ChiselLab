@@ -1,12 +1,15 @@
 `timescale 1ns/1ps
 
+`include "config.v"
+
 `ifdef SIMFLAG
 // DPI-C
 import "DPI-C" function void DualPortSram1R1W_write(input string label, input longint waddr, input longint wmask, input longint wdata);
 import "DPI-C" function longint DualPortSram1R1W_read(input string label, input longint raddr);
 `endif
 
-module DualPortSram1R1W #(
+// DEPTH x DATA_WIDTH
+module BlackBoxDualPortSram1R1W #(
     parameter ADDR_WIDTH = 8,
     parameter DATA_WIDTH = 32,
     parameter LABEL = ""
@@ -22,7 +25,7 @@ module DualPortSram1R1W #(
     output [DATA_WIDTH - 1: 0] rdata
 );
 `ifndef SIMFLAG
-    reg [DATA_WIDTH - 1 : 0] mem[0: 2 ** ADDR_WIDTH - 1];
+    reg [DATA_WIDTH - 1 : 0] mem[0 : 2 ** ADDR_WIDTH - 1];
     reg [DATA_WIDTH - 1 : 0] dout;
     always @(posedge clk) begin
         if(!rst) begin
@@ -44,7 +47,7 @@ module DualPortSram1R1W #(
     assign rdata = dout;
 `else
     reg [DATA_WIDTH - 1 : 0] dout;
-    always @(posedge clock) begin
+    always @(posedge clk) begin
         if(!rst) begin
             integer i;
             for(i=0;i<2 ** ADDR_WIDTH;i=i+1) begin
@@ -63,6 +66,7 @@ module DualPortSram1R1W #(
     end
     assign rdata = dout;
 `endif
+
 endmodule
 
 
