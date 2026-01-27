@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 
-`include "config.v"
+//`include "config.v"
 
 `ifdef SIMFLAG
 // DPI-C
@@ -27,7 +27,7 @@ module BlackBoxDualPortSram2R1W #(
     output [DATA_WIDTH - 1: 0] rdata0,
     output [DATA_WIDTH - 1: 0] rdata1    
 );
-
+integer i;
 `ifndef SIMFLAG
     reg [DATA_WIDTH - 1 : 0] mem0 [0 : 2 ** ADDR_WIDTH - 1];
     reg [DATA_WIDTH - 1 : 0] mem1 [0 : 2 ** ADDR_WIDTH - 1];
@@ -36,7 +36,6 @@ module BlackBoxDualPortSram2R1W #(
     reg [DATA_WIDTH - 1 : 0] dout1;
     always @(posedge clk) begin
         if(!rst) begin
-            integer i;
             for(i=0;i<2 ** ADDR_WIDTH;i=i+1) begin
                 mem0[i] <= 0;
                 mem1[i] <= 0;
@@ -44,7 +43,7 @@ module BlackBoxDualPortSram2R1W #(
             dout0 <= 0;
         end
         else begin
-            if(wen) begin
+            if((en0 | en1) & wen) begin
                 mem0[waddr] <= (mem0[waddr] & ~wmask) | (wdata & wmask); // clear and reset
                 mem1[waddr] <= (mem1[waddr] & ~wmask) | (wdata & wmask); // clear and reset
             end

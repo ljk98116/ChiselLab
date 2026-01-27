@@ -75,3 +75,10 @@ class PipelineRegisterStage [T<: Data] (gen: T) extends Module {
 
     io.out := stageReg;
 }
+
+object StageConnect {
+    def apply[T <: Data](left: DecoupledIO[T], right: DecoupledIO[T]) {
+        val arch = "riscv32E";
+        left <> right;
+    }
+}
