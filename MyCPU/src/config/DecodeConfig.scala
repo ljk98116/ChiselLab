@@ -64,8 +64,8 @@ case class RVUJTypeInstPattern(
     def bitPat: BitPat = imm(20) ## imm(10, 1) ## imm(11) ## imm(19, 12) ## rd ## opcode;
 }
 
-object Imm extends DecodeField[DecodePattern, UInt] {
-    def name: String = "Imm"
+object ImmField extends DecodeField[DecodePattern, UInt] {
+    def name: String = "ImmField"
     def chiselType: UInt = UInt(CPUConfig.DATA_WIDTH.W)
     def genTable(op: DecodePattern): BitPat = {
         if(op.isInstanceOf[RVITypeInstPattern]) {
@@ -87,8 +87,8 @@ object Imm extends DecodeField[DecodePattern, UInt] {
     }
 }
 
-object Rs1 extends DecodeField[DecodePattern, UInt] {
-    def name: String = "Rs1"
+object Rs1Field extends DecodeField[DecodePattern, UInt] {
+    def name: String = "Rs1Field"
     def chiselType: UInt = UInt(CPUConfig.AREG_WIDTH.W)
     def genTable(op: DecodePattern): BitPat = {
         if(op.isInstanceOf[RVRTypeInstPattern]) {
@@ -107,8 +107,8 @@ object Rs1 extends DecodeField[DecodePattern, UInt] {
     }
 }
 
-object Rs2 extends DecodeField[DecodePattern, UInt] {
-    def name: String = "Rs2"
+object Rs2Field extends DecodeField[DecodePattern, UInt] {
+    def name: String = "Rs2Field"
     def chiselType: UInt = UInt(CPUConfig.AREG_WIDTH.W)
     def genTable(op: DecodePattern): BitPat = {
         if(op.isInstanceOf[RVRTypeInstPattern]) {
@@ -124,8 +124,8 @@ object Rs2 extends DecodeField[DecodePattern, UInt] {
     }
 }
 
-object Rd extends DecodeField[DecodePattern, UInt] {
-    def name: String = "Rd"
+object RdField extends DecodeField[DecodePattern, UInt] {
+    def name: String = "RdField"
     def chiselType: UInt = UInt(CPUConfig.AREG_WIDTH.W)
     def genTable(op: DecodePattern): BitPat = {
         if(op.isInstanceOf[RVRTypeInstPattern]) {
@@ -141,6 +141,63 @@ object Rd extends DecodeField[DecodePattern, UInt] {
             return op.asInstanceOf[RVUJTypeInstPattern].rd
         }
         return BitPat.N(CPUConfig.AREG_WIDTH)
+    }
+}
+
+object OpcodeField extends DecodeField[DecodePattern, UInt] {
+    def name: String = "OpcodeField"
+    def chiselType: UInt = UInt(7.W)
+    def genTable(op: DecodePattern): BitPat = {
+        if(op.isInstanceOf[RVRTypeInstPattern]) {
+            return op.asInstanceOf[RVRTypeInstPattern].opcode
+        }        
+        if(op.isInstanceOf[RVITypeInstPattern]) {
+            return op.asInstanceOf[RVITypeInstPattern].opcode
+        }
+        if(op.isInstanceOf[RVUTypeInstPattern]) {
+            return op.asInstanceOf[RVUTypeInstPattern].opcode
+        }
+        if(op.isInstanceOf[RVUJTypeInstPattern]) {
+            return op.asInstanceOf[RVUJTypeInstPattern].opcode
+        }
+        if(op.isInstanceOf[RVSTypeInstPattern]) {
+            return op.asInstanceOf[RVSTypeInstPattern].opcode
+        }
+        if(op.isInstanceOf[RVSBTypeInstPattern]) {
+            return op.asInstanceOf[RVSBTypeInstPattern].opcode
+        }
+        return BitPat.N(7)
+    }
+}
+
+object Funct3Field extends DecodeField[DecodePattern, UInt] {
+    def name: String = "Funct3Field"
+    def chiselType: UInt = UInt(3.W)
+    def genTable(op: DecodePattern): BitPat = {
+        if(op.isInstanceOf[RVRTypeInstPattern]) {
+            return op.asInstanceOf[RVRTypeInstPattern].funct3
+        }        
+        if(op.isInstanceOf[RVITypeInstPattern]) {
+            return op.asInstanceOf[RVITypeInstPattern].funct3
+        }
+        if(op.isInstanceOf[RVSTypeInstPattern]) {
+            return op.asInstanceOf[RVSTypeInstPattern].funct3
+        }
+        if(op.isInstanceOf[RVSBTypeInstPattern]) {
+            return op.asInstanceOf[RVSBTypeInstPattern].funct3
+        }
+        return BitPat.N(3)
+    }
+}
+
+object Funct7Field extends DecodeField[DecodePattern, UInt] {
+    def name: String = "Funct7Field"
+    def chiselType: UInt = UInt(7.W)
+    def genTable(op: DecodePattern): BitPat = {
+        if(op.isInstanceOf[RVRTypeInstPattern]) {
+            return op.asInstanceOf[RVRTypeInstPattern].funct7
+        }        
+        return BitPat.N(7)
     }
 }
 

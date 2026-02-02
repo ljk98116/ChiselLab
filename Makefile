@@ -3,7 +3,7 @@
 #            		   dpicpp   -> obj_file
 PROJ=MyCPU
 ARCH=RV32E
-TOP=PRF
+TOP=DecodeStage
 
 CC = g++
 VERILATOR = verilator

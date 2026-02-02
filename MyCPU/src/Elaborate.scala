@@ -1,6 +1,6 @@
 import MyCPU.utils._
 import MyCPU._
-
+import MyCPU.frontend._
 import chisel3._
 
 object Elaborate extends App {
@@ -13,5 +13,5 @@ object Elaborate extends App {
             "locationInfoStyle=wrapInAtSquareBracket"
         ).reduce(_ + "," + _)
     )
-    circt.stage.ChiselStage.emitSystemVerilogFile(new PRF, args, firtoolOptions)
+    circt.stage.ChiselStage.emitSystemVerilogFile(new DecodeStage, args, firtoolOptions)
 }

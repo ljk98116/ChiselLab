@@ -10,10 +10,9 @@ import MyCPU.io._
 class DecodeStage extends Module {
     val io = IO(new Bundle {
         val insts_i = Input(Vec(CPUConfig.FETCH_WIDTH, UInt(CPUConfig.ADDR_WIDTH.W)))
-        val decodeRes_o = Output(Vec(CPUConfig.FETCH_WIDTH, new DecodeResBundle))
+        val decodeRes_o = Output(Vec(CPUConfig.FETCH_WIDTH, new DecodeResultBundle))
     });
- 
-    
+
     val patterns: Seq[DecodePattern] = Seq(
         RVUTypeInstPattern(opcode = Opcode.LUI), 
         RVUTypeInstPattern(opcode = Opcode.AUIPC),
@@ -23,7 +22,7 @@ class DecodeStage extends Module {
     );
 
     val fields = Seq(
-        Imm, Rs1, Rs2, Rd,
+        ImmField, Rs1Field, Rs2Field, RdField, OpcodeField, Funct3Field, Funct7Field
     )
 
     val decoderTable: DecodeTable[DecodePattern] = new DecodeTable(
@@ -31,6 +30,21 @@ class DecodeStage extends Module {
         fields
     )
 
-    var decodeResult = decoderTable.decode(0.U)
-    var imm = decodeResult(Imm)
+    var decodeRes = WireInit(VecInit(
+        Seq.fill(CPUConfig.FETCH_WIDTH)(0.U.asTypeOf(new DecodeResultBundle))
+    ))
+
+    for(i <- 0 until CPUConfig.FETCH_WIDTH) {
+        var decodeResult = decoderTable.decode(io.insts_i(i))
+
+        decodeRes(i).rs1 := decodeResult(Rs1Field)
+        decodeRes(i).rs2 := decodeResult(Rs2Field)
+        decodeRes(i).imm := decodeResult(ImmField)
+        decodeRes(i).rd := decodeResult(RdField)
+        decodeRes(i).opcode := decodeResult(OpcodeField)
+        decodeRes(i).funct3 := decodeResult(Funct3Field)
+        decodeRes(i).funct7 := decodeResult(Funct7Field)
+    }
+
+    io.decodeRes_o := decodeRes
 }
