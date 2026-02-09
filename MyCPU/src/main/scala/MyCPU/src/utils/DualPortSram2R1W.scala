@@ -3,11 +3,11 @@ package MyCPU.utils
 import chisel3._
 import chisel3.util._
 
-class BlackBoxDualPortSram2R1W(LABEL: String, ADDR_WIDTH: Int, DATA_WIDTH: Int) extends ExtModule(Map(
+class BlackBoxDualPortSram2R1W(LABEL: String, ADDR_WIDTH: Int, DATA_WIDTH: Int) extends BlackBox(Map(
     "ADDR_WIDTH" -> ADDR_WIDTH,
     "DATA_WIDTH" -> DATA_WIDTH,
     "LABEL"-> LABEL
-)){
+)) with HasBlackBoxPath{
     val clk = IO(Input(Bool()));
     val rst = IO(Input(Bool()));
     val raddr0 = IO(Input(UInt(ADDR_WIDTH.W)));
@@ -21,7 +21,7 @@ class BlackBoxDualPortSram2R1W(LABEL: String, ADDR_WIDTH: Int, DATA_WIDTH: Int) 
     val rdata0 = IO(Output(UInt(DATA_WIDTH.W)));
     val rdata1 = IO(Output(UInt(DATA_WIDTH.W)));
 
-    addPath("./MyCPU/src/resources/utils/BlackBoxDualPortSram2R1W.v")
+    addPath("./MyCPU/src/main/resources/vsrc/utils/BlackBoxDualPortSram2R1W.v")
 }
 
 class DualPortSram2R1W(LABEL: String, ADDR_WIDTH: Int, DATA_WIDTH: Int) extends Module {

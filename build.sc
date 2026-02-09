@@ -1,39 +1,24 @@
-package build
-
+import bloop.config.Config.Scala
 import mill._
 import mill.scalalib._
-import mill.util.bsp._
 import mill.scalalib.scalafmt.ScalafmtModule
 import coursier.core.Repository
-import mill.api.Task.Simple
+import $ivy.`com.lihaoyi::mill-contrib-bloop:`
+import mill.bsp._
 
-// used for metals debugging
 object MyCPU extends ScalaModule with ScalafmtModule { m =>
-    def scalaVersion = "2.13.18"
+    def scalaVersion = "2.12.18"
     override def scalacOptions = Seq(
         "-language:reflectiveCalls",
         "-deprecation",
         "-feature",
         "-Xcheckinit"
     )
-    override def mvnDeps = Seq(
-        mvn"org.chipsalliance::chisel:7.7.0"
+    override def ivyDeps = Agg(
+        mvn"org.chipsalliance::chisel:5.3.0",
+        mvn"edu.berkeley.cs::rocketchip:1.2.6",
+        mvn"org.chipsalliance::firtool-resolver:2.0.1",
+        mvn"org.chipsalliance:llvm-firtool:1.140.0"
     )
-    override def scalacPluginMvnDeps = Seq(mvn"org.chipsalliance:::chisel-plugin:7.7.0")
-
-    object test extends ScalaTests with TestModule.ScalaTest with ScalafmtModule {
-        override def mvnDeps = m.mvnDeps() ++ Seq(
-            mvn"org.scalatest::scalatest::3.2.19",
-            // for formal flow in future
-            mvn"edu.berkeley.cs::chiseltest:6.0.0"
-        )
-    }
-
-    override def repositoriesTask = Task.Anon {
-        Seq(
-            coursier.MavenRepository("https://repo.scala-sbt.org/scalasbt/maven-releases"),
-            coursier.MavenRepository("https://oss.sonatype.org/content/repositories/releases"),
-            coursier.MavenRepository("https://oss.sonatype.org/content/repositories/snapshots")
-        ) ++ super.repositoriesTask()
-    }
+    override def scalacPluginIvyDeps = Agg(mvn"org.chipsalliance:::chisel-plugin:5.3.0")
 }

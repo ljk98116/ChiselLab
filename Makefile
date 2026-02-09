@@ -51,7 +51,8 @@ sim_model: verilog sim_cpp
 
 .PHONY: verilog
 verilog:
-	@mill -i $(PROJ).run Verilog --target-dir=./verilog/$(PROJ)
+	@mill $(PROJ).compile
+	@mill $(PROJ).runMain Elaborate --target-dir=./verilog/$(PROJ)
 	@rm -rf ./verilog/$(PROJ)/verification
 
 .PHONY: cpp
