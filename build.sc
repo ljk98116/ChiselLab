@@ -18,7 +18,7 @@ object MyCPU extends ScalaModule with ScalafmtModule { m =>
         mvn"org.chipsalliance::chisel:5.3.0",
         mvn"edu.berkeley.cs::rocketchip:1.2.6",
         mvn"org.chipsalliance::firtool-resolver:2.0.1",
-        mvn"org.chipsalliance:llvm-firtool:1.140.0"
+        // mvn"org.chipsalliance:llvm-firtool:1.140.0" useless
     )
     override def scalacPluginIvyDeps = Agg(mvn"org.chipsalliance:::chisel-plugin:5.3.0")
 }
