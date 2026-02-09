@@ -201,6 +201,15 @@ object Funct7Field extends DecodeField[DecodePattern, UInt] {
     }
 }
 
+object LatField extends DecodeField[DecodePattern, UInt] {
+    def name: String = "LatField"
+    def chiselType: UInt = UInt(3.W)
+    def genTable(op: DecodePattern): BitPat = {
+        // to do
+        return  BitPat.N(3)
+    }
+}
+
 object Opcode {
     val LUI: BitPat     = BitPat("b011 0111")
     val AUIPC: BitPat   = BitPat("b001 0111")
