@@ -2,6 +2,9 @@ import MyCPU.utils._
 import MyCPU._
 import MyCPU.frontend._
 import chisel3._
+import org.chipsalliance.cde.config._
+import MyCPU.config._
+import firtoolresolver.shaded.coursier.util.shaded.org.jsoup.Connection.Base
 
 object Elaborate extends App {
     val firtoolOptions = Array(
@@ -13,5 +16,6 @@ object Elaborate extends App {
             "locationInfoStyle=wrapInAtSquareBracket"
         ).reduce(_ + "," + _)
     )
+    implicit val p: Parameters = new BaseConfig
     circt.stage.ChiselStage.emitSystemVerilogFile(new DecodeStage, args, firtoolOptions)
 }

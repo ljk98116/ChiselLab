@@ -1,17 +1,33 @@
 package MyCPU.config
 
-object CacheConfig {
-    // icache
-    val icache_line_idx_width = 10; // 1KB x 16 x 4bytes = 64KB
-    val icache_way_idx_width = 2;
-    val icache_off_idx_width = 4;
-    val icache_tag_width = CPUConfig.ADDR_WIDTH - 2 - icache_way_idx_width - icache_off_idx_width - icache_line_idx_width; // 14 bits
-    val icache_line_data_num = 1 << icache_off_idx_width;
+import org.chipsalliance.cde.config._
 
-    //dcache
-    val dcache_line_idx_width = 10; // 1KB x 16 x 4bytes = 64KB
-    val dcache_way_idx_width = 2;
-    val dcache_off_idx_width = 4;
-    val dcache_tag_width = CPUConfig.ADDR_WIDTH - 2 - dcache_way_idx_width - dcache_off_idx_width - dcache_line_idx_width; // 14 bits
-    val dcache_line_data_num = 1 << dcache_off_idx_width;
-}
+case object icache_line_idx_width extends WidthConfig
+case object icache_way_idx_width extends WidthConfig
+case object icache_off_idx_width extends WidthConfig
+case object icache_tag_width extends WidthConfig
+case object icache_line_data_num extends WidthConfig
+
+case object dcache_line_idx_width extends WidthConfig
+case object dcache_way_idx_width extends WidthConfig
+case object dcache_off_idx_width extends WidthConfig
+case object dcache_tag_width extends WidthConfig
+case object dcache_line_data_num extends WidthConfig
+
+class CacheConfig(implicit p: Parameters) extends Config(
+    (site, here, up) => {
+        // icache
+        case icache_line_idx_width => 10; // 1KB x 16 x 4bytes = 64KB
+        case icache_way_idx_width => 2;
+        case icache_off_idx_width => 4;
+        case icache_tag_width => p(ADDR_WIDTH) - 2 - here(icache_way_idx_width) - here(icache_off_idx_width) - here(icache_line_idx_width); // 14 bits
+        case icache_line_data_num => 1 << here(icache_off_idx_width);
+
+        //dcache
+        case dcache_line_idx_width => 10; // 1KB x 16 x 4bytes = 64KB
+        case dcache_way_idx_width => 2;
+        case dcache_off_idx_width => 4;
+        case dcache_tag_width => p(ADDR_WIDTH) - 2 - here(dcache_way_idx_width) - here(dcache_off_idx_width) - here(dcache_line_idx_width); // 14 bits
+        case dcache_line_data_num => 1 << here(dcache_off_idx_width);
+    }
+)

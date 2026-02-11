@@ -6,8 +6,9 @@ import chisel3.util.experimental.decode._
 
 import MyCPU.config._
 import MyCPU.io._
+import org.chipsalliance.cde.config._
 
-case class RVRTypeInstPattern(
+case class RVRTypeInstPattern (
     val funct7: BitPat,
     val rs2: BitPat = BitPat.dontCare(5),
     val rs1: BitPat = BitPat.dontCare(5),
@@ -64,9 +65,14 @@ case class RVUJTypeInstPattern(
     def bitPat: BitPat = imm(20) ## imm(10, 1) ## imm(11) ## imm(19, 12) ## rd ## opcode;
 }
 
-object ImmField extends DecodeField[DecodePattern, UInt] {
+trait WithParaField extends DecodeField[DecodePattern, UInt] {
+    val p: Parameters = new BaseConfig
+}
+
+object ImmField extends WithParaField {
+    
     def name: String = "ImmField"
-    def chiselType: UInt = UInt(CPUConfig.DATA_WIDTH.W)
+    def chiselType: UInt = UInt(p(DATA_WIDTH).W)
     def genTable(op: DecodePattern): BitPat = {
         if(op.isInstanceOf[RVITypeInstPattern]) {
             return BitPat.N(20) ## op.asInstanceOf[RVITypeInstPattern].imm(11, 0)
@@ -83,13 +89,13 @@ object ImmField extends DecodeField[DecodePattern, UInt] {
         if(op.isInstanceOf[RVUJTypeInstPattern]) {
             return BitPat.N(11) ## op.asInstanceOf[RVUJTypeInstPattern].imm(20, 1) ## BitPat.N(1)
         }
-        return BitPat.N(CPUConfig.DATA_WIDTH)
+        return BitPat.N(p(DATA_WIDTH))
     }
 }
 
-object Rs1Field extends DecodeField[DecodePattern, UInt] {
+object Rs1Field extends WithParaField {
     def name: String = "Rs1Field"
-    def chiselType: UInt = UInt(CPUConfig.AREG_WIDTH.W)
+    def chiselType: UInt = UInt(p(AREG_WIDTH).W)
     def genTable(op: DecodePattern): BitPat = {
         if(op.isInstanceOf[RVRTypeInstPattern]) {
             return op.asInstanceOf[RVRTypeInstPattern].rs1
@@ -103,13 +109,13 @@ object Rs1Field extends DecodeField[DecodePattern, UInt] {
         if(op.isInstanceOf[RVSBTypeInstPattern]) {
             return op.asInstanceOf[RVSBTypeInstPattern].rs1
         }
-        return BitPat.N(CPUConfig.AREG_WIDTH)
+        return BitPat.N(p(AREG_WIDTH))
     }
 }
 
-object Rs2Field extends DecodeField[DecodePattern, UInt] {
+object Rs2Field extends WithParaField {
     def name: String = "Rs2Field"
-    def chiselType: UInt = UInt(CPUConfig.AREG_WIDTH.W)
+    def chiselType: UInt = UInt(p(AREG_WIDTH).W)
     def genTable(op: DecodePattern): BitPat = {
         if(op.isInstanceOf[RVRTypeInstPattern]) {
             return op.asInstanceOf[RVRTypeInstPattern].rs2
@@ -120,13 +126,13 @@ object Rs2Field extends DecodeField[DecodePattern, UInt] {
         if(op.isInstanceOf[RVSBTypeInstPattern]) {
             return op.asInstanceOf[RVSBTypeInstPattern].rs2
         }
-        return BitPat.N(CPUConfig.AREG_WIDTH)
+        return BitPat.N(p(AREG_WIDTH))
     }
 }
 
-object RdField extends DecodeField[DecodePattern, UInt] {
+object RdField extends WithParaField {
     def name: String = "RdField"
-    def chiselType: UInt = UInt(CPUConfig.AREG_WIDTH.W)
+    def chiselType: UInt = UInt(p(AREG_WIDTH).W)
     def genTable(op: DecodePattern): BitPat = {
         if(op.isInstanceOf[RVRTypeInstPattern]) {
             return op.asInstanceOf[RVRTypeInstPattern].rd
@@ -140,11 +146,11 @@ object RdField extends DecodeField[DecodePattern, UInt] {
         if(op.isInstanceOf[RVUJTypeInstPattern]) {
             return op.asInstanceOf[RVUJTypeInstPattern].rd
         }
-        return BitPat.N(CPUConfig.AREG_WIDTH)
+        return BitPat.N(p(AREG_WIDTH))
     }
 }
 
-object OpcodeField extends DecodeField[DecodePattern, UInt] {
+object OpcodeField extends WithParaField {
     def name: String = "OpcodeField"
     def chiselType: UInt = UInt(7.W)
     def genTable(op: DecodePattern): BitPat = {
@@ -170,7 +176,7 @@ object OpcodeField extends DecodeField[DecodePattern, UInt] {
     }
 }
 
-object Funct3Field extends DecodeField[DecodePattern, UInt] {
+object Funct3Field extends WithParaField {
     def name: String = "Funct3Field"
     def chiselType: UInt = UInt(3.W)
     def genTable(op: DecodePattern): BitPat = {
@@ -190,7 +196,7 @@ object Funct3Field extends DecodeField[DecodePattern, UInt] {
     }
 }
 
-object Funct7Field extends DecodeField[DecodePattern, UInt] {
+object Funct7Field extends WithParaField {
     def name: String = "Funct7Field"
     def chiselType: UInt = UInt(7.W)
     def genTable(op: DecodePattern): BitPat = {
@@ -201,7 +207,7 @@ object Funct7Field extends DecodeField[DecodePattern, UInt] {
     }
 }
 
-object LatField extends DecodeField[DecodePattern, UInt] {
+object LatField extends WithParaField {
     def name: String = "LatField"
     def chiselType: UInt = UInt(3.W)
     def genTable(op: DecodePattern): BitPat = {

@@ -1,14 +1,21 @@
 package MyCPU.config
+import org.chipsalliance.cde.config._
 
-object CPUConfig {
-    val FETCH_WIDTH = 4;
+trait WidthConfig extends Field[Int]
+case object FETCH_WIDTH extends WidthConfig
+case object DATA_WIDTH extends WidthConfig
+case object ADDR_WIDTH extends WidthConfig
+case object AREG_WIDTH extends WidthConfig
+case object PREG_WIDTH extends WidthConfig
+case object ROBID_WIDTH extends WidthConfig
 
-    val DATA_WIDTH = 32;
-    val ADDR_WIDTH = 32;
-
-    val AREG_WIDTH = 5;
-    val PREG_WIDTH = AREG_WIDTH + 2;
-    val ROBID_WIDTH = AREG_WIDTH + 2;
-    
-    
-}
+class BaseConfig extends Config(
+    (site, here, up) => {
+        case FETCH_WIDTH => 4
+        case DATA_WIDTH => 32
+        case ADDR_WIDTH => 32
+        case AREG_WIDTH => 5
+        case PREG_WIDTH => here(AREG_WIDTH) + 2
+        case ROBID_WIDTH => here(AREG_WIDTH) + 2
+    }
+)

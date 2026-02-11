@@ -40,6 +40,9 @@ VERILATOR_SIM_CSRC = $(wildcard $(SIM_OBJ_DIR)/*.cpp)
 TARGET = $(OBJ_DIR)/lib$(PROJ).so
 SIM_TARGET = $(SIM_OBJ_DIR)/lib$(PROJ)_sim.so
 
+# firtool path
+export PATH:=./firtool-1.43.0/bin:$(PATH)
+
 .PHONY: all
 all: model $(TARGET) sim_model $(SIM_TARGET)
 

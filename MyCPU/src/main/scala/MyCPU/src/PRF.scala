@@ -2,30 +2,31 @@ package MyCPU
 
 import chisel3._
 import chisel3.util._
+import org.chipsalliance.cde.config._
 
 import MyCPU.config._
 import MyCPU.io._
 import MyCPU.utils._
 
-class PRF extends Module {
+class PRF(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
-        val read_reqs = Input(Vec(CPUConfig.FETCH_WIDTH * 2, new PRFReadReq));
-        val write_reqs = Input(Vec(CPUConfig.FETCH_WIDTH, new PRFWriteReq));
-        val read_res = Output(Vec(CPUConfig.FETCH_WIDTH * 2, new PRFReadRes));
+        val read_reqs = Input(Vec(p(FETCH_WIDTH) * 2, new PRFReadReq));
+        val write_reqs = Input(Vec(p(FETCH_WIDTH), new PRFWriteReq));
+        val read_res = Output(Vec(p(FETCH_WIDTH) * 2, new PRFReadRes));
     });
 
     // Labels
-    val names = Seq.tabulate(CPUConfig.FETCH_WIDTH)(
+    val names = Seq.tabulate(p(FETCH_WIDTH))(
         t => "PRF_DualPortSram2R1W_" + t.toString()
     );
 
     // srams
-    var prf_sram_vec = Seq.tabulate(CPUConfig.FETCH_WIDTH)(
-        t => Module(new DualPortSram2R1W(names(t), CPUConfig.ADDR_WIDTH, CPUConfig.DATA_WIDTH))
-    );
+    var prf_sram_vec = Seq.tabulate(p(FETCH_WIDTH))(
+        t => Module(new DualPortSram2R1W(names(t), p(ADDR_WIDTH), p(DATA_WIDTH))
+    ))
 
     // connect
-    for(i <- 0 until CPUConfig.FETCH_WIDTH) {
+    for(i <- 0 until p(FETCH_WIDTH)) {
         prf_sram_vec(i).io.en0 := io.read_reqs(2 * i).en;
         prf_sram_vec(i).io.en1 := io.read_reqs(2 * i + 1).en;
 

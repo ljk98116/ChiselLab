@@ -1,16 +1,16 @@
-package MyCPU.frontend
-
+package MyCPU.frontend;
 import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.decode._
 
+import org.chipsalliance.cde.config._
 import MyCPU.config._
 import MyCPU.io._
 
-class DecodeStage extends Module {
+class DecodeStage(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
-        val insts_i = Input(Vec(CPUConfig.FETCH_WIDTH, UInt(CPUConfig.ADDR_WIDTH.W)))
-        val decodeRes_o = Output(Vec(CPUConfig.FETCH_WIDTH, new DecodeResultBundle))
+        val insts_i = Input(Vec(p(FETCH_WIDTH), UInt(p(ADDR_WIDTH).W)))
+        val decodeRes_o = Output(Vec(p(FETCH_WIDTH), new DecodeResultBundle))
     });
 
     val patterns: Seq[DecodePattern] = Seq(
@@ -31,10 +31,10 @@ class DecodeStage extends Module {
     )
 
     var decodeRes = WireInit(VecInit(
-        Seq.fill(CPUConfig.FETCH_WIDTH)(0.U.asTypeOf(new DecodeResultBundle))
+        Seq.fill(p(FETCH_WIDTH))(0.U.asTypeOf(new DecodeResultBundle))
     ))
 
-    for(i <- 0 until CPUConfig.FETCH_WIDTH) {
+    for(i <- 0 until p(FETCH_WIDTH)) {
         var decodeResult = decoderTable.decode(io.insts_i(i))
 
         decodeRes(i).rs1 := decodeResult(Rs1Field)

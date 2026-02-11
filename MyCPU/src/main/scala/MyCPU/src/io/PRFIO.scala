@@ -2,21 +2,21 @@ package MyCPU.io
 
 import chisel3._
 import chisel3.util._
-
+import org.chipsalliance.cde.config._
 import MyCPU.config._
 
-class PRFReadReq extends Bundle {
+class PRFReadReq(implicit p: Parameters) extends Bundle {
     val en = Bool();
-    val addr = UInt(CPUConfig.PREG_WIDTH.W);
+    val addr = UInt(p(PREG_WIDTH).W);
 }
 
-class PRFReadRes extends Bundle {
-    val data = UInt(CPUConfig.DATA_WIDTH.W);
+class PRFReadRes(implicit p: Parameters) extends Bundle {
+    val data = UInt(p(DATA_WIDTH).W);
 }
 
-class PRFWriteReq extends Bundle {
+class PRFWriteReq(implicit p: Parameters) extends Bundle {
     val en = Bool();
-    val addr = UInt(CPUConfig.PREG_WIDTH.W);
-    val mask = UInt(CPUConfig.DATA_WIDTH.W);
-    val data = UInt(CPUConfig.DATA_WIDTH.W);
+    val addr = UInt(p(PREG_WIDTH).W);
+    val mask = UInt(p(DATA_WIDTH).W);
+    val data = UInt(p(DATA_WIDTH).W);
 }
