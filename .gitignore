@@ -1,6 +1,7 @@
 .bsp
 out
-.mill-version
 build/**
 build_sim/**
 verilog/**
+.metals/**
+.vscode/**
