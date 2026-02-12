@@ -1,3 +1,6 @@
 [submodule "tools/cde"]
 	path = tools/cde
 	url = https://github.com/chipsalliance/cde.git
+[submodule "tools/diplomacy"]
+	path = tools/diplomacy
+	url = https://github.com/chipsalliance/diplomacy.git

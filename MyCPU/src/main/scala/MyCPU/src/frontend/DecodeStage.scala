@@ -14,15 +14,24 @@ class DecodeStage(implicit p: Parameters) extends Module {
     });
 
     val patterns: Seq[DecodePattern] = Seq(
-        RVUTypeInstPattern(opcode = Opcode.LUI), 
-        RVUTypeInstPattern(opcode = Opcode.AUIPC),
-        RVUJTypeInstPattern(opcode = Opcode.JAL),
-        RVITypeInstPattern(opcode = Opcode.JALR, funct3 = Funct3.JALR),
-        RVSBTypeInstPattern(opcode = Opcode.BEQ, funct3 = Funct3.BEQ),
+        RVUTypeInstPattern(opcode = OpcodeVal.LUI), 
+        RVUTypeInstPattern(opcode = OpcodeVal.AUIPC),
+        RVUJTypeInstPattern(opcode = OpcodeVal.JAL),
+        RVITypeInstPattern(opcode = OpcodeVal.JALR, funct3 = Funct3Val.JALR),
+        RVSBTypeInstPattern(opcode = OpcodeVal.BEQ, funct3 = Funct3Val.BEQ),
     );
 
+    val Imm: ImmField = new ImmField
+    val Rs1: Rs1Field = new Rs1Field
+    val Rs2: Rs2Field = new Rs2Field
+    val Rd: RdField = new RdField
+    val Opcode: OpcodeField = new OpcodeField
+    val Funct3: Funct3Field = new Funct3Field
+    val Funct7: Funct7Field = new Funct7Field
+    val Lat: LatField = new LatField
+
     val fields = Seq(
-        ImmField, Rs1Field, Rs2Field, RdField, OpcodeField, Funct3Field, Funct7Field
+        Imm, Rs1, Rs2, Rd, Opcode, Funct3, Funct7, Lat
     )
 
     val decoderTable: DecodeTable[DecodePattern] = new DecodeTable(
@@ -37,13 +46,13 @@ class DecodeStage(implicit p: Parameters) extends Module {
     for(i <- 0 until p(FETCH_WIDTH)) {
         var decodeResult = decoderTable.decode(io.insts_i(i))
 
-        decodeRes(i).rs1 := decodeResult(Rs1Field)
-        decodeRes(i).rs2 := decodeResult(Rs2Field)
-        decodeRes(i).imm := decodeResult(ImmField)
-        decodeRes(i).rd := decodeResult(RdField)
-        decodeRes(i).opcode := decodeResult(OpcodeField)
-        decodeRes(i).funct3 := decodeResult(Funct3Field)
-        decodeRes(i).funct7 := decodeResult(Funct7Field)
+        decodeRes(i).rs1 := decodeResult(Rs1)
+        decodeRes(i).rs2 := decodeResult(Rs2)
+        decodeRes(i).imm := decodeResult(Imm)
+        decodeRes(i).rd := decodeResult(Rd)
+        decodeRes(i).opcode := decodeResult(Opcode)
+        decodeRes(i).funct3 := decodeResult(Funct3)
+        decodeRes(i).funct7 := decodeResult(Funct7)
     }
 
     io.decodeRes_o := decodeRes
