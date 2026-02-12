@@ -9,7 +9,8 @@ import publish._
 import $ivy.`de.tototec::de.tobiasroeser.mill.vcs.version::0.4.0`
 import de.tobiasroeser.mill.vcs.version.VcsVersion
 
-import $file.tools.cde.common
+import $file.tools.cde.common.{CDEModule, CDEPublishModule}
+import $file.tools.diplomacy.common
 
 trait CDEPublishModule extends PublishModule {
   def publishVersion = de.tobiasroeser.mill.vcs.version.VcsVersion.vcsState().format()
@@ -27,7 +28,24 @@ trait CDEPublishModule extends PublishModule {
   // TODO: wait Chisel has mill-based release flow, let's copy&paste from it.
 }
 
+trait DiplomacyPublishModule extends PublishModule {
+  def publishVersion = de.tobiasroeser.mill.vcs.version.VcsVersion.vcsState().format()
+  def pomSettings = PomSettings(
+    description = artifactName(),
+    organization = "org.chipsalliance",
+    url = "https://www.github.com/chipsalliance/diplomacy",
+    licenses = Seq(License.`Apache-2.0`),
+    versionControl = VersionControl.github("chipsalliance", "diplomacy"),
+    developers = Seq(
+      Developer("terpstra", "Wesley W. Terpstra", "https://github.com/terpstra"),
+      Developer("hcook", "Henry Cook", "https://github.com/hcook"),
+      Developer("sequencer", "Jiuyang Liu", "https://github.com/sequencer")
+    )
+  )
+}
+
 object cde extends CDE
+object diplomacy extends DiplomacyModule
 
 trait CDE
   extends common.CDEModule
