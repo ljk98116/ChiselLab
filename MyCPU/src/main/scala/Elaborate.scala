@@ -4,7 +4,6 @@ import MyCPU.frontend._
 import chisel3._
 import org.chipsalliance.cde.config._
 import MyCPU.config._
-import firtoolresolver.shaded.coursier.util.shaded.org.jsoup.Connection.Base
 
 object Elaborate extends App {
     val firtoolOptions = Array(
