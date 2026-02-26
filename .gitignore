@@ -1,4 +1,5 @@
 .bsp
+.bloop
 out
 build/**
 build_sim/**

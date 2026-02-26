@@ -18,3 +18,12 @@ class ICacheReadReq(implicit p: Parameters) extends Bundle {
     val en = Bool();
     val addr = UInt(p(ADDR_WIDTH).W);
 }
+
+class ICacheBranchMetaInfo(implicit p: Parameters) extends Bundle {
+    val isCall = Bool()
+    val isReturn = Bool()
+    val isDirectJump = Bool()
+    val isIndirectJump = Bool()
+    val isConditionalBranch = Bool()
+    val isUnconditionalBranch = Bool()
+}

@@ -1,4 +1,5 @@
 package MyCPU.config
+
 import org.chipsalliance.cde.config._
 
 class WidthConfig extends Field[Int]

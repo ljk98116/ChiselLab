@@ -86,6 +86,9 @@ object MyCPU extends ScalaModule with ScalafmtModule { m =>
     override def moduleDeps: Seq[JavaModule] = Seq(
       cde, chisel
     )
+    override def scalacPluginIvyDeps = Agg(
+      v.sourcecode, ivy"org.chipsalliance:::chisel-plugin:6.7.0"
+    )
     override def sources: T[Seq[PathRef]] = T{
       Seq(
         PathRef(os.pwd / "tools" / "cde" / "cde" / "src"),

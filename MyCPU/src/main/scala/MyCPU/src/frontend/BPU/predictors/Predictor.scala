@@ -8,3 +8,11 @@ import org.chipsalliance.cde.config._
 import MyCPU.config._
 import MyCPU.io._
 
+// abstract class Predictor, which is the parent class of all predictors
+abstract class Predictor(implicit p: Parameters) extends Module {
+    val io = IO(new Bundle {
+        val req = Input(new PredictorReqInfo)
+        val update = Input(new PredictorUpdateInfo)
+        val predict = Output(new PredictorRespInfo)
+    })
+}
