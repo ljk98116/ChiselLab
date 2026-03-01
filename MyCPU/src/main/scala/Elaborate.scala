@@ -6,6 +6,7 @@ import org.chipsalliance.cde.config._
 import MyCPU.config._
 import MyCPU.frontend.BPU.L0BTB
 import MyCPU.frontend.BPU.L1BTB
+import MyCPU.frontend.BPU.L1BTBWbQueue
 
 object Elaborate extends App {
     val firtoolOptions = Array(
@@ -18,5 +19,5 @@ object Elaborate extends App {
         ).reduce(_ + "," + _)
     )
     implicit val p: Parameters = new BTBConfig ++ new BaseConfig
-    circt.stage.ChiselStage.emitSystemVerilogFile(new L1BTB, args, firtoolOptions)
+    circt.stage.ChiselStage.emitSystemVerilogFile(new L1BTBWbQueue(64), args, firtoolOptions)
 }

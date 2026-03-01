@@ -14,13 +14,14 @@ import org.chipsalliance.cde.config._
 // if l0 btb miss but l1 btb hit, use l1 btb target to update l0 btb and jump to l1 btb target
 // split tag, valid, target, isCall, isReturn arrays, update by index, hit by tag match and valid bit, 
 // good for timing, but may cause more area overhead than combined entry array
+
 // use L1 BTB WbQueue to update L0 BTB
 // random select victim way
 class L1BTB(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
         val req = Input(Vec(p(FETCH_WIDTH), new L1BTBReqInfo))
         val resp = Output(new L1BTBRespInfo)
-        val update = Input(new L1BTBUpdateInfo)
+        val update = Input(Vec(p(FETCH_WIDTH), new L1BTBUpdateInfo)) // no bank conflict update
     })
 
     val wayNum = p(UseFourWayBTB) match {
@@ -34,7 +35,7 @@ class L1BTB(implicit p: Parameters) extends Module {
     val offsetBits = p(L1BTBParam).btbOffsetBits
     val bankNum = p(L1BTBParam).btbBankNum
     
-    require(bankNum == p(FETCH_WIDTH), "bankNum must equal to fetch width")
+    require(bankNum == p(FETCH_WIDTH), "l1 btb bankNum must equal to fetch width")
 
     val bankBits = log2Ceil(bankNum)
 
@@ -45,7 +46,7 @@ class L1BTB(implicit p: Parameters) extends Module {
         SyncReadMem(EntryNum / bankNum / wayNum, UInt(3.W)) // valid, isCall, isReturn
     ))
     val l1_btb_target_array = Seq.fill(bankNum)(Seq.fill(wayNum)(SyncReadMem(EntryNum / bankNum / wayNum, UInt(p(ADDR_WIDTH).W))))
-
+    
     val reqValid = RegInit(VecInit(
         Seq.fill(p(FETCH_WIDTH))(false.B)
     ))
@@ -102,15 +103,15 @@ class L1BTB(implicit p: Parameters) extends Module {
         )
     ))
 
-    val updateValid = RegInit(false.B)
-    val updatePC = RegInit(0.U(p(ADDR_WIDTH).W))
-    val updateIsCall = RegInit(false.B)
-    val updateIsReturn = RegInit(false.B)
-    val updateTarget = RegInit(0.U(p(ADDR_WIDTH).W))
+    val updateValid = RegInit(VecInit(Seq.fill(bankNum)(false.B)))
+    val updatePC = RegInit(VecInit(Seq.fill(bankNum)(0.U(p(ADDR_WIDTH).W))))
+    val updateIsCall = RegInit(VecInit(Seq.fill(bankNum)(false.B)))
+    val updateIsReturn = RegInit(VecInit(Seq.fill(bankNum)(false.B)))
+    val updateTarget = RegInit(VecInit(Seq.fill(bankNum)(0.U(p(ADDR_WIDTH).W))))
 
     // read at if0 stage, use io.req
     for(j <- 0 until p(FETCH_WIDTH)) {
-        RAWMask(j) := io.req(j).pc === io.update.pc && io.update.valid && io.req(j).valid
+        RAWMask(j) := io.update(j).pc === io.req(j).pc && io.update(j).valid && io.req(j).valid
         for(i <- 0 until wayNum) {
             val tag = l1_btb_tag_array(j)(i).read(io.req(j).pc(indexBits + offsetBits - 1, offsetBits + bankBits))
             val prop = l1_btb_prop_array(j)(i).read(io.req(j).pc(indexBits + offsetBits - 1, offsetBits + bankBits))
@@ -121,8 +122,8 @@ class L1BTB(implicit p: Parameters) extends Module {
             // hit judge at if1 stage, use staged req
             hitVec(j)(i) := (reqValid(j) && valid && tag === reqPC(j)(p(ADDR_WIDTH)-1, indexBits + offsetBits + bankBits)) || RAWMask(j) 
             validVec(j)(i) := Mux(RAWMask(j), true.B, valid)
-            isCallVec(j)(i) := Mux(RAWMask(j), updateIsCall, isCall)
-            isReturnVec(j)(i) := Mux(RAWMask(j), updateIsReturn, isReturn)
+            isCallVec(j)(i) := Mux(RAWMask(j), updateIsCall(j), isCall)
+            isReturnVec(j)(i) := Mux(RAWMask(j), updateIsReturn(j), isReturn)
         }
     }
 
@@ -148,25 +149,25 @@ class L1BTB(implicit p: Parameters) extends Module {
     io.resp.isCall := Mux(io.resp.valid, isCallVec(hitIndex)(hitWayArray(hitIndex)), false.B)
     io.resp.isReturn := Mux(io.resp.valid, isReturnVec(hitIndex)(hitWayArray(hitIndex)), false.B)
     
-    updateValid := io.update.valid
-    updatePC := io.update.pc
-    updateIsCall := io.update.isCall
-    updateIsReturn := io.update.isReturn
-    updateTarget := io.update.target
+    updateValid := io.update.map(_.valid)
+    updatePC := io.update.map(_.pc)
+    updateIsCall := io.update.map(_.isCall)
+    updateIsReturn := io.update.map(_.isReturn)
+    updateTarget := io.update.map(_.target)
 
     val lfsr = chisel3.util.random.LFSR(4)
     val victimWay = WireInit(0.U(log2Ceil(wayNum).W))
     victimWay := lfsr(log2Ceil(wayNum) - 1, 0)
 
     // same update logic for hit and update
-    val updateBankId = io.update.pc(bankBits + offsetBits - 1, offsetBits)
     for(j <- 0 until bankNum) {
+        val updateBankId = io.update(j).pc(bankBits + offsetBits - 1, offsetBits)
         for(i <- 0 until wayNum) {
-            when(i.U === victimWay && j.U === updateBankId) {
-                when(updateValid) {
-                    l1_btb_tag_array(j)(i).write(io.update.pc(p(ADDR_WIDTH)-1, indexBits + offsetBits), io.update.pc(p(ADDR_WIDTH)-1, indexBits + offsetBits))
-                    l1_btb_prop_array(j)(i).write(io.update.pc(p(ADDR_WIDTH)-1, indexBits + offsetBits), Cat(1.U(1.W), io.update.isCall, io.update.isReturn))
-                    l1_btb_target_array(j)(i).write(io.update.pc(indexBits + offsetBits - 1, offsetBits + bankBits), io.update.target)
+            when(i.U === victimWay) {
+                when(io.update(j).valid) {
+                    l1_btb_tag_array(j)(i).write(io.update(j).pc(p(ADDR_WIDTH)-1, indexBits + offsetBits), io.update(j).pc(p(ADDR_WIDTH)-1, indexBits + offsetBits))
+                    l1_btb_prop_array(j)(i).write(io.update(j).pc(p(ADDR_WIDTH)-1, indexBits + offsetBits), Cat(1.U(1.W), io.update(j).isCall, io.update(j).isReturn))
+                    l1_btb_target_array(j)(i).write(io.update(j).pc(indexBits + offsetBits - 1, offsetBits + bankBits), io.update(j).target)
                 }
             }
         }
