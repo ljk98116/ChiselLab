@@ -1,84 +1,145 @@
 package MyCPU.frontend.BPU
 
-import chisel3._
-import chisel3.util._
-
-import MyCPU.config._
-import MyCPU.io._
+import chisel3._ 
+import chisel3.util._ 
+import MyCPU.config._ 
+import MyCPU.io._ 
 import org.chipsalliance.cde.config._
-
-// Multi Write/ Multi Read queue for L1 BTB update
-// multi bank write to regfile, combine read
-// write at commit stage, read fetch width's btb update info to update btb
+ 
+// Multi Write/ Multi Read queue for L1 BTB update 
+// multi bank write to regfile, combine read 
+// write at commit stage 0, 1, 2, read fetch width's btb update info to update btb 
+// enqReady is false when wb1 write not allowed
+// 1716MHz on asic
 class L1BTBWbQueue(size: Int)(implicit p: Parameters) extends Module {
     val io = IO(new Bundle{
         val enq = Input(Vec(p(FETCH_WIDTH), new L1BTBUpdateInfo))
         val deq = Output(Vec(p(FETCH_WIDTH), new L1BTBUpdateInfo))
-        val wr_able = Output(Bool())
+        val enqReady = Output(Bool())
+        val deqReady = Output(Bool()) // maybe useless
     })
 
     require(p(L1BTBParam).btbBankNum == p(FETCH_WIDTH), "l1 btb wbqueue bankNum must equal to fetch width")
     require(size % p(FETCH_WIDTH) == 0, "invalid l1 btb wbqueue size")
+
     val offsetBits = p(L1BTBParam).btbOffsetBits
     val ptrWidth = log2Ceil(size / p(FETCH_WIDTH))
-    val preBankSize = size / p(FETCH_WIDTH)
+    val perBankSize = size / p(FETCH_WIDTH)
+
     val bankNum = p(L1BTBParam).btbBankNum
     val _1stBankBits = log2Ceil(bankNum)
-    val _2ndBankBits = log2Ceil(p(FETCH_WIDTH))
 
-    require(_1stBankBits + offsetBits + _2ndBankBits < p(ADDR_WIDTH), "l1 btb wbqueue bank id overflow")
+    val queue_banks = Seq.fill(bankNum)(
+        SyncReadMem(size / bankNum, new L1BTBUpdateInfo)
+    )
 
-    // Queue banks: smaller per-bank storage size
-    val queue_banks = RegInit(VecInit(Seq.fill(p(FETCH_WIDTH))(
-        VecInit(Seq.fill(bankNum)(VecInit(Seq.fill(preBankSize)(0.U.asTypeOf(new L1BTBUpdateInfo))))))))
+    val tails = RegInit(VecInit(
+        Seq.fill(bankNum)(0.U(ptrWidth.W))
+    ))
 
-    // Read and write pointers
-    val read_ptrs = RegInit(VecInit(Seq.fill(p(FETCH_WIDTH))(0.U(ptrWidth.W))))
-    val write_ptrs = RegInit(VecInit(Seq.fill(p(FETCH_WIDTH))(0.U(ptrWidth.W))))
+    val heads = RegInit(VecInit(
+        Seq.fill(bankNum)(0.U(ptrWidth.W))
+    ))
 
-    // Data to be read from banks
-    val readData = WireInit(VecInit(Seq.fill(p(FETCH_WIDTH))(0.U.asTypeOf(new L1BTBUpdateInfo))))
+    val freeCounts = RegInit(VecInit(
+        Seq.fill(bankNum)((size / bankNum).U((ptrWidth + 1).W))
+    ))
 
-    // Writing Logic
-    for(i <- 0 until p(FETCH_WIDTH)) {
-        val prefix_sum = WireInit(VecInit(Seq.fill(p(FETCH_WIDTH))(0.U(ptrWidth.W))))
-        prefix_sum(0) := 0.U
+    val wr_able = WireInit(false.B)
 
-        // Calculate prefix sum for the 1st bank to determine which entries to write
-        for(j <- 1 until p(FETCH_WIDTH)) {
-            val _1stbankid = io.enq(j - 1).pc(_1stBankBits + offsetBits - 1, offsetBits)
-            prefix_sum(j) := prefix_sum(j-1) + (io.enq(j - 1).valid && _1stbankid === i.U)
+    // stage 0
+    val bankSel = Seq.fill(bankNum)(
+        WireInit(VecInit(
+            Seq.fill(p(FETCH_WIDTH))(false.B)
+        ))
+    )
+
+    val bankCount = Seq.fill(bankNum)(
+        WireInit(0.U((log2Ceil(p(FETCH_WIDTH)) + 1).W))
+    )
+
+    val stagedBankPrefix = Seq.fill(bankNum)(
+        RegInit(VecInit(
+            Seq.fill(p(FETCH_WIDTH))(0.U(log2Ceil(p(FETCH_WIDTH)).W))
+        ))
+    )
+
+    val stagedBankSelect = Seq.fill(bankNum)(
+        RegInit(VecInit(
+            Seq.fill(p(FETCH_WIDTH))(false.B)
+        ))
+    )
+
+    val stagedBankCount = Seq.fill(bankNum)(
+        RegInit(0.U((log2Ceil(p(FETCH_WIDTH)) + 1).W))
+    )
+
+    for(b <- 0 until bankNum) {
+        for(i <- 0 until p(FETCH_WIDTH)) {
+            val bankId = io.enq(i).pc(_1stBankBits + offsetBits - 1, offsetBits)
+            bankSel(b)(i) := io.enq(i).valid && (bankId === b.U)
         }
 
-        // For each write, write to the corresponding bank
-        for(j <- 0 until p(FETCH_WIDTH)) {
-            val global_index = write_ptrs(i) + prefix_sum(j)
-            val _2ndbankid = global_index(log2Ceil(p(FETCH_WIDTH)) - 1, 0)
-            val _2ndrow = global_index(ptrWidth - 1, log2Ceil(p(FETCH_WIDTH)))
+        val prefix = WireInit(VecInit(
+            Seq.fill(p(FETCH_WIDTH))(0.U(log2Ceil(p(FETCH_WIDTH)).W))
+        ))
 
-            for(k <- 0 until p(FETCH_WIDTH)) {
-                val _1stbankid = io.enq(k).pc(_1stBankBits + offsetBits - 1, offsetBits)
-                when(io.enq(k).valid && _1stbankid === i.U) {
-                    queue_banks(i)(_2ndbankid)(_2ndrow) := io.enq(k)
-                }
-            }
+        prefix(0) := 0.U
+        for(i <- 1 until p(FETCH_WIDTH)) {
+            prefix(i) := prefix(i-1) + bankSel(b)(i-1)
         }
 
-        // Per bank write count
-        val WriteVec = io.enq.map(enq => enq.valid && enq.pc(_1stBankBits + offsetBits - 1, offsetBits) === i.U)
-        val WriteCount = PopCount(WriteVec)
+        bankCount(b) := PopCount(bankSel(b))
 
-        write_ptrs(i) := write_ptrs(i) + WriteCount
-
-        // Read data from the banks
-        val readBank = read_ptrs(i)(log2Ceil(p(FETCH_WIDTH)) - 1, 0)
-        val readRow = read_ptrs(i)(ptrWidth - 1, log2Ceil(p(FETCH_WIDTH)))
-
-        readData(i) := queue_banks(i)(readBank)(readRow)
-        read_ptrs(i) := read_ptrs(i) + readData(i).valid
+        stagedBankPrefix(b) := prefix
+        stagedBankSelect(b) := bankSel(b)
+        stagedBankCount(b) := bankCount(b)
     }
 
-    // Output read data and ready signal
-    io.deq := readData
-    io.wr_able := ~(write_ptrs.map(ptr => ptr === (preBankSize / bankNum).U)).reduce(_ || _)
+    // stage 1
+    val bankData = Seq.fill(bankNum)(
+        WireInit(VecInit(
+            Seq.fill(p(FETCH_WIDTH))(0.U.asTypeOf(new L1BTBUpdateInfo))
+        ))
+    )
+
+    val wrAbleVec = Wire(Vec(bankNum, Bool()))
+    val stagedWrAble = RegInit(false.B)
+    val stagedBankData = Seq.fill(bankNum)(
+        RegInit(VecInit(
+            Seq.fill(p(FETCH_WIDTH))(0.U.asTypeOf(new L1BTBUpdateInfo))
+        ))
+    )
+    val stagedBankCount2 = Seq.fill(bankNum)(
+        RegInit(0.U((log2Ceil(p(FETCH_WIDTH)) + 1).W))
+    )
+    val enq = RegNext(io.enq)
+    for(b <- 0 until bankNum) {
+        for(i <- 0 until p(FETCH_WIDTH)) {
+            when(stagedBankSelect(b)(i)) {
+                bankData(b)(stagedBankPrefix(b)(i)) := enq(i)
+            }
+        }
+        wrAbleVec(b) := ~(freeCounts(b) < stagedBankCount(b))
+        stagedBankData(b) := bankData(b)
+        stagedBankCount2(b) := stagedBankCount(b)
+    }
+
+    stagedWrAble := wrAbleVec.asUInt.andR
+    io.enqReady := wrAbleVec.asUInt.andR
+
+    // stage 2
+    for(b <- 0 until bankNum) {
+        for(i <- 0 until p(FETCH_WIDTH)) {
+            when(i.U < stagedBankCount2(b) && stagedWrAble) {
+                queue_banks(b).write(tails(b) + i.U, stagedBankData(b)(i))
+            }
+        }
+        io.deq(b) := queue_banks(b).read(heads(b))
+        heads(b) := heads(b) + io.deq(b).valid
+        tails(b) := tails(b) + Mux(stagedWrAble, stagedBankCount2(b), 0.U)
+        freeCounts(b) := freeCounts(b) + io.deq(b).valid - stagedBankCount2(b)
+    }
+
+    io.deqReady := io.deq.map(_.valid).reduce(_||_)
 }

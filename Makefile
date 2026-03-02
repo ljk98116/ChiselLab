@@ -3,7 +3,7 @@
 #            		   dpicpp   -> obj_file
 PROJ=MyCPU
 ARCH=RV32E
-TOP=L1BTBWbQueue
+TOP=L0BTB
 
 CC = g++
 VERILATOR = verilator

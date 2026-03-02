@@ -7,6 +7,7 @@ import MyCPU.config._
 import MyCPU.frontend.BPU.L0BTB
 import MyCPU.frontend.BPU.L1BTB
 import MyCPU.frontend.BPU.L1BTBWbQueue
+import MyCPU.frontend.BPU.predictors.GSharePredictor
 
 object Elaborate extends App {
     val firtoolOptions = Array(
@@ -18,6 +19,6 @@ object Elaborate extends App {
             "locationInfoStyle=wrapInAtSquareBracket"
         ).reduce(_ + "," + _)
     )
-    implicit val p: Parameters = new BTBConfig ++ new BaseConfig
-    circt.stage.ChiselStage.emitSystemVerilogFile(new L1BTBWbQueue(64), args, firtoolOptions)
+    implicit val p: Parameters = new BTBConfig ++ new BaseConfig ++ new GSharePredictorConfig
+    circt.stage.ChiselStage.emitSystemVerilogFile(new GSharePredictor, args, firtoolOptions)
 }

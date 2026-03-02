@@ -17,6 +17,7 @@ import org.chipsalliance.cde.config._
 
 // use L1 BTB WbQueue to update L0 BTB
 // random select victim way
+// >3GHz on asic
 class L1BTB(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
         val req = Input(Vec(p(FETCH_WIDTH), new L1BTBReqInfo))

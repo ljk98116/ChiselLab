@@ -9,6 +9,8 @@ import MyCPU.config._
 import MyCPU.io._
 
 class NullPredictor(implicit p: Parameters) extends Predictor {
-    io.predict.valid := io.req.valid
-    io.predict.taken := false.B
+    for(i <- 0 until p(FETCH_WIDTH)) {
+        io.predict(i).valid := io.req(i).valid
+        io.predict(i).taken := false.B
+    }
 }

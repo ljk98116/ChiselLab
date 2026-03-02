@@ -17,14 +17,14 @@ class PredictorRespInfo(implicit p: Parameters) extends Bundle {
     if(p(UseGShare)) {
         val ghist = UInt(p(GShareParamKey).BPUPredictorGlobalHistoryBits.W)
     }
-    if(p(UseTournament)) {
-        val lhist = UInt(p(TournamentParamKey).BPUPredictorLocalHistoryBits.W)
-        val ghist = UInt(p(TournamentParamKey).BPUPredictorGlobalHistoryBits.W)
-    }
-    if(p(UseTAGE)) {
-        val lhist = UInt(p(TAGEParamKey).BPUPredictorLocalHistoryBits.W)
-        val ghist = UInt(p(TAGEParamKey).BPUPredictorGlobalHistoryBits.W)
-    }
+    // if(p(UseTournament)) {
+    //     val lhist = UInt(p(TournamentParamKey).BPUPredictorLocalHistoryBits.W)
+    //     val ghist = UInt(p(TournamentParamKey).BPUPredictorGlobalHistoryBits.W)
+    // }
+    // if(p(UseTAGE)) {
+    //     val lhist = UInt(p(TAGEParamKey).BPUPredictorLocalHistoryBits.W)
+    //     val ghist = UInt(p(TAGEParamKey).BPUPredictorGlobalHistoryBits.W)
+    // }
 }
 
 class PredictorUpdateInfo(implicit p: Parameters) extends Bundle {

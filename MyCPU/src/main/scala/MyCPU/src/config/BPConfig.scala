@@ -7,7 +7,8 @@ case class BPUParams(
     BPUPredictorIndexBits: Int,
     BPUPredictorGlobalHistoryBits: Int,
     BPUPredictorLocalHistoryBits: Int,
-    BPUPredictorCounterBits: Int
+    BPUPredictorCounterBits: Int,
+    BPUPredictorBankNum: Int
 )
 
 case class RASParams(
@@ -68,7 +69,8 @@ object NullPredictorParams extends BPUParams(
     BPUPredictorIndexBits = 0,
     BPUPredictorGlobalHistoryBits = 0,
     BPUPredictorLocalHistoryBits = 0,
-    BPUPredictorCounterBits = 0
+    BPUPredictorCounterBits = 0,
+    BPUPredictorBankNum = 0
 )
 
 object GSharePredictorParams extends BPUParams(
@@ -77,6 +79,7 @@ object GSharePredictorParams extends BPUParams(
     BPUPredictorGlobalHistoryBits = 10, // 10 bits global history
     BPUPredictorLocalHistoryBits = 0,
     BPUPredictorCounterBits = 2, // 2 bits counter
+    BPUPredictorBankNum = 4 // equal with fetch_width
 )
 
 object TournamentPredictorParams extends BPUParams(
@@ -85,6 +88,7 @@ object TournamentPredictorParams extends BPUParams(
     BPUPredictorGlobalHistoryBits = 10, // 10 bits global history for global predictor
     BPUPredictorLocalHistoryBits = 10, // 10 bits local history for local predictor
     BPUPredictorCounterBits = 2, // 2 bits counter for each predictor
+    BPUPredictorBankNum = 4
 )
 
 object TAGEPredictorParams extends BPUParams(
@@ -93,6 +97,7 @@ object TAGEPredictorParams extends BPUParams(
     BPUPredictorGlobalHistoryBits = 20, // 20 bits global history
     BPUPredictorLocalHistoryBits = 0,
     BPUPredictorCounterBits = 3, // 3 bits counter for each table
+    BPUPredictorBankNum = 4
 )
 
 object RASParams extends RASParams(

@@ -13,6 +13,7 @@ import org.chipsalliance.cde.config._
 // return first hit entry, if no hit, return invalid entry with target = pc + 4
 // tag,valid, target, isCall, isReturn arrays splited, update by index, hit by tag match and valid bit, 
 // good for timing, but may cause more area overhead than combined entry array
+// >3GHz on asic
 class L0BTB(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
         val req = Input(Vec(p(FETCH_WIDTH), new L0BTBReqInfo))
@@ -20,7 +21,7 @@ class L0BTB(implicit p: Parameters) extends Module {
         val update = Input(new L0BTBUpdateInfo) // only 1 update from L1 BTB, save area and timing, but may cause more mispredictions than multiple updates in one cycle
     })
 
-    var l0_btb_target_array = RegInit(VecInit.fill(p(L0BTBParam).btbEntryNum)(0.U(UInt(p(ADDR_WIDTH).W))))
+    var l0_btb_target_array = RegInit(VecInit.fill(p(L0BTBParam).btbEntryNum)(0.U(p(ADDR_WIDTH).W)))
     val l0_btb_tag_array = RegInit(VecInit.fill(p(L0BTBParam).btbEntryNum)(0.U(p(L0BTBParam).btbTagBits.W)))
     val l0_btb_valid_array = RegInit(VecInit.fill(p(L0BTBParam).btbEntryNum)(false.B))
     val l0_btb_isCall_array = RegInit(VecInit.fill(p(L0BTBParam).btbEntryNum)(false.B))

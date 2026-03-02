@@ -11,8 +11,9 @@ import MyCPU.io._
 // abstract class Predictor, which is the parent class of all predictors
 abstract class Predictor(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
-        val req = Input(new PredictorReqInfo)
-        val update = Input(new PredictorUpdateInfo)
-        val predict = Output(new PredictorRespInfo)
+        val req = Input(Vec(p(FETCH_WIDTH), new PredictorReqInfo))
+        // with different banks
+        val update = Input(Vec(p(FETCH_WIDTH), new PredictorUpdateInfo))
+        val predict = Output(Vec(p(FETCH_WIDTH), new PredictorRespInfo))
     })
 }
