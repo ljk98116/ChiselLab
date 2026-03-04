@@ -6,64 +6,79 @@ import chisel3.util._
 import MyCPU.config._
 import org.chipsalliance.cde.config._
 
-class PredictorReqInfo(implicit p: Parameters) extends Bundle {
+trait HasValid { this: Bundle =>
+    val valid: Bool
+}
+
+class PredictorReqInfo(implicit p: Parameters) extends Bundle with HasValid {
     val pc = UInt(p(ADDR_WIDTH).W)
     val valid = Bool()
 }
 
-class PredictorRespInfo(implicit p: Parameters) extends Bundle {
+class PredictorRespInfo(implicit p: Parameters) extends Bundle with HasValid {
     val valid = Bool()
-    val taken = Bool()
-    if(p(UseGShare)) {
-        val ghist = UInt(p(GShareParamKey).BPUPredictorGlobalHistoryBits.W)
+    val counter = UInt(2.W)
+
+    val BPUPredictorGlobalHistoryBits = GetBPUPredictorGlobalHistoryBits
+    def GetBPUPredictorGlobalHistoryBits: Int = {
+        if(p(UseGShare)) return p(GShareParamKey).BPUPredictorGlobalHistoryBits
+        else if(p(UseTournament)) return p(TournamentParamKey).BPUPredictorGlobalHistoryBits
+        else if(p(UseTAGE)) return p(TAGEParamKey).BPUPredictorGlobalHistoryBits
+        return p(NullPredictorParamKey).BPUPredictorGlobalHistoryBits
     }
-    // if(p(UseTournament)) {
-    //     val lhist = UInt(p(TournamentParamKey).BPUPredictorLocalHistoryBits.W)
-    //     val ghist = UInt(p(TournamentParamKey).BPUPredictorGlobalHistoryBits.W)
-    // }
-    // if(p(UseTAGE)) {
-    //     val lhist = UInt(p(TAGEParamKey).BPUPredictorLocalHistoryBits.W)
-    //     val ghist = UInt(p(TAGEParamKey).BPUPredictorGlobalHistoryBits.W)
-    // }
+
+    val BPUPredictorLocalHistoryBits = GetBPUPredictorLocalHistoryBits
+    def GetBPUPredictorLocalHistoryBits: Int = {
+        if(p(UseGShare)) return p(GShareParamKey).BPUPredictorLocalHistoryBits
+        else if(p(UseTournament)) return p(TournamentParamKey).BPUPredictorLocalHistoryBits
+        else if(p(UseTAGE)) return p(TAGEParamKey).BPUPredictorLocalHistoryBits
+        return p(NullPredictorParamKey).BPUPredictorLocalHistoryBits
+    }
+
+    val ghist = UInt(BPUPredictorGlobalHistoryBits.W)
+    val lhist = UInt(BPUPredictorLocalHistoryBits.W)    
 }
 
-class PredictorUpdateInfo(implicit p: Parameters) extends Bundle {
+class PredictorUpdateInfo(implicit p: Parameters) extends Bundle with HasValid {
     val valid = Bool()
     val pc = UInt(p(ADDR_WIDTH).W)
+    val counter = UInt(2.W)
     val taken = Bool()
     val misPred = Bool()
-    var ghist = UInt(p(NullPredictorParamKey).BPUPredictorGlobalHistoryBits.W)
-    var lhist = UInt(p(NullPredictorParamKey).BPUPredictorLocalHistoryBits.W)
 
-    if(p(UseGShare)) {
-        ghist = UInt(p(GShareParamKey).BPUPredictorGlobalHistoryBits.W)
+    val BPUPredictorGlobalHistoryBits = GetBPUPredictorGlobalHistoryBits
+    def GetBPUPredictorGlobalHistoryBits: Int = {
+        if(p(UseGShare)) return p(GShareParamKey).BPUPredictorGlobalHistoryBits
+        else if(p(UseTournament)) return p(TournamentParamKey).BPUPredictorGlobalHistoryBits
+        else if(p(UseTAGE)) return p(TAGEParamKey).BPUPredictorGlobalHistoryBits
+        return p(NullPredictorParamKey).BPUPredictorGlobalHistoryBits
     }
-    else if(p(UseTournament)) {
-        lhist = UInt(p(TournamentParamKey).BPUPredictorLocalHistoryBits.W)
-        ghist = UInt(p(TournamentParamKey).BPUPredictorGlobalHistoryBits.W)
+
+    val BPUPredictorLocalHistoryBits = GetBPUPredictorLocalHistoryBits
+    def GetBPUPredictorLocalHistoryBits: Int = {
+        if(p(UseGShare)) return p(GShareParamKey).BPUPredictorLocalHistoryBits
+        else if(p(UseTournament)) return p(TournamentParamKey).BPUPredictorLocalHistoryBits
+        else if(p(UseTAGE)) return p(TAGEParamKey).BPUPredictorLocalHistoryBits
+        return p(NullPredictorParamKey).BPUPredictorLocalHistoryBits
     }
-    else if(p(UseTAGE)) {
-        lhist = UInt(p(TAGEParamKey).BPUPredictorLocalHistoryBits.W)
-        ghist = UInt(p(TAGEParamKey).BPUPredictorGlobalHistoryBits.W)
-    }
-    else {
-        ghist = UInt(p(NullPredictorParamKey).BPUPredictorGlobalHistoryBits.W)
-        lhist = UInt(p(NullPredictorParamKey).BPUPredictorLocalHistoryBits.W)
-    }
+
+    val ghist = UInt(BPUPredictorGlobalHistoryBits.W)
+    val lhist = UInt(BPUPredictorLocalHistoryBits.W)
 }
 
-class BPUReqInfo(implicit p: Parameters) extends Bundle {
+class BPUReqInfo(implicit p: Parameters) extends Bundle with HasValid {
     val pc = UInt(p(ADDR_WIDTH).W)
+    val valid = Bool()
 }
 
-class BPUPredictInfo(implicit p: Parameters) extends Bundle {
+class BPUPredictInfo(implicit p: Parameters) extends Bundle with HasValid {
     val pc = UInt(p(ADDR_WIDTH).W)
     val valid = Bool()
     val taken = Bool()
     val target = UInt(p(ADDR_WIDTH).W)
 }
 
-class BPUUpdateInfo(implicit p: Parameters) extends Bundle {
+class BPUUpdateInfo(implicit p: Parameters) extends Bundle with HasValid {
     val pc = UInt(p(ADDR_WIDTH).W)
     val valid = Bool()
     val taken = Bool()

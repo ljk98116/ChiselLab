@@ -4,9 +4,7 @@ import MyCPU.frontend._
 import chisel3._
 import org.chipsalliance.cde.config._
 import MyCPU.config._
-import MyCPU.frontend.BPU.L0BTB
-import MyCPU.frontend.BPU.L1BTB
-import MyCPU.frontend.BPU.L1BTBWbQueue
+import MyCPU.frontend.BPU._
 import MyCPU.frontend.BPU.predictors.GSharePredictor
 
 object Elaborate extends App {

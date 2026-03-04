@@ -1,6 +1,7 @@
 package MyCPU.config
 
 import org.chipsalliance.cde.config._
+import os.truncate
 
 case class BPUParams(
     BPUPredictorNum: Int,
@@ -104,16 +105,30 @@ object RASParams extends RASParams(
     RASSize = 16
 )
 
-class NullPredictorConfig extends Config(new PredictorParameters ++ new BasePredictorConfig)
+class NullPredictorConfig extends Config(new PredictorParameters ++ new BasePredictorConfig ++ new RASConfig ++ new Config((site, here, up) => {
+    case UseGShare => false
+    case UseNullPredictor => true
+    case UseTAGE => false
+    case UseTournament => false
+}))
 
 class GSharePredictorConfig extends Config(new PredictorParameters ++ new BasePredictorConfig ++ new RASConfig ++ new Config((site, here, up) => {
     case UseGShare => true
+    case UseNullPredictor => true
+    case UseTAGE => false
+    case UseTournament => false
 }))
 
 class TournamentPredictorConfig extends Config(new PredictorParameters ++ new BasePredictorConfig ++ new RASConfig ++ new Config((site, here, up) => {
+    case UseGShare => false
+    case UseNullPredictor => false
+    case UseTAGE => false
     case UseTournament => true
 }))
 
 class TAGEPredictorConfig extends Config(new PredictorParameters ++ new BasePredictorConfig ++ new RASConfig ++ new Config((site, here, up) => {
+    case UseGShare => false
+    case UseNullPredictor => false
     case UseTAGE => true
+    case UseTournament => false
 }))
