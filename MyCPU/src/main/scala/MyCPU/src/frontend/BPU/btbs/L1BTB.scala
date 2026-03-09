@@ -54,16 +54,12 @@ class L1BTB(implicit p: Parameters) extends Module {
     val reqPC = RegInit(VecInit(
         Seq.fill(p(FETCH_WIDTH))(0.U(p(ADDR_WIDTH).W))
     ))
-    val reqL0Hit = RegInit(VecInit(
-        Seq.fill(p(FETCH_WIDTH))(false.B)
-    ))
 
     // judge if read hit the staged update
     val RAWMask = RegInit(VecInit(Seq.fill(bankNum)(false.B)))
 
     reqValid := io.req.map(_.valid)
     reqPC := io.req.map(_.pc)
-    reqL0Hit := io.req.map(_.l0_hit)
 
     // for 4 way
     // b2 b1 b0
@@ -149,6 +145,7 @@ class L1BTB(implicit p: Parameters) extends Module {
     io.resp.target := Mux(io.resp.valid, targetVec(hitIndex)(hitWayArray(hitIndex)), io.req(0).pc + (p(FETCH_WIDTH) << 2).U)
     io.resp.isCall := Mux(io.resp.valid, isCallVec(hitIndex)(hitWayArray(hitIndex)), false.B)
     io.resp.isReturn := Mux(io.resp.valid, isReturnVec(hitIndex)(hitWayArray(hitIndex)), false.B)
+    io.resp.hitIndex := hitIndex
     
     updateValid := io.update.map(_.valid)
     updatePC := io.update.map(_.pc)

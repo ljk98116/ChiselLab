@@ -18,5 +18,5 @@ object Elaborate extends App {
         ).reduce(_ + "," + _)
     )
     implicit val p: Parameters = new BTBConfig ++ new BaseConfig ++ new GSharePredictorConfig
-    circt.stage.ChiselStage.emitSystemVerilogFile(new GSharePredictor, args, firtoolOptions)
+    circt.stage.ChiselStage.emitSystemVerilogFile(new FrontEnd, args, firtoolOptions)
 }

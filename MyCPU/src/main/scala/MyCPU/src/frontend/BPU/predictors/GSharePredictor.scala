@@ -7,6 +7,7 @@ import chisel3.util.experimental.decode._
 import org.chipsalliance.cde.config._
 import MyCPU.config._
 import MyCPU.io._
+import MyCPU.utils._
 
 // gshare predictor is accessed in if0 stage, update when commit
 // if0 stage generate pht index, if1 get predict result
@@ -23,7 +24,7 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
 
     val predictorSize = 1 << indexBits
     val phtBanks = Seq.fill(fetchWidth)(
-        SyncReadMem(predictorSize / fetchWidth, UInt(counterBits.W))
+        Module(new LargeBank(predictorSize / fetchWidth, UInt(counterBits.W)))
     )
 
     var ghist = RegInit(0.U(globalHistoryBits.W))
@@ -51,8 +52,27 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
         Seq.fill(fetchWidth)(0.U(counterBits.W))
     ))
 
+    // init bank ios
+    (0 until fetchWidth).map(
+        index => {
+            phtBanks(index).io.raddr := 0.U
+            phtBanks(index).io.wen := false.B
+            phtBanks(index).io.waddr := 0.U
+            phtBanks(index).io.wdata := 0.U
+        }
+    )
+
+    for(i <- 0 until fetchWidth) {
+        val bankId = if0_phtReqIndexBankIds(i)
+        for(b <- 0 until fetchWidth) {
+            when(b.U === bankId) {
+                phtBanks(b).io.raddr := if0_phtReqIndexBankRow(i)
+            }
+        }
+    }
+
     phtReadData := (0 until fetchWidth).map(
-        index => phtBanks(index).read(if0_phtReqIndexBankRow(index))
+        index => phtBanks(index).io.rdata
     )
 
     if1_phtAccess := if0_phtAccess
@@ -99,7 +119,10 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
         (0 until fetchWidth).map(
             index => {
                 when(wb4_hitVec(index)) {
-                    phtBanks(index).write(wb4_bankRow, wb4_nextPhtResult)
+                    // phtBanks(index).write(wb4_bankRow, wb4_nextPhtResult)
+                    phtBanks(index).io.wen := true.B
+                    phtBanks(index).io.waddr := wb4_bankRow
+                    phtBanks(index).io.wdata := wb4_nextPhtResult
                 }
             }
         )

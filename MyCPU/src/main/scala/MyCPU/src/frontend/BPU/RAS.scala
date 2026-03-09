@@ -11,12 +11,12 @@ import org.chipsalliance.cde.config._
 // access & update ras at if1 stage
 class RAS(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
-        val next_ras_top_ptr = Output(UInt(log2Ceil(p(RASParam).RASSize).W))
-        val next_ras_top = Output(UInt(p(ADDR_WIDTH).W))
+        val next_ras_top_ptr = Input(UInt(log2Ceil(p(RASParam).RASSize + 1).W))
+        val next_ras_top = Input(UInt(p(ADDR_WIDTH).W))
         val next_ras_top_valid = Input(Bool())
         // from if0 stage, used for ras update
         val rasTop = Output(UInt(p(ADDR_WIDTH).W))
-        val rasTopPtr = Input(UInt(log2Ceil(p(RASParam).RASSize).W))
+        val rasTopPtr = Output(UInt(log2Ceil(p(RASParam).RASSize + 1).W))
         val rasTopValid = Output(Bool())
     })
 

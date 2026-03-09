@@ -16,6 +16,7 @@ import org.chipsalliance.cde.config._
 // >3GHz on asic
 class L0BTB(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
+        val rasTopPtr = Input(UInt(log2Ceil(p(RASParam).RASSize + 1).W))
         val req = Input(Vec(p(FETCH_WIDTH), new L0BTBReqInfo))
         val resp = Output(new L0BTBRespInfo)
         val update = Input(new L0BTBUpdateInfo) // only 1 update from L1 BTB, save area and timing, but may cause more mispredictions than multiple updates in one cycle
@@ -55,4 +56,5 @@ class L0BTB(implicit p: Parameters) extends Module {
     io.resp.isCall := Mux(io.resp.valid, l0_btb_isCall_array(io.req(hit_index).pc(l0_btbIndexBits + l0_btbOffsetBits - 1, l0_btbOffsetBits)), false.B)
     io.resp.isReturn := Mux(io.resp.valid, l0_btb_isReturn_array(io.req(hit_index).pc(l0_btbIndexBits + l0_btbOffsetBits - 1, l0_btbOffsetBits)), false.B)
     io.resp.hitIndex := hit_index
+    io.resp.rasTopPtr := io.rasTopPtr
 }
