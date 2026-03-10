@@ -12,23 +12,35 @@ import org.chipsalliance.cde.config._
 class FrontEnd(implicit p: Parameters) extends Module {
     // if0 stage: generate fetch pc, access L0 & L1 BTB
     // if0 stage: access ITLB
+    // if1 stage: use predictors to judge redirect
+    // if1 stage: judge insts valid or not, write to inst buffer
     // use l0 btb res & l1 btb res to generate next pred target
     // use final pred target to access RAS, piplined l0 pred result
     // l0 jump but l1 not jump, not save icache request, redirect to l1 pred target
-    val io = IO(new Bundle{
+    val io = IO(new Bundle {
         val commit_redirect = Input(new CommitUpdateInfo)
-        // from commit stage
-        val l1_btb_update = Input(Vec(p(FETCH_WIDTH), new L1BTBUpdateInfo))
-        val predictor_update = Input(Vec(p(FETCH_WIDTH), new PredictorUpdateInfo))
+        // from wb1 stage
+        val wb1_l1_btb_update = Input(Vec(p(FETCH_WIDTH), new L1BTBUpdateInfo))
+        val wb1_predictor_update = Input(Vec(p(FETCH_WIDTH), new PredictorUpdateInfo))
         // to commit stage
         val wb1_l1_btb_enqReady = Output(Bool())
         val wb1_predictor_enqReady = Output(Bool())
-        // from decode stage
+        // from middle end
+        val decode_l1_btb_update = Input(Vec(p(FETCH_WIDTH), new L1BTBUpdateInfo))
         // to iTLB
+        val if0_itlb_req = Output(Vec(p(FETCH_WIDTH), new ITLBReqInfo))
         // from iTLB
+        
         // to icache
+        val icache_req = Output(Vec(p(FETCH_WIDTH), new ICacheReadReq))
         // from icache
+        val icache_inst = Input(Vec(p(FETCH_WIDTH), UInt(p(DATA_WIDTH).W)))
+        val icache_hit_vec = Input(Vec(p(FETCH_WIDTH), Bool()))
         // to middle end
+        val if1_inst = Output(Vec(p(FETCH_WIDTH), UInt(p(DATA_WIDTH).W)))
+        val if1_instValid = Output(Vec(p(FETCH_WIDTH), Bool()))
+
+        val if1_br_pred_info_vec = Output(Vec(p(FETCH_WIDTH), new BranchPredInfo))
     })
 
     val l0_btb = Module(new L0BTB)
@@ -38,8 +50,7 @@ class FrontEnd(implicit p: Parameters) extends Module {
 
     val l1_btb_wb_queue = Module(new L1BTBWbQueue(32))
     val pred_wb_queue = Module(new PredictorWbQueue(32))
-
-    // to do: inst buffer
+    val inst_buffer = Module(new InstBuffer(64))
 
     val offsetBits = 2
     val fetchBits = log2Ceil(p(FETCH_WIDTH))
@@ -58,8 +69,8 @@ class FrontEnd(implicit p: Parameters) extends Module {
         Seq.fill(p(FETCH_WIDTH))(0.U.asTypeOf(new PredictorUpdateInfo))
     ))
 
-    l1_btb_wb_queue.io.enq := io.l1_btb_update
-    pred_wb_queue.io.enq := io.predictor_update
+    l1_btb_wb_queue.io.enq := io.wb1_l1_btb_update
+    pred_wb_queue.io.enq := io.wb1_predictor_update
 
     io.wb1_l1_btb_enqReady := l1_btb_wb_queue.io.enqReady
     io.wb1_predictor_enqReady := pred_wb_queue.io.enqReady
@@ -197,4 +208,5 @@ class FrontEnd(implicit p: Parameters) extends Module {
         if1_rasTop        
     )
     l0_btb.io.update := if1_l0_btb_update
+
 }

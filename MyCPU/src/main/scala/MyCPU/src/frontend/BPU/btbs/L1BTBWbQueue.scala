@@ -8,11 +8,9 @@ import MyCPU.utils._
 import org.chipsalliance.cde.config._
 
 // use 4 commit rob item to update
-// wb stage1: calculate rob item 's bank id, gen select vec
-// wb stage2: generate prefix vec
-// wb stage3: select deq rob item, enq dispatched rob items
-// wb stage4: write into skid buffer
-// 2312MHz on asic 
+// wb stage0: get rob rdy, read rob sram
+// wb stage1: calculate multi bank write id, bank write enable
+// wb stage2: get bank enq items, and write into multi bank queue
 class L1BTBWbQueue(size: Int)(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
         val enq = Input(Vec(p(FETCH_WIDTH), new L1BTBUpdateInfo))
@@ -20,18 +18,6 @@ class L1BTBWbQueue(size: Int)(implicit p: Parameters) extends Module {
         val enqReady = Output(Bool()) // wr_able
         val deqReady = Output(Vec(p(FETCH_WIDTH), Bool())) // maybe useless        
     })
-
-    def compactPrefix(sel: Vec[Bool]): Vec[UInt] = {
-        val n = sel.length
-        val w = log2Ceil(n + 1)
-        val result = Wire(Vec(n, UInt(w.W)))
-
-        result(0) := 0.U
-        for (i <- 1 until n) {
-            result(i) := result(i-1) + sel(i-1).asUInt
-        }
-        result
-    }
 
     val bankNum = p(L1BTBParam).btbBankNum
     val infoWidth = (new L1BTBUpdateInfo).getWidth
@@ -42,86 +28,103 @@ class L1BTBWbQueue(size: Int)(implicit p: Parameters) extends Module {
     require(p(L1BTBParam).btbBankNum == p(FETCH_WIDTH), "l1 btb wbqueue bankNum must equal to fetch width")
     require(size % p(FETCH_WIDTH) == 0, "invalid l1 btb wbqueue size")
 
-    val skidBuffers = Seq.fill(bankNum)(
+    val queues = Seq.fill(bankNum)(
         Module(new MultiPortQueueNW1R(perBankSize, bankNum, new L1BTBUpdateInfo))
     )
-
-    // wb1 calculate bankselect and prefix
-    val wb1_bankSelectArray = WireInit(VecInit(
-        Seq.fill(bankNum)(
-            VecInit(Seq.fill(p(FETCH_WIDTH))(false.B))
-        )
+    // wb stage1
+    // enq items' origin index
+    val wb1_enqItemIndexArray = WireInit(VecInit(
+        Seq.fill(bankNum)(VecInit(
+            Seq.fill(bankNum)(0.U(_1stBankBits.W))
+        ))
+    ))
+    val wb1_enqItemValidArray = WireInit(VecInit(
+        Seq.fill(bankNum)(VecInit(
+            Seq.fill(bankNum)(false.B)
+        ))
     ))
 
-    for(b <- 0 until bankNum) {
-        for(i <- 0 until p(FETCH_WIDTH)) {
-            val bankId = io.enq(i).pc(_1stBankBits + offsetBits - 1, offsetBits)
-            wb1_bankSelectArray(b)(i) := io.enq(i).valid && (bankId === b.U)
-        }
+    val defaultIndex = (1 << _1stBankBits).U((_1stBankBits + 1).W)
+    // bank i's mapping
+    val mapping_lut = VecInit(
+        Seq.tabulate(1 << bankNum)(
+            mask => mask match {
+                case 0 => VecInit(Seq.fill(bankNum)(defaultIndex))
+                case 1 => VecInit(Seq(0.U((_1stBankBits + 1).W), defaultIndex, defaultIndex, defaultIndex))
+                case 2 => VecInit(Seq(1.U((_1stBankBits + 1).W), defaultIndex, defaultIndex, defaultIndex))
+                case 3 => VecInit(Seq(0.U((_1stBankBits + 1).W), 1.U((_1stBankBits + 1).W), defaultIndex, defaultIndex))
+                case 4 => VecInit(Seq(2.U((_1stBankBits + 1).W), defaultIndex, defaultIndex, defaultIndex))
+                case 5 => VecInit(Seq(0.U((_1stBankBits + 1).W), 2.U((_1stBankBits + 1).W), defaultIndex, defaultIndex))
+                case 6 => VecInit(Seq(1.U((_1stBankBits + 1).W), 2.U((_1stBankBits + 1).W), defaultIndex, defaultIndex))
+                case 7 => VecInit(Seq(0.U((_1stBankBits + 1).W), 1.U((_1stBankBits + 1).W), 2.U((_1stBankBits + 1).W), defaultIndex))
+                case 8 => VecInit(Seq(3.U((_1stBankBits + 1).W), defaultIndex, defaultIndex, defaultIndex))
+                case 9 => VecInit(Seq(0.U((_1stBankBits + 1).W), 3.U((_1stBankBits + 1).W), defaultIndex, defaultIndex))
+                case 10 => VecInit(Seq(1.U((_1stBankBits + 1).W), 3.U((_1stBankBits + 1).W), defaultIndex, defaultIndex))
+                case 11 => VecInit(Seq(0.U((_1stBankBits + 1).W), 1.U((_1stBankBits + 1).W), 3.U((_1stBankBits + 1).W), defaultIndex))
+                case 12 => VecInit(Seq(2.U((_1stBankBits + 1).W), 3.U((_1stBankBits + 1).W), defaultIndex, defaultIndex))
+                case 13 => VecInit(Seq(0.U((_1stBankBits + 1).W), 2.U((_1stBankBits + 1).W), 3.U((_1stBankBits + 1).W), defaultIndex))
+                case 14 => VecInit(Seq(1.U((_1stBankBits + 1).W), 2.U((_1stBankBits + 1).W), 3.U((_1stBankBits + 1).W), defaultIndex))
+                case 15 => VecInit(Seq(0.U((_1stBankBits + 1).W), 1.U((_1stBankBits + 1).W), 2.U((_1stBankBits + 1).W), 3.U((_1stBankBits + 1).W)))
+            }
+        )
+    )
+
+    val bankIds = VecInit(io.enq.map(_.pc(_1stBankBits + offsetBits - 1, offsetBits)))
+    val wb1_firstEnqIndexArray = WireInit(VecInit(
+        Seq.fill(bankNum)(0.U(_1stBankBits.W))
+    ))
+    val wb1_firstEnqIndexValidArray = WireInit(VecInit(
+        Seq.fill(bankNum)(false.B)
+    ))
+
+    for(i <-0 until bankNum) {
+        // queue deqReady, need to write
+        val bankMask = Cat((0 until bankNum).reverse.map { j =>
+            (bankIds(j) === i.U) && io.enq(j).valid
+        })
+
+        val lutOut = mapping_lut(bankMask)
+        val only1write = PopCount(bankMask) === 1.U
+
+        wb1_firstEnqIndexArray(i) := PriorityEncoder(bankMask)
+        wb1_firstEnqIndexValidArray(i) := bankMask.orR
+
+        wb1_enqItemIndexArray(i) := lutOut.map(_(_1stBankBits - 1, 0))
+        
+        val queueEmpty = !queues(i).io.deqReady
+
+        val bypass = queueEmpty && only1write
+
+        val firstOH = UIntToOH(wb1_firstEnqIndexArray(i))
+        val bypassMask = firstOH & Fill(bankNum, bypass)
+
+        wb1_enqItemValidArray(i) := VecInit(lutOut.map(~_(_1stBankBits)).zipWithIndex.map(
+            {
+                case (item, index) => {
+                    item & ~bypassMask(index)
+                }
+            }
+        ))
+        
+        io.deq(i) := Mux(
+            bypass,
+            io.enq(wb1_firstEnqIndexArray(i)),
+            queues(i).io.deq
+        )
     }
 
-    val perBankNeedWrite = wb1_bankSelectArray.map(sel => sel.reduce(_||_))
-
-    val bankReadyVec = skidBuffers.map(_.io.enqReady)
-
-    io.enqReady := perBankNeedWrite.zip(bankReadyVec).map {
-        case (need, ready) => !need || ready
-    }.reduce(_ && _)
-
-    val deqValidVec = skidBuffers.map(_.io.deqReady)
-    io.deqReady := deqValidVec
-
-    // wb2 use banksel to get prefix vec
-    val wb2_bankPrefixArray = WireInit(VecInit(
-        Seq.fill(bankNum)(
-            VecInit(Seq.fill(p(FETCH_WIDTH))(0.U(log2Ceil(p(FETCH_WIDTH)).W)))
-        )
-    ))
+    // wb2 stage, get banked enq item and write to multi port queue
+    val wb2_enqItemIndexesArray = RegNext(wb1_enqItemIndexArray)
+    val wb2_enqItemValidArray = RegNext(wb1_enqItemValidArray)
     val wb2_enq = RegNext(io.enq)
-    val wb2_bankSelectArray = RegNext(wb1_bankSelectArray)
-    for(b <- 0 until bankNum) {
-        val prefix = WireInit(VecInit(
-            Seq.fill(p(FETCH_WIDTH))(0.U(log2Ceil(p(FETCH_WIDTH)).W))
-        ))
 
-        wb2_bankPrefixArray(b) := compactPrefix(wb2_bankSelectArray(b))
-    }
-
-    // wb3 use banksel and prefix vec to generate bankData
-    val wb3_bankDataArray = WireInit(VecInit(
-        Seq.fill(bankNum)(
-            VecInit(Seq.fill(p(FETCH_WIDTH))(0.U.asTypeOf(new L1BTBUpdateInfo)))
-        )
-    ))
-    val wb3_enq = RegNext(wb2_enq)
-    val wb3_bankDataValidArray = 
-        WireInit(VecInit(
-            Seq.fill(bankNum)(VecInit(
-                Seq.fill(p(FETCH_WIDTH))(false.B)
-            ))
-        ))
-    
-    val wb3_bankPrefixArray = RegNext(wb2_bankPrefixArray)
-    val wb3_bankSelectArray = RegNext(wb2_bankSelectArray)
-
-    for(b <- 0 until bankNum) {
-        for(slot <- 0 until p(FETCH_WIDTH)) {
-            val hitVec = VecInit((0 until p(FETCH_WIDTH)).map { i =>
-                wb3_bankSelectArray(b)(i) &&
-                wb3_bankPrefixArray(b)(i) === slot.U
-            })
-            wb3_bankDataArray(b)(slot) := Mux1H(hitVec, wb3_enq)
+    for(i <- 0 until bankNum) {
+        for(j <- 0 until bankNum) {
+            queues(i).io.enq(j) := wb2_enq(wb2_enqItemIndexesArray(i)(j))
         }
-        wb3_bankDataValidArray(b) := wb3_bankDataArray(b).map(_.valid)
-        io.deq(b) := skidBuffers(b).io.deq
+        queues(i).io.enqValid := wb2_enqItemValidArray(i)
     }
 
-    // wb4 write into skid buffer
-    val wb4_bankDataArray = RegNext(wb3_bankDataArray)
-    val wb4_bankDataValidArray = RegNext(wb3_bankDataValidArray)
-
-    for(b <- 0 until bankNum) {
-        skidBuffers(b).io.enq := wb4_bankDataArray(b)
-        skidBuffers(b).io.enqValid := wb4_bankDataValidArray(b)
-    }
+    io.deqReady := queues.map(_.io.deqReady)
+    io.enqReady := Cat(queues.map(_.io.enqReady)).andR
 }
