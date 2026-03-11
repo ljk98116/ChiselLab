@@ -7,16 +7,25 @@ import org.chipsalliance.cde.config._
 import MyCPU.config._
 
 class ICacheLineEntry(implicit p: Parameters) extends Bundle {
-    val valid = Bool();
-    val tag = UInt(p(icache_tag_width).W);
-    val index = UInt(p(icache_line_idx_width).W);
-    val wayIndex = UInt(p(icache_way_idx_width).W);
-    val data = Vec(p(icache_line_data_num), UInt(p(DATA_WIDTH).W)); 
+    val valid = Bool()
+    val tag = UInt(p(ICacheTagBits).W)
+    val data = Vec(p(L1CacheLineLength), UInt(p(DATA_WIDTH).W)) 
 }
 
-class ICacheReadReq(implicit p: Parameters) extends Bundle {
-    val en = Bool();
-    val addr = UInt(p(ADDR_WIDTH).W);
+class ICacheReadReq(implicit p: Parameters) extends Bundle with HasValid {
+    val valid = Bool()
+    val index = UInt(p(ICacheIndexBits).W)
+}
+
+class ICacheRefillReq(implicit p: Parameters) extends Bundle with HasValid {
+    val valid = Bool()
+    val pa = new PhysicalAddress
+}
+
+class ICacheRefillResp(implicit p: Parameters) extends Bundle with HasValid {
+    val valid = Bool()
+    val pa = new PhysicalAddress
+    val data = Vec(p(L1CacheLineLength), UInt(p(DATA_WIDTH).W))
 }
 
 class ICacheBranchMetaInfo(implicit p: Parameters) extends Bundle {

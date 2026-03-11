@@ -30,12 +30,14 @@ class FrontEnd(implicit p: Parameters) extends Module {
         // to iTLB
         val if0_itlb_req = Output(Vec(p(FETCH_WIDTH), new ITLBReqInfo))
         // from iTLB
-        
-        // to icache
-        val icache_req = Output(Vec(p(FETCH_WIDTH), new ICacheReadReq))
+        val if1_itlb_resp = Input(Vec(p(FETCH_WIDTH), new ITLBRespInfo))
+        // to icache, use part of page offset as index
+        val if0_icache_req = Output(new ICacheReadReq)
+        // if1 use ppn to judge hit
+        val if1_itlb_resp_icache = Output(Vec(p(FETCH_WIDTH), new ITLBRespInfo))
         // from icache
-        val icache_inst = Input(Vec(p(FETCH_WIDTH), UInt(p(DATA_WIDTH).W)))
-        val icache_hit_vec = Input(Vec(p(FETCH_WIDTH), Bool()))
+        val if1_icache_data_vec = Input(Vec(p(FETCH_WIDTH), UInt(p(DATA_WIDTH).W)))
+        val if1_icache_hit_vec = Input(Bool())
         // to middle end
         val if1_inst = Output(Vec(p(FETCH_WIDTH), UInt(p(DATA_WIDTH).W)))
         val if1_instValid = Output(Vec(p(FETCH_WIDTH), Bool()))
@@ -156,6 +158,19 @@ class FrontEnd(implicit p: Parameters) extends Module {
     ras.io.next_ras_top_ptr := nextRASTop
     ras.io.next_ras_top_valid := nextIsCall
 
+    // itlb req
+    for(i <- 0 until p(FETCH_WIDTH)) {
+        io.if0_itlb_req(i).addr := if0_ReqVec(i)
+        io.if0_itlb_req(i).valid := if0_ReqValid(i)
+    }
+
+    // icache req merge
+    io.if0_icache_req.valid := if0_ReqValid.asUInt.orR
+    io.if0_icache_req.index := if0_ReqVec(0)(
+        p(ICacheIndexBits) + p(L1CacheOffsetBits) + p(FETCH_OFFSET) - 1, 
+        p(FETCH_OFFSET) + p(L1CacheOffsetBits)
+    )
+
     // if1 stage
     val if1_rasTopPtr = RegInit(0.U(rasPtrWidth.W))
     val if1_rasTop = RegInit(0.U(p(ADDR_WIDTH).W))
@@ -208,5 +223,4 @@ class FrontEnd(implicit p: Parameters) extends Module {
         if1_rasTop        
     )
     l0_btb.io.update := if1_l0_btb_update
-
 }

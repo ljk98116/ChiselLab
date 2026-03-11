@@ -1,5 +1,7 @@
 package MyCPU.config
 
+import chisel3._
+import chisel3.util._
 import org.chipsalliance.cde.config._
 
 class WidthConfig extends Field[Int]
@@ -11,6 +13,7 @@ case object ADDR_WIDTH extends WidthConfig
 case object AREG_WIDTH extends WidthConfig
 case object PREG_WIDTH extends WidthConfig
 case object ROBID_WIDTH extends WidthConfig
+case object FETCH_OFFSET extends WidthConfig
 
 case object SIM_FLAG extends FlagConfig
 
@@ -22,6 +25,7 @@ class BaseConfig extends Config(
         case AREG_WIDTH => 5
         case PREG_WIDTH => here(AREG_WIDTH) + 2
         case ROBID_WIDTH => here(AREG_WIDTH) + 2
+        case FETCH_OFFSET => log2Ceil(here(DATA_WIDTH) / 8)
         case SIM_FLAG => false
     }
 )
