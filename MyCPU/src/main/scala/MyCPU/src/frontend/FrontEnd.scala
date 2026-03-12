@@ -41,7 +41,6 @@ class FrontEnd(implicit p: Parameters) extends Module {
         // to middle end
         val if1_inst = Output(Vec(p(FETCH_WIDTH), UInt(p(DATA_WIDTH).W)))
         val if1_instValid = Output(Vec(p(FETCH_WIDTH), Bool()))
-
         val if1_br_pred_info_vec = Output(Vec(p(FETCH_WIDTH), new BranchPredInfo))
     })
 
