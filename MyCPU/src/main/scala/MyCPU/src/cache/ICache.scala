@@ -26,7 +26,26 @@ class ICache(implicit p: Parameters) extends Module {
 
     val sram = Module(new ICacheSram)
     val refiller = Module(new ICacheRefiller(p(ICacheMSHRNum)))
-    val policy = Module(new pLRUReplacePolicy(1, p(L1CacheWayNum), depth))
+    val policy = Module(new pLRUReplacePolicy(1, p(L1CacheWayNum)))
 
-    
+    // sram <> io
+    sram.io.if0_icache_req := io.if0_icache_req
+    sram.io.if1_itlb_resp := io.if1_itlb_resp
+    io.if1_icache_stall_req := sram.io.if1_icache_stall_req
+    io.if1_icacheline_resp := sram.io.if1_icacheline_resp
+    io.if1_icache_hit := sram.io.if1_icache_hit
+
+    // sram <> refiller
+    sram.io.if1_mshr_enqReady := refiller.io.if1_mshr_enqReady
+    sram.io.icache_refill_resp := refiller.io.icache_refill_resp
+    refiller.io.if1_icache_refill_req := sram.io.if1_icache_refill_req
+
+    // sram <> policy
+    sram.io.icacheReplaceRefillResp := policy.io.refillResp
+    policy.io.hitUpdate(0) := sram.io.icacheReplaceHitUpdate
+    policy.io.refillReq := refiller.io.icacheReplaceRefillReq
+    policy.io.refillUpdate := sram.io.icacheRefillUpdate
+
+    // refiller <> io
+    io.axi4_master <> refiller.io.axi4_master
 }

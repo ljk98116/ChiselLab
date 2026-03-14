@@ -6,6 +6,7 @@ import org.chipsalliance.cde.config._
 import MyCPU.config._
 import MyCPU.frontend.BPU._
 import MyCPU.frontend.BPU.predictors.GSharePredictor
+import MyCPU.cache._
 
 object Elaborate extends App {
     val firtoolOptions = Array(
@@ -17,6 +18,10 @@ object Elaborate extends App {
             "locationInfoStyle=wrapInAtSquareBracket"
         ).reduce(_ + "," + _)
     )
-    implicit val p: Parameters = new BTBConfig ++ new BaseConfig ++ new GSharePredictorConfig
-    circt.stage.ChiselStage.emitSystemVerilogFile(new FrontEnd, args, firtoolOptions)
+    implicit val p: Parameters = 
+        new BTBConfig ++ new BaseConfig ++ 
+        new GSharePredictorConfig ++ new L1CacheConfig ++
+        new UseSv32Config
+        
+    circt.stage.ChiselStage.emitSystemVerilogFile(new ICache, args, firtoolOptions)
 }

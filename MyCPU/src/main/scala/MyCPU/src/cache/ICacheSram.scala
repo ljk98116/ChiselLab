@@ -22,9 +22,10 @@ class ICacheSram(implicit p: Parameters) extends Module {
         val icache_refill_resp = Input(new ICacheRefillResp)
         // to replace policy module req
         val icacheReplaceHitUpdate = Output(new ReplacePolicyHitUpdateInfo)
-        val icacheReplaceRefillReq = Output(new ReplacePolicyRefillReqInfo)
         // from replace policy module resp
         val icacheReplaceRefillResp = Input(new ReplacePolicyRefillRespInfo)
+        // to replace policy module
+        val icacheRefillUpdate = Output(new ReplacePolicyRefillUpdateInfo)
         // resp
         val if1_icacheline_resp = Output(Vec(p(L1CacheLineLength), UInt(p(DATA_WIDTH).W)))
         val if1_icache_hit = Output(Bool())
@@ -51,6 +52,10 @@ class ICacheSram(implicit p: Parameters) extends Module {
     val if1_icache_req = RegNext(io.if0_icache_req)
 
     io.if1_icache_hit := if1_hitArray.reduce(_||_)
+    val if1_hitwayIndex = PriorityEncoder(if1_hitArray)
+    val memReadResult = VecInit((0 until p(L1CacheWayNum)).map(
+        index => mem(index).read(io.if0_icache_req.index)
+    ))
 
     // mshr construct
     io.if1_icache_refill_req.valid := !io.if1_icache_hit && if1_icache_access_valid
@@ -58,9 +63,20 @@ class ICacheSram(implicit p: Parameters) extends Module {
         io.if1_itlb_resp(0).paddr.GetPPN, if1_icache_req.index, 0.U((p(L1CacheOffsetBits) + p(FETCH_OFFSET)).W)
     ).asTypeOf(new PhysicalAddress)
 
-    // need refill, but mshr queue full and can not merge
+    // need refill, mshr queue full and can not merge
     io.if1_icache_stall_req := !io.if1_mshr_enqReady && io.if1_icache_refill_req.valid
+    io.if1_icacheline_resp := memReadResult(if1_hitwayIndex).data
 
+    io.icacheRefillUpdate.valid := io.icacheReplaceRefillResp.valid
+    io.icacheRefillUpdate.way := io.icacheReplaceRefillResp.way
+    io.icacheRefillUpdate.index := io.icache_refill_resp.pa.bits(
+        p(ICacheIndexBits) + p(L1CacheOffsetBits) + p(FETCH_OFFSET) - 1,
+        p(L1CacheOffsetBits) + p(FETCH_OFFSET)
+    )
+
+    io.icacheReplaceHitUpdate.valid := if1_hitArray.reduce(_||_)
+    io.icacheReplaceHitUpdate.way := if1_hitwayIndex
+    io.icacheReplaceHitUpdate.index := if1_icache_req.index
     // refill icache
     (0 until p(L1CacheWayNum)).map(
         wayIndex => {

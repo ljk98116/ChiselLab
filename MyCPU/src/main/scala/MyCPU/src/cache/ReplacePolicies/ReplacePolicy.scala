@@ -9,8 +9,7 @@ import MyCPU.io._
 import MyCPU.utils._
 
 // refill update > hitUpdate, same cycle only do refill update
-abstract class ReplacePolicy(nPort: Int, nWayNum: Int, depth: Int)(implicit p: Parameters) extends Module {
-    val indexBits = log2Ceil(depth)
+abstract class ReplacePolicy(nPort: Int, nWayNum: Int)(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
         val hitUpdate = Input(Vec(nPort, new ReplacePolicyHitUpdateInfo))
         val refillUpdate = Input(new ReplacePolicyRefillUpdateInfo)

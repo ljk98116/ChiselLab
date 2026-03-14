@@ -13,13 +13,13 @@ import MyCPU.io._
 class ICacheRefiller(MSHRQueueSize: Int)(implicit p: Parameters) extends Module {
     val pa_bits = (new PhysicalAddress).GetWidth
     val io = IO(new Bundle {
-        // from icache
+        // from icache sram
         val if1_icache_refill_req = Input(new ICacheRefillReq)
-        // to icache
+        // to replace policy module
+        val icacheReplaceRefillReq = Output(new ReplacePolicyRefillReqInfo)
+        // to icache sram
         val icache_refill_resp = Output(new ICacheRefillResp)
         val if1_mshr_enqReady = Output(Bool())
-        // to replace policy module
-        val icacheRefillUpdate = Output(new ReplacePolicyRefillUpdateInfo)
         // as master send req to crossbar
         val axi4_master = new AXI4(pa_bits, p(DATA_WIDTH), 4)
     })
@@ -28,8 +28,15 @@ class ICacheRefiller(MSHRQueueSize: Int)(implicit p: Parameters) extends Module 
 
     val refill_start = WireInit(false.B)
     val refill_pa = RegInit(0.U.asTypeOf(new PhysicalAddress))
-
+    val sIdle :: sAddr :: sRead :: sResp :: Nil = Enum(4)
+    val state = RegInit(sIdle)
     val burst_len = p(L1CacheLineLength)
+    // IDLE -> AR -> R -> Resp -> IDLE
+    val cacheLineBuffer = RegInit(VecInit(
+        Seq.fill(burst_len)(0.U(p(DATA_WIDTH).W))
+    ))
+
+    val beatCnt = RegInit(0.U(p(L1CacheOffsetBits).W))
 
     mshr_buffer.io.enq := io.if1_icache_refill_req.asTypeOf(new CacheRefillReq)
     // sIdle read MSHRQueue deq
@@ -40,20 +47,23 @@ class ICacheRefiller(MSHRQueueSize: Int)(implicit p: Parameters) extends Module 
     refill_start := mshr_buffer.io.deqReady
     refill_pa := mshr_buffer.io.deq.pa
 
-    val sIdle :: sAddr :: sRead :: sResp :: Nil = Enum(4)
-    val state = RegInit(sIdle)
+    io.axi4_master.aw.bits.id := 0.U
+    io.axi4_master.aw.bits.addr := 0.U
+    io.axi4_master.aw.bits.burst := 0.U
+    io.axi4_master.aw.bits.len := 0.U
+    io.axi4_master.aw.bits.size := 0.U
 
-    // IDLE -> AR -> R -> Resp -> IDLE
-    val cacheLineBuffer = RegInit(VecInit(
-        Seq.fill(burst_len)(0.U(p(DATA_WIDTH).W))
-    ))
+    io.axi4_master.aw.valid := false.B
+    io.axi4_master.w.bits.data := 0.U
+    io.axi4_master.w.bits.last := 0.U
+    io.axi4_master.w.bits.strb := 0.U
 
-    val beatCnt = RegInit(0.U((p(L1CacheOffsetBits) + 1).W))
-
+    io.axi4_master.w.valid := false.B
+    io.axi4_master.b.ready := false.B
     // AR Channel
     io.axi4_master.ar.bits.id := 0.U
     io.axi4_master.ar.bits.burst := 1.U
-    io.axi4_master.ar.bits.addr := refill_pa
+    io.axi4_master.ar.bits.addr := refill_pa.bits
     io.axi4_master.ar.bits.len := 7.U
     io.axi4_master.ar.bits.size := log2Ceil(p(DATA_WIDTH) / 8).U
 
@@ -67,6 +77,11 @@ class ICacheRefiller(MSHRQueueSize: Int)(implicit p: Parameters) extends Module 
     io.icache_refill_resp.data := cacheLineBuffer
     io.icache_refill_resp.pa := refill_pa
 
+    io.icacheReplaceRefillReq.valid := state === sResp
+    io.icacheReplaceRefillReq.index := refill_pa.bits(
+        p(ICacheIndexBits) + p(L1CacheOffsetBits) + p(FETCH_OFFSET) - 1,
+        p(L1CacheOffsetBits) + p(FETCH_OFFSET)        
+    )
     // FSM
     switch(state) {
         is(sIdle) {

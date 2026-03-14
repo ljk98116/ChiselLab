@@ -30,7 +30,7 @@ case object UsepLRUPolicy extends PolicyConfig
 case object UseRRPolicy extends PolicyConfig
 case object UseRandomPolicy extends PolicyConfig
 
-class FourWayL1CacheConfig(implicit p: Parameters) extends Config(
+class FourWayL1CacheConfig extends Config(
     (site, here, up) => {
         case Use4WayL1Cache => true
         case Use2WayL1Cache => false
@@ -39,7 +39,7 @@ class FourWayL1CacheConfig(implicit p: Parameters) extends Config(
     }
 )
 
-class TwoWayL1CacheConfig(implicit p: Parameters) extends Config(
+class TwoWayL1CacheConfig extends Config(
     (site, here, up) => {
         case Use4WayL1Cache => false
         case Use2WayL1Cache => true
@@ -48,7 +48,7 @@ class TwoWayL1CacheConfig(implicit p: Parameters) extends Config(
     }
 )
 
-class OneWayL1CacheConfig(implicit p: Parameters) extends Config(
+class OneWayL1CacheConfig extends Config(
     (site, here, up) => {
         case Use4WayL1Cache => false
         case Use2WayL1Cache => false
@@ -59,13 +59,13 @@ class OneWayL1CacheConfig(implicit p: Parameters) extends Config(
 
 // 128 x 8x DATA_WIDTH x wayNum
 // e.g. 128x8x4Bx4 = 16KB
-class L1CacheBaseConfig(implicit p: Parameters) extends Config(
+class L1CacheBaseConfig extends Config(
     (site, here, up) => {
         case L1CacheOffsetBits => 3
         case ICacheIndexBits => 7
         case DCacheIndexBits => 7
         case ICacheTagBits => 
-            (new PhysicalAddress).GetWidth - here(L1CacheOffsetBits) - 
+            34 - here(L1CacheOffsetBits) - 
             here(ICacheIndexBits) - site(FETCH_OFFSET)
         case L1CacheLineLength => (1 << here(L1CacheOffsetBits))
         case ICacheMSHRNum => 8
@@ -73,8 +73,8 @@ class L1CacheBaseConfig(implicit p: Parameters) extends Config(
     }
 )
 
-class L1CacheConfig(implicit p: Parameters) extends Config(
-    new L1CacheConfig ++ new FourWayL1CacheConfig
+class L1CacheConfig extends Config(
+    new L1CacheBaseConfig ++ new FourWayL1CacheConfig ++ new ReplacePolicyConfig
 )
 
 class CacheRefillReq(implicit p: Parameters) extends Bundle with HasValid {
@@ -82,7 +82,7 @@ class CacheRefillReq(implicit p: Parameters) extends Bundle with HasValid {
     val pa = new PhysicalAddress
 }
 
-class UsepLRUPolicyConfig(implicit p: Parameters) extends Config(
+class UsepLRUPolicyConfig extends Config(
     (site, here, up) => {
         case UseRRPolicy => false
         case UseRandomPolicy => false
@@ -90,7 +90,7 @@ class UsepLRUPolicyConfig(implicit p: Parameters) extends Config(
     }
 )
 
-class UseRRPolicyConfig(implicit p: Parameters) extends Config(
+class UseRRPolicyConfig extends Config(
     (site, here, up) => {
         case UseRRPolicy => true
         case UseRandomPolicy => false
@@ -106,6 +106,6 @@ class UseRandomPolicyConfig(implicit p:Parameters) extends Config(
     }    
 )
 
-class ReplacePolicyConfig(implicit p: Parameters) extends Config(
+class ReplacePolicyConfig extends Config(
     new UsepLRUPolicyConfig
 )
