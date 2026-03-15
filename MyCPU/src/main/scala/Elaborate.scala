@@ -23,5 +23,5 @@ object Elaborate extends App {
         new GSharePredictorConfig ++ new L1CacheConfig ++
         new UseSv32Config
         
-    circt.stage.ChiselStage.emitSystemVerilogFile(new ICache, args, firtoolOptions)
+    circt.stage.ChiselStage.emitSystemVerilogFile(new Nangate45RAM(32, 64, "test_example"), args, firtoolOptions)
 }

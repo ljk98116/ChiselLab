@@ -8,15 +8,15 @@ class BlackBoxDualPortSram1R1W(LABEL: String, ADDR_WIDTH: Int, DATA_WIDTH: Int) 
     "DATA_WIDTH" -> DATA_WIDTH,
     "LABEL"-> LABEL
 )) with HasBlackBoxPath{
-    val clk = IO(Input(Bool()));
-    val rst = IO(Input(Bool()));
-    val raddr = IO(Input(UInt(ADDR_WIDTH.W)));
-    val waddr = IO(Input(UInt(ADDR_WIDTH.W)));
-    val en = IO(Input(Bool()));
-    val wen = IO(Input(Bool()));
-    val wmask = IO(Input(UInt(DATA_WIDTH.W)));
-    val wdata = IO(Input(UInt(DATA_WIDTH.W)));
-    val rdata = IO(Output(UInt(DATA_WIDTH.W)));
+    val clk = IO(Input(Bool()))
+    val rst = IO(Input(Bool()))
+    val raddr = IO(Input(UInt(ADDR_WIDTH.W)))
+    val waddr = IO(Input(UInt(ADDR_WIDTH.W)))
+    val en = IO(Input(Bool()))
+    val wen = IO(Input(Bool()))
+    val wmask = IO(Input(UInt(DATA_WIDTH.W)))
+    val wdata = IO(Input(UInt(DATA_WIDTH.W)))
+    val rdata = IO(Output(UInt(DATA_WIDTH.W)))
 
     addPath("./MyCPU/src/main/resources/vsrc/utils/BlackBoxDualPortSram1R1W.v")
 }
@@ -33,7 +33,7 @@ class DualPortSram1R1W(LABEL: String, ADDR_WIDTH: Int, DATA_WIDTH: Int) extends 
         val rdata = Output(UInt(DATA_WIDTH.W));
     });
 
-    val internal_ram = Module(new BlackBoxDualPortSram1R1W(LABEL, ADDR_WIDTH, DATA_WIDTH));
+    val internal_ram = Module(new BlackBoxDualPortSram1R1W(LABEL, ADDR_WIDTH, DATA_WIDTH))
 
     internal_ram.clk := clock.asBool;
     internal_ram.rst := reset.asBool;
