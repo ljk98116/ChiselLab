@@ -17,5 +17,6 @@ abstract class Predictor(implicit p: Parameters) extends Module {
         // predict result
         val if0_predict = Output(Vec(p(FETCH_WIDTH), new PredictorRespInfo))
         val if1_predict = Output(Vec(p(FETCH_WIDTH), new PredictorRespInfo))
+        val if0_stall = Output(Bool())
     })
 }

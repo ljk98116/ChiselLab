@@ -21,7 +21,8 @@ object Elaborate extends App {
     implicit val p: Parameters = 
         new BTBConfig ++ new BaseConfig ++ 
         new GSharePredictorConfig ++ new L1CacheConfig ++
-        new UseSv32Config
+        new UseSv32Config ++
+        new UseNangate45LibraryConfig
         
-    circt.stage.ChiselStage.emitSystemVerilogFile(new Nangate45RAM(32, 64, "test_example"), args, firtoolOptions)
+    circt.stage.ChiselStage.emitSystemVerilogFile(new FrontEnd, args, firtoolOptions)
 }

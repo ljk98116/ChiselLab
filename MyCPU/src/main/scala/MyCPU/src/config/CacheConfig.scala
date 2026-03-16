@@ -61,12 +61,12 @@ class OneWayL1CacheConfig extends Config(
 // e.g. 128x8x4Bx4 = 16KB
 class L1CacheBaseConfig extends Config(
     (site, here, up) => {
-        case L1CacheOffsetBits => 3
-        case ICacheIndexBits => 7
-        case DCacheIndexBits => 7
+        case L1CacheOffsetBits => 2
+        case ICacheIndexBits => 8
+        case DCacheIndexBits => 8
         case ICacheTagBits => 
             34 - here(L1CacheOffsetBits) - 
-            here(ICacheIndexBits) - site(FETCH_OFFSET)
+            here(ICacheIndexBits) - site(FETCH_OFFSET) // 34 - 12 = 22
         case L1CacheLineLength => (1 << here(L1CacheOffsetBits))
         case ICacheMSHRNum => 8
         case DCacheMSHRNum => 8

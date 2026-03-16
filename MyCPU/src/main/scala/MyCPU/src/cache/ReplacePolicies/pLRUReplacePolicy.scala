@@ -35,7 +35,11 @@ extends ReplacePolicy(nPort, nWayNum) {
     for(i <- 0 until idxBits) {
         victim(idxBits - i - 1) := tree(readIdxs(i))
         if(i < idxBits - 1) {
-            readIdxs(i + 1) := Mux(tree(readIdxs(i)), readIdxs(i) << 1.U + 1.U, readIdxs(i) << 1.U)
+            readIdxs(i + 1) := Mux(
+                tree(readIdxs(i)), 
+                readIdxs(i) << 1.U + 1.U, 
+                readIdxs(i) << 1.U
+            )
         }
     }
     io.refillResp.valid := io.refillReq.valid

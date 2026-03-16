@@ -10,11 +10,11 @@ import MyCPU.io._
 import MyCPU.utils._
 
 // gshare predictor is accessed in if0 stage, update when commit
-// if0 stage generate pht index, if1 get predict result
+// if0 stage generate pht index, if1 get predict result, but if1 no redirect, timing path not allowed
 // update GHR and PHT
 // use update info from PredictorWbQueue to update PHT
 // update infos are assumed to be on different bank
-// udpate GHR/PHT in 3 cycles
+// udpate GHR/PHT in 2 cycles
 class GSharePredictor(implicit p: Parameters) extends Predictor {
     val fetchWidth = p(FETCH_WIDTH)
     val indexBits = p(GShareParamKey).BPUPredictorIndexBits
@@ -23,8 +23,12 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
     val offsetBits = 2
 
     val predictorSize = 1 << indexBits
-    val phtBanks = Seq.fill(fetchWidth)(
-        Module(new LargeBank(predictorSize / fetchWidth, UInt(counterBits.W)))
+    // 256x2 => 256x34[Nangate45]
+    val phtBanks = Seq.tabulate(fetchWidth)(
+        index => {
+            if(p(UseNangate45)) Module(new Nangate45Bank(predictorSize / fetchWidth, UInt(34.W), s"PHTBank_${index}"))
+            else Module(new LargeBank(predictorSize / fetchWidth, UInt(counterBits.W)))
+        }
     )
 
     var ghist = RegInit(0.U(globalHistoryBits.W))
@@ -59,6 +63,7 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
             phtBanks(index).io.wen := false.B
             phtBanks(index).io.waddr := 0.U
             phtBanks(index).io.wdata := 0.U
+            phtBanks(index).io.wmask := ~(0.U)
         }
     )
 
@@ -88,6 +93,8 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
 
     val wb2_update = RegNext(io.update)
     val wb3_update = RegNext(wb2_update)
+
+    io.if0_stall := false.B
     // update PHT
     for(i <- 0 until fetchWidth) {
         val wb2_bankId = wb2_update(i).pc(log2Ceil(fetchWidth) + offsetBits - 1, offsetBits)
@@ -112,17 +119,14 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
         val wb3_nextPhtResult = WireInit(0.U(counterBits.W))
         wb3_nextPhtResult := Mux(wb3_update(i).taken, wb3_nextResultIfTaken, wb3_nextResultIfNotTaken)
 
-        val wb4_nextPhtResult = RegNext(wb3_nextPhtResult)
-        val wb4_bankRow = RegNext(wb3_bankRow)
-        val wb4_hitVec = RegNext(wb3_hitVec)
-
         (0 until fetchWidth).map(
             index => {
-                when(wb4_hitVec(index)) {
+                when(wb3_hitVec(index)) {
                     // phtBanks(index).write(wb4_bankRow, wb4_nextPhtResult)
+                    io.if0_stall := true.B
                     phtBanks(index).io.wen := true.B
-                    phtBanks(index).io.waddr := wb4_bankRow
-                    phtBanks(index).io.wdata := wb4_nextPhtResult
+                    phtBanks(index).io.waddr := wb3_bankRow
+                    phtBanks(index).io.wdata := wb3_nextPhtResult
                 }
             }
         )
@@ -140,8 +144,5 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
     val wb3_ghistLeft = ghist << wb3_num_branch
     val wb3_ghistRight = wb3_taken.asUInt >> wb3_first_taken
 
-    val wb4_ghistLeft = RegNext(wb3_ghistLeft)
-    val wb4_ghistRight = RegNext(wb3_ghistRight)
-
-    ghist := wb4_ghistLeft | wb4_ghistRight
+    ghist := wb3_ghistLeft | wb3_ghistRight
 }

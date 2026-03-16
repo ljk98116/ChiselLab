@@ -48,6 +48,7 @@ class MultiPortQueueNW1R[T <: Bundle with HasValid](size: Int, nWritePorts: Int,
             banks(b).io.wen := false.B
             banks(b).io.waddr := 0.U
             banks(b).io.wdata := 0.U.asTypeOf(gen)
+            banks(b).io.wmask := (~(0.U)).asTypeOf(gen)
             when(b.U === wr_bank && io.enqReady && io.enqValid(i)) {
                 banks(b).io.wen := true.B
                 banks(b).io.waddr := wr_row

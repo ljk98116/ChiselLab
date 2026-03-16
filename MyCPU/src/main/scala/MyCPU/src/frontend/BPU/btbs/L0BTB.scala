@@ -49,12 +49,16 @@ class L0BTB(implicit p: Parameters) extends Module {
         l0_btb_valid_array(io.update.pc(l0_btbIndexBits + l0_btbOffsetBits - 1, l0_btbOffsetBits)) := true.B
     }
 
-    val hit_index = PriorityEncoder(l0_hit_array)
+    val if1_l0_hit_array = RegNext(l0_hit_array)
+    val if1_req = RegNext(io.req)
+    val if1_rasTopPtr = RegNext(io.rasTopPtr)
 
-    io.resp.valid := l0_hit_array.reduce(_ || _)
-    io.resp.target := Mux(io.resp.valid, l0_btb_target_array(io.req(hit_index).pc(l0_btbIndexBits + l0_btbOffsetBits - 1, l0_btbOffsetBits)), io.req(p(FETCH_WIDTH) - 1).pc + 4.U)
-    io.resp.isCall := Mux(io.resp.valid, l0_btb_isCall_array(io.req(hit_index).pc(l0_btbIndexBits + l0_btbOffsetBits - 1, l0_btbOffsetBits)), false.B)
-    io.resp.isReturn := Mux(io.resp.valid, l0_btb_isReturn_array(io.req(hit_index).pc(l0_btbIndexBits + l0_btbOffsetBits - 1, l0_btbOffsetBits)), false.B)
+    val hit_index = PriorityEncoder(if1_l0_hit_array)
+
+    io.resp.valid := if1_l0_hit_array.reduce(_ || _)
+    io.resp.target := Mux(io.resp.valid, l0_btb_target_array(if1_req(hit_index).pc(l0_btbIndexBits + l0_btbOffsetBits - 1, l0_btbOffsetBits)), if1_req(p(FETCH_WIDTH) - 1).pc + 4.U)
+    io.resp.isCall := Mux(io.resp.valid, l0_btb_isCall_array(if1_req(hit_index).pc(l0_btbIndexBits + l0_btbOffsetBits - 1, l0_btbOffsetBits)), false.B)
+    io.resp.isReturn := Mux(io.resp.valid, l0_btb_isReturn_array(if1_req(hit_index).pc(l0_btbIndexBits + l0_btbOffsetBits - 1, l0_btbOffsetBits)), false.B)
     io.resp.hitIndex := hit_index
-    io.resp.rasTopPtr := io.rasTopPtr
+    io.resp.rasTopPtr := if1_rasTopPtr
 }

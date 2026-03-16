@@ -64,7 +64,7 @@ class ICacheRefiller(MSHRQueueSize: Int)(implicit p: Parameters) extends Module 
     io.axi4_master.ar.bits.id := 0.U
     io.axi4_master.ar.bits.burst := 1.U
     io.axi4_master.ar.bits.addr := refill_pa.bits
-    io.axi4_master.ar.bits.len := 7.U
+    io.axi4_master.ar.bits.len := 3.U
     io.axi4_master.ar.bits.size := log2Ceil(p(DATA_WIDTH) / 8).U
 
     io.axi4_master.ar.valid := (state === sAddr)

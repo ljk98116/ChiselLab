@@ -96,13 +96,13 @@ endmodule
 
 
 module fakeram45_32x64 (
-    input clk,                // 时钟信号
-    input [31:0] addr_in,     // 32 位地址输入
-    input ce_in,              // 启用信号
-    output reg [63:0] rd_out, // 64 位数据输出
-    input [63:0] w_mask_in,   // 写掩码
-    input [63:0] wd_in,       // 写入数据
-    input we_in               // 写使能信号
+    input clk,
+    input [4:0] addr_in,
+    input ce_in,
+    output reg [63:0] rd_out,
+    input [63:0] w_mask_in,
+    input [63:0] wd_in,
+    input we_in
 );
 endmodule
 
