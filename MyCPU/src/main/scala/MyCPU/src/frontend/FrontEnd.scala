@@ -40,13 +40,14 @@ class FrontEnd(implicit p: Parameters) extends Module {
         // to icache, use part of page offset as index
         val if0_icache_req = Output(new ICacheReadReq)
         // from icache
-        val if1_icacheline = Input(Vec(p(L1CacheLineLength), UInt(p(DATA_WIDTH).W)))
+        val if2_icacheline = Input(Vec(p(L1CacheLineLength), UInt(p(DATA_WIDTH).W)))
         val if2_icache_hit = Input(Bool())
         // to middle end
-        val if4_inst = Output(Vec(p(FETCH_WIDTH), UInt(p(DATA_WIDTH).W)))
-        val if4_instValid = Output(Vec(p(FETCH_WIDTH), Bool()))
-        val if4_instHit = Output(Bool())
-        val if4_br_pred_info_vec = Output(Vec(p(FETCH_WIDTH), new BranchPredInfo))
+        val if5_pc_vec = Output(Vec(p(FETCH_WIDTH), UInt(p(ADDR_WIDTH).W)))
+        val if5_inst = Output(Vec(p(FETCH_WIDTH), UInt(p(DATA_WIDTH).W)))
+        val if5_instValid = Output(Vec(p(FETCH_WIDTH), Bool()))
+        val if5_instHit = Output(Bool())
+        val if5_br_pred_info_vec = Output(Vec(p(FETCH_WIDTH), new BranchPredInfo))
     })
 
     val l0_btb = Module(new L0BTB)
@@ -56,7 +57,7 @@ class FrontEnd(implicit p: Parameters) extends Module {
 
     val l1_btb_wb_queue = Module(new L1BTBWbQueue(32))
     val pred_wb_queue = Module(new PredictorWbQueue(32))
-    // val inst_buffer = Module(new InstBuffer(64))
+    val inst_buffer = Module(new InstBuffer(8))
 
     val offsetBits = 2
     val fetchBits = log2Ceil(p(FETCH_WIDTH))
@@ -204,7 +205,7 @@ class FrontEnd(implicit p: Parameters) extends Module {
     // if1 do pht read, if3 judge redirect
     val if2_pred_resp = RegNext(if1_pred_resp)
 
-    val if2_insts = RegNext(io.if1_icacheline)
+    val if2_insts = io.if2_icacheline
     val if2_icache_hit = io.if2_icache_hit
 
     // if3 stage
@@ -277,27 +278,32 @@ class FrontEnd(implicit p: Parameters) extends Module {
     val if4_insts = RegNext(if3_insts)
     val if4_icache_hit = RegNext(if3_icache_hit)
 
-    val if4_noRedirectTarget = Mux(if4_l0_btb_resp.valid, if4_l0_btb_resp.target, 0.U)
     val if4_noRedirectIsCall = Mux(if4_l0_btb_resp.valid, if4_l0_btb_resp.isCall, false.B)
     val if4_noRedirectIsReturn = Mux(if4_l0_btb_resp.valid, if4_l0_btb_resp.isReturn, false.B)
 
     for(i <- 0 until p(FETCH_WIDTH)) {
-        if4_branch_results(i).valid := if3_ReqValid(i)
-        if4_branch_results(i).counter := if3_pred_resp(i).counter
-        if4_branch_results(i).ghist := if3_pred_resp(i).ghist
-        if4_branch_results(i).lhist := if3_pred_resp(i).lhist
-        if4_branch_results(i).target := Mux(if4_if3_redirect.redirect, if4_if3_redirect.target, if4_noRedirectTarget)
+        if4_branch_results(i).valid := if4_ReqValid(i)
+        if4_branch_results(i).counter := if4_pred_resp(i).counter
+        if4_branch_results(i).ghist := if4_pred_resp(i).ghist
+        if4_branch_results(i).lhist := if4_pred_resp(i).lhist
+        if4_branch_results(i).target := Mux(
+            if4_if3_redirect.redirect, 
+            if4_if3_redirect.target, 
+            Mux(if4_l0_btb_resp.valid, if4_l0_btb_resp.target, if4_ReqVec(i) + 4.U)
+        )
         if4_branch_results(i).isCall := Mux(if4_if3_redirect.redirect, if4_if3_redirect.isCall, if4_noRedirectIsCall)
         if4_branch_results(i).isReturn := Mux(if4_if3_redirect.redirect, if4_if3_redirect.isReturn, if4_noRedirectIsReturn)
     }
 
-    io.if4_inst := if4_insts
-    io.if4_instValid := if4_ReqValid
-    io.if4_instHit := if4_icache_hit
+    io.if5_inst := if4_insts
+    io.if5_instValid := if4_ReqValid
+    io.if5_instHit := if4_icache_hit
 
     for(i <- 0 until p(FETCH_WIDTH)) {
-        io.if4_br_pred_info_vec(i) := 0.U.asTypeOf(new BranchPredInfo)
+        io.if5_br_pred_info_vec(i) := 0.U.asTypeOf(new BranchPredInfo)
     }
 
     // if4 stage get final branch result and write into instBuffer
+    // if4 stage deq, if5 get deq item
+
 }

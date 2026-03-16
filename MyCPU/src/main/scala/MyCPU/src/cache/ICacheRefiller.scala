@@ -19,7 +19,7 @@ class ICacheRefiller(MSHRQueueSize: Int)(implicit p: Parameters) extends Module 
         val icacheReplaceRefillReq = Output(new ReplacePolicyRefillReqInfo)
         // to icache sram
         val icache_refill_resp = Output(new ICacheRefillResp)
-        val if1_mshr_enqReady = Output(Bool())
+        val if2_mshr_enqReady = Output(Bool())
         // as master send req to crossbar
         val axi4_master = new AXI4(pa_bits, p(DATA_WIDTH), 4)
     })
@@ -42,7 +42,7 @@ class ICacheRefiller(MSHRQueueSize: Int)(implicit p: Parameters) extends Module 
     // sIdle read MSHRQueue deq
     mshr_buffer.io.deqValid := (state === sIdle)
 
-    io.if1_mshr_enqReady := mshr_buffer.io.enqReady
+    io.if2_mshr_enqReady := mshr_buffer.io.enqReady
 
     refill_start := mshr_buffer.io.deqReady
     refill_pa := mshr_buffer.io.deq.pa

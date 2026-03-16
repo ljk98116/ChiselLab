@@ -18,10 +18,10 @@ class ICache(implicit p: Parameters) extends Module {
         // to memory, axi
         val axi4_master = new AXI4(pa_bits, p(DATA_WIDTH), 4)
         // resp
-        val if1_icacheline_resp = Output(Vec(p(L1CacheLineLength), UInt(p(DATA_WIDTH).W)))
-        val if1_icache_hit = Output(Bool())
+        val if2_icacheline_resp = Output(Vec(p(L1CacheLineLength), UInt(p(DATA_WIDTH).W)))
+        val if2_icache_hit = Output(Bool())
         // stall signal
-        val if1_icache_stall_req = Output(Bool())        
+        val if2_icache_stall_req = Output(Bool())        
     })
 
     val sram = Module(new ICacheSram)
@@ -31,14 +31,14 @@ class ICache(implicit p: Parameters) extends Module {
     // sram <> io
     sram.io.if0_icache_req := io.if0_icache_req
     sram.io.if1_itlb_resp := io.if1_itlb_resp
-    io.if1_icache_stall_req := sram.io.if1_icache_stall_req
-    io.if1_icacheline_resp := sram.io.if1_icacheline_resp
-    io.if1_icache_hit := sram.io.if1_icache_hit
+    io.if2_icache_stall_req := sram.io.if2_icache_stall_req
+    io.if2_icacheline_resp := sram.io.if2_icacheline_resp
+    io.if2_icache_hit := sram.io.if2_icache_hit
 
     // sram <> refiller
-    sram.io.if1_mshr_enqReady := refiller.io.if1_mshr_enqReady
+    sram.io.if2_mshr_enqReady := refiller.io.if2_mshr_enqReady
     sram.io.icache_refill_resp := refiller.io.icache_refill_resp
-    refiller.io.if1_icache_refill_req := sram.io.if1_icache_refill_req
+    refiller.io.if1_icache_refill_req := sram.io.if2_icache_refill_req
 
     // sram <> policy
     sram.io.icacheReplaceRefillResp := policy.io.refillResp

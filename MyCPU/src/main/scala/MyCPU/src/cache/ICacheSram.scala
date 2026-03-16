@@ -17,8 +17,8 @@ class ICacheSram(implicit p: Parameters) extends Module {
         // if1 stage, use ppn to judge hit
         val if1_itlb_resp = Input(Vec(p(FETCH_WIDTH), new ITLBRespInfo))
         // refill req
-        val if1_icache_refill_req = Output(new ICacheRefillReq)
-        val if1_mshr_enqReady = Input(Bool())
+        val if2_icache_refill_req = Output(new ICacheRefillReq)
+        val if2_mshr_enqReady = Input(Bool())
         // refill resp
         val icache_refill_resp = Input(new ICacheRefillResp)
         // to replace policy module req
@@ -28,10 +28,10 @@ class ICacheSram(implicit p: Parameters) extends Module {
         // to replace policy module
         val icacheRefillUpdate = Output(new ReplacePolicyRefillUpdateInfo)
         // resp
-        val if1_icacheline_resp = Output(Vec(p(L1CacheLineLength), UInt(p(DATA_WIDTH).W)))
-        val if1_icache_hit = Output(Bool())
+        val if2_icacheline_resp = Output(Vec(p(L1CacheLineLength), UInt(p(DATA_WIDTH).W)))
+        val if2_icache_hit = Output(Bool())
         // stall signal
-        val if1_icache_stall_req = Output(Bool())
+        val if2_icache_stall_req = Output(Bool())
     })
 
     val tagWidth = (new PhysicalAddress).getWidth
@@ -70,6 +70,7 @@ class ICacheSram(implicit p: Parameters) extends Module {
     val if1_data1_rdata = WireInit(VecInit(
         Seq.fill(p(L1CacheWayNum))(0.U((cacheLineWidth / 2).W))
     ))    
+    val if1_icache_req = RegNext(io.if0_icache_req)
 
     for(i <- 0 until p(L1CacheWayNum)) {
         tagVMem(i).io.wen := io.icache_refill_resp.valid && io.icacheReplaceRefillResp.way === i.U
@@ -105,33 +106,41 @@ class ICacheSram(implicit p: Parameters) extends Module {
 
     // itlb must hit
     val if1_icache_access_valid = 
-        RegNext(io.if0_icache_req.valid) && 
+        if1_icache_req.valid && 
         io.if1_itlb_resp(0).valid && 
         io.if1_itlb_resp(0).hit
 
-    val if1_hitArray = if1_tagV_rdata.map(
-        tagV => tagV(p(ICacheTagBits)) && tagV(p(ICacheTagBits) - 1, 0) === io.if1_itlb_resp(0).paddr.GetPPN
+    val if1_memReadResult = VecInit(if1_data0_rdata.zip(if1_data1_rdata).map({case (p0, p1) => Cat(p1(p(DATA_WIDTH) * 2 - 1, 0), p0(p(DATA_WIDTH) * 2 - 1, 0))}))
+
+    // if2 stage
+    val if2_tagV_rdata = RegNext(if1_tagV_rdata)
+    val if2_itlb_resp = RegNext(io.if1_itlb_resp)
+    val if2_icache_req = RegNext(if1_icache_req)
+
+    val if2_hitArray = if2_tagV_rdata.map(
+        tagV => tagV(p(ICacheTagBits)) && tagV(p(ICacheTagBits) - 1, 0) === if2_itlb_resp(0).paddr.GetPPN
     )
 
-    val if1_icache_req = RegNext(io.if0_icache_req)
+    val if2_icache_access_valid = RegNext(if1_icache_access_valid)
 
-    io.if1_icache_hit := if1_hitArray.reduce(_||_)
-    val if1_hitwayIndex = PriorityEncoder(if1_hitArray)
+    io.if2_icache_hit := if2_hitArray.reduce(_||_)
+    val if2_hitwayIndex = PriorityEncoder(if2_hitArray)
     // val memReadResult = VecInit((0 until p(L1CacheWayNum)).map(
     //     index => mem(index).read(io.if0_icache_req.index)
     // ))
-    val memReadResult = VecInit(if1_data0_rdata.zip(if1_data1_rdata).map({case (p0, p1) => Cat(p1(p(DATA_WIDTH) * 2 - 1, 0), p0(p(DATA_WIDTH) * 2 - 1, 0))}))
+
+    val if2_memReadResult = RegNext(if1_memReadResult)
     // mshr construct
-    io.if1_icache_refill_req.valid := !io.if1_icache_hit && if1_icache_access_valid
-    io.if1_icache_refill_req.pa := Cat(
-        io.if1_itlb_resp(0).paddr.GetPPN, if1_icache_req.index, 0.U((p(L1CacheOffsetBits) + p(FETCH_OFFSET)).W)
+    io.if2_icache_refill_req.valid := !io.if2_icache_hit && if2_icache_access_valid
+    io.if2_icache_refill_req.pa := Cat(
+        if2_itlb_resp(0).paddr.GetPPN, if2_icache_req.index, 0.U((p(L1CacheOffsetBits) + p(FETCH_OFFSET)).W)
     ).asTypeOf(new PhysicalAddress)
 
     // need refill, mshr queue full and can not merge
     // need refill write
-    io.if1_icache_stall_req := (!io.if1_mshr_enqReady && io.if1_icache_refill_req.valid) || io.icache_refill_resp.valid
-    for(i <- 0 until io.if1_icacheline_resp.length) {
-        io.if1_icacheline_resp(i) := memReadResult(if1_hitwayIndex)((i + 1) * p(DATA_WIDTH) - 1, i * p(DATA_WIDTH))
+    io.if2_icache_stall_req := (!io.if2_mshr_enqReady && io.if2_icache_refill_req.valid) || io.icache_refill_resp.valid
+    for(i <- 0 until io.if2_icacheline_resp.length) {
+        io.if2_icacheline_resp(i) := if2_memReadResult(if2_hitwayIndex)((i + 1) * p(DATA_WIDTH) - 1, i * p(DATA_WIDTH))
     }
 
     io.icacheRefillUpdate.valid := io.icacheReplaceRefillResp.valid
@@ -141,7 +150,7 @@ class ICacheSram(implicit p: Parameters) extends Module {
         p(L1CacheOffsetBits) + p(FETCH_OFFSET)
     )
 
-    io.icacheReplaceHitUpdate.valid := if1_hitArray.reduce(_||_)
-    io.icacheReplaceHitUpdate.way := if1_hitwayIndex
-    io.icacheReplaceHitUpdate.index := if1_icache_req.index
+    io.icacheReplaceHitUpdate.valid := if2_hitArray.reduce(_||_)
+    io.icacheReplaceHitUpdate.way := if2_hitwayIndex
+    io.icacheReplaceHitUpdate.index := if2_icache_req.index
 }
