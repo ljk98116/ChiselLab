@@ -1,6 +1,7 @@
 import os.Path
 import mill._
 import mill.scalalib._
+import mill.scalalib.TestModule
 import mill.scalalib.scalafmt.ScalafmtModule
 import coursier.core.Repository
 import $ivy.`com.lihaoyi::mill-contrib-bloop:`
@@ -94,5 +95,16 @@ object MyCPU extends ScalaModule with ScalafmtModule { m =>
         PathRef(os.pwd / "tools" / "cde" / "cde" / "src"),
         PathRef(os.pwd / "tools" / "diplomacy" / "diplomacy" / "src"),
       ) ++ super.sources().toSeq
+    }
+
+    object test extends ScalaTests {
+      def testFramework = "org.scalatest.tools.Framework"
+      def ivyDeps = Agg(
+        ivy"org.scalatest::scalatest:3.2.18",
+        ivy"edu.berkeley.cs::chiseltest:6.0.0"
+      )
+      override def sources = T.sources {
+        os.pwd / "MyCPU" / "test"
+      }      
     }
 }

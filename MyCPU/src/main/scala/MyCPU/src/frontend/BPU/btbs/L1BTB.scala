@@ -17,6 +17,8 @@ import org.chipsalliance.cde.config._
 // >3GHz on asic, small size synth as DFFs
 class L1BTB(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
+        val flush = Input(Bool())
+        val if2_stall = Input(Bool())
         val req = Input(Vec(p(FETCH_WIDTH), new L1BTBReqInfo))
         val resp = Output(new L1BTBRespInfo)
         val update = Input(Vec(p(FETCH_WIDTH), new L1BTBUpdateInfo)) // no bank conflict update
@@ -88,9 +90,6 @@ class L1BTB(implicit p: Parameters) extends Module {
     val updateIsReturn = RegInit(VecInit(Seq.fill(bankNum)(false.B)))
     val updateTarget = RegInit(VecInit(Seq.fill(bankNum)(0.U(p(ADDR_WIDTH).W))))
 
-    val if2_reqPC = RegNext(if1_reqPC)
-    val if2_reqValid = RegNext(if1_reqValid)
-
     // read at if0 stage, use io.req
     for(j <- 0 until p(FETCH_WIDTH)) {
         for(i <- 0 until wayNum) {
@@ -121,10 +120,13 @@ class L1BTB(implicit p: Parameters) extends Module {
         }
     }
 
-    val if2_hitVec = RegNext(if1_hitVec)
-    val if2_targetVec = RegNext(if1_targetVec)
-    val if2_isCallVec = RegNext(if1_isCallVec)
-    val if2_isReturnVec = RegNext(if1_isReturnVec)
+    val if2_reqPC = PipeReg(if1_reqPC, io.if2_stall, io.flush)
+    val if2_reqValid = PipeReg(if1_reqValid, io.if2_stall, io.flush)
+
+    val if2_hitVec = PipeReg(if1_hitVec, io.if2_stall, io.flush)
+    val if2_targetVec = PipeReg(if1_targetVec, io.if2_stall, io.flush)
+    val if2_isCallVec = PipeReg(if1_isCallVec, io.if2_stall, io.flush)
+    val if2_isReturnVec = PipeReg(if1_isReturnVec, io.if2_stall, io.flush)
 
     // double PE may be a critical timing path
     val if2_hitWayArray = WireInit(VecInit(Seq.tabulate(bankNum)(i => PriorityEncoder(if2_hitVec(i)))))
