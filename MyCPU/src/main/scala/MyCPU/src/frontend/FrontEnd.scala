@@ -63,7 +63,7 @@ class FrontEnd(implicit p: Parameters) extends Module {
 
     val l1_btb_wb_queue = Module(new L1BTBWbQueue(32))
     val pred_wb_queue = Module(new PredictorWbQueue(32))
-    val inst_buffer = Module(new InstBuffer(16))
+    val inst_buffer = Module(new InstBuffer(8))
 
     val offsetBits = 2
     val fetchBits = log2Ceil(p(FETCH_WIDTH))

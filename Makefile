@@ -58,6 +58,10 @@ verilog:
 	@mill $(PROJ).runMain Elaborate --target-dir=./verilog/$(PROJ)
 	@rm -rf ./verilog/$(PROJ)/verification
 
+.PHONY: test
+test:
+	@mill $(PROJ).test
+
 .PHONY: cpp
 cpp: $(RTL_SRC)
 	@rm -rf $(OBJ_DIR)

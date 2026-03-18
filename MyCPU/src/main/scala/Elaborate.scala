@@ -24,5 +24,5 @@ object Elaborate extends App {
         new UseSv32Config ++
         new UseNangate45LibraryConfig
         
-    circt.stage.ChiselStage.emitSystemVerilogFile(new ICache, args, firtoolOptions)
+    circt.stage.ChiselStage.emitSystemVerilogFile(new FrontEnd, args, firtoolOptions)
 }
