@@ -6,3 +6,4 @@ build_sim/**
 verilog/**
 .metals/**
 .vscode/**
+test_run_dir/**
