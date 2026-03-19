@@ -11,7 +11,7 @@ class DecodeStage(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
         val insts_i = Input(Vec(p(FETCH_WIDTH), UInt(p(ADDR_WIDTH).W)))
         val decodeRes_o = Output(Vec(p(FETCH_WIDTH), new DecodeResultBundle))
-    });
+    })
 
     val patterns: Seq[DecodePattern] = Seq(
         RVUTypeInstPattern(opcode = OpcodeVal.LUI), 
@@ -19,7 +19,7 @@ class DecodeStage(implicit p: Parameters) extends Module {
         RVUJTypeInstPattern(opcode = OpcodeVal.JAL),
         RVITypeInstPattern(opcode = OpcodeVal.JALR, funct3 = Funct3Val.JALR),
         RVSBTypeInstPattern(opcode = OpcodeVal.BEQ, funct3 = Funct3Val.BEQ),
-    );
+    )
 
     val Imm: ImmField = new ImmField
     val Rs1: Rs1Field = new Rs1Field

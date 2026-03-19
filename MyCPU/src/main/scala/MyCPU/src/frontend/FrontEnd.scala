@@ -119,9 +119,9 @@ class FrontEnd(implicit p: Parameters) extends Module {
     l1_btb.io.flush := flush
     
     for(i <- 0 until p(FETCH_WIDTH)) {
-        val pc_loc = Cat(pc(p(ADDR_WIDTH) - 1, offsetBits + fetchBits), 0.U((offsetBits + fetchBits).W)) | (i << offsetBits).U
+        val pc_loc = Cat(pc(p(ADDR_WIDTH) - 1, offsetBits + fetchBits), i.U(log2Ceil(p(FETCH_WIDTH)).W), 0.U(p(FETCH_OFFSET).W))
         if0_ReqVec(i) := pc_loc
-        if0_ReqValid(i) := !(pc(offsetBits + fetchBits - 1, offsetBits) > i.U) & !if0_stall
+        if0_ReqValid(i) := (i.U <= pc(offsetBits + fetchBits - 1, offsetBits)) && !if0_stall
 
         l0_btb.io.req(i).pc := if0_ReqVec(i)
         l0_btb.io.req(i).valid := if0_ReqValid(i)
