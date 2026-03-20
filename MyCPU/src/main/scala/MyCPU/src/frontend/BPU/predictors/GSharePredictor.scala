@@ -75,11 +75,14 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
     //                                   if0                                                                                         if1
     // inst 1              ghr_spec0[ghr_spec0[gbits - predecodeResult.popcount, gbits - predecodeResult.popcount - idxbits]] (right index)    output use ghr_spec0 and predecode result | if2_predict[staged if1 predict] as ghr_spec1
     // 
-    // inst 2                                                                                                                        if0
+    // inst 2                                                                                                                        if0                                              if1
+    // inst 3                                                                                                                                                                         if0
     val if0_ghist_spec = if1_ghist << if1_branchCount
+    // but if0 isBranch unknown ?
     val if0_phtReqIndex = io.if0_req.map(
         req => (req.pc >> 2)(indexBits - 1, 0) ^ if0_ghist_spec(globalHistoryBits - 1, globalHistoryBits - indexBits)
     )
+
     val if0_phtReqIndexBankIds = if0_phtReqIndex.map(
         index => index(log2Ceil(fetchWidth) - 1, 0) 
     )
