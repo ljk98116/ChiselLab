@@ -17,7 +17,7 @@ import MyCPU.utils._
 // udpate GHR/PHT in 2 cycles
 class GSharePredictor(implicit p: Parameters) extends Predictor {
     val fetchWidth = p(FETCH_WIDTH)
-    val indexBits = p(GShareParamKey).BPUPredictorIndexBits
+    val indexBits = p(GShareParamKey).BPUPredictorIndexBits // 10
     val globalHistoryBits = p(GShareParamKey).BPUPredictorGlobalHistoryBits
     val counterBits = p(GShareParamKey).BPUPredictorCounterBits
     val offsetBits = 2
@@ -31,12 +31,54 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
         }
     )
 
-    var ghist = RegInit(0.U(globalHistoryBits.W))
+    var ghist_commit = RegInit(0.U(globalHistoryBits.W))
+    var ghist_spec = RegInit(0.U(globalHistoryBits.W))
 
+    val if1_ghist = PipeReg(ghist_spec, io.if1_stall, io.flush)
+    val if2_ghist = PipeReg(if1_ghist, io.if2_stall, io.flush)
+    val if2_predict = PipeReg(
+        Cat(io.if1_predict.map(_.counter(counterBits - 1))), io.if2_stall, io.flush
+    )
+    // if1 predecode, get branch count
+    val if1_branchCount = PopCount(io.if1_predecode.map(_.asUInt.orR))
+    val if2_branchCount = PipeReg(if1_branchCount, io.if2_stall, io.flush)
+
+    val if1_predecodeIsBranch = io.if1_predecode.map(_.asUInt.orR)
+
+    // calculate ghr_spec update prefix at if1 stage
+    val if1_ghr_spec_prefix = WireInit(VecInit(
+        Seq.fill(fetchWidth)(0.U((p(FETCH_OFFSET) + 1).W))
+    ))
+
+    if1_ghr_spec_prefix(0) := 0.U
+    for(i <- 1 until fetchWidth) {
+        if1_ghr_spec_prefix(i) := if1_ghr_spec_prefix(i-1) + if1_predecodeIsBranch(i-1)
+    }
+
+    val if2_ghr_spec_prefix = PipeReg(if1_ghr_spec_prefix, io.if2_stall, io.flush)
+
+    // ---------- pack ----------
+    val if2_packedTaken = WireInit(VecInit(
+        Seq.fill(fetchWidth)(0.U(p(FETCH_WIDTH).W))
+    ))
+
+    if2_packedTaken(0) := if2_predict(0) << if2_ghr_spec_prefix(0)
+    for(i <- 1 until fetchWidth) {
+        if2_packedTaken(i) := if2_packedTaken(i-1) | (if2_predict(i) << if2_ghr_spec_prefix(i))
+    } 
     // predictor table
-    // phtIndex (pc >> 2) ^ ghr(ghrWidth - 1, ghrWidth - indexBits)
+    // phtIndex (pc >> 2) ^ ghr_spec(ghrWidth - 1, ghrWidth - indexBits)
+    // spectaculative GHR
+    // store ghr_spec(indexBits - 1, 0) ghr_spec(fetchWidth - 1, 0) will change at if1, but ghr_spec(indexBits - 1, min(branch_num, fetchWidth)) will not change, indexBits > 2 * fetchWidth
+    //          if0                      if1                                                                                         if2
+    // inst 0   ghr_spec0             ghr_spec0                                                 use ghr_spec0 and predecode result | if2_predict[staged if1 predict] -> ghr_spec1
+    //                                   if0                                                                                         if1
+    // inst 1              ghr_spec0[ghr_spec0[gbits - predecodeResult.popcount, gbits - predecodeResult.popcount - idxbits]] (right index)    output use ghr_spec0 and predecode result | if2_predict[staged if1 predict] as ghr_spec1
+    // 
+    // inst 2                                                                                                                        if0
+    val if0_ghist_spec = if1_ghist << if1_branchCount
     val if0_phtReqIndex = io.if0_req.map(
-        req => (req.pc >> 2)(indexBits - 1, 0) ^ ghist(globalHistoryBits - 1, globalHistoryBits - indexBits)
+        req => (req.pc >> 2)(indexBits - 1, 0) ^ if0_ghist_spec(globalHistoryBits - 1, globalHistoryBits - indexBits)
     )
     val if0_phtReqIndexBankIds = if0_phtReqIndex.map(
         index => index(log2Ceil(fetchWidth) - 1, 0) 
@@ -67,11 +109,10 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
         }
     )
 
-
     for (b <- 0 until fetchWidth) {
 
         val hits = VecInit((0 until fetchWidth).map(i =>
-            if0_phtReqIndexBankIds(i) === b.U && if0_phtAccess(i)
+            (if0_phtReqIndexBankIds(i) === b.U) && if0_phtAccess(i)
         ))
 
         val hasHit = hits.asUInt.orR
@@ -88,23 +129,32 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
 
         phtReadData(i) := Mux1H(
             (0 until fetchWidth).map(b =>
-            (bankId_r === b.U && valid_r) -> phtBanks(b).io.rdata
+                (bankId_r === b.U && valid_r) -> phtBanks(b).io.rdata
             )
         )
     }
 
     if1_phtAccess := if0_phtAccess
-
-    val if1_ghist = RegNext(ghist)
-
+ 
     for(i <- 0 until fetchWidth) {
         io.if0_predict(i) := 0.U.asTypeOf(new PredictorRespInfo)
 
         io.if1_predict(i).counter := phtReadData(i)
-        io.if1_predict(i).valid := if1_phtAccess(i)
-        io.if1_predict(i).ghist := if1_ghist
+        io.if1_predict(i).valid := if1_phtAccess(i) 
         io.if1_predict(i).lhist := 0.U
     }
+
+    // inst 0 see current ghr
+    // inst 1 see current ghr + inst 0 pred
+
+    io.if1_predict(0).ghist := if2_ghist
+
+    for(i <- 1 until fetchWidth) {
+        io.if1_predict(i).ghist :=
+            (if2_ghist << if2_ghr_spec_prefix(i)) |
+            if2_packedTaken(i)
+    }
+
 
     val wb2_update = RegNext(io.update)
     val wb3_update = RegNext(wb2_update)
@@ -188,14 +238,14 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
     }
 
     // ---------- prefix sum ----------
-    val prefix = Wire(Vec(fetchWidth, UInt(log2Ceil(fetchWidth + 1).W)))
-    prefix(0) := 0.U
+    val wb2_prefix = Wire(Vec(fetchWidth, UInt(log2Ceil(fetchWidth + 1).W)))
+    wb2_prefix(0) := 0.U
     for (i <- 1 until fetchWidth) {
-        prefix(i) := prefix(i-1) + validVec(i-1)
+        wb2_prefix(i) := wb2_prefix(i-1) + validVec(i-1)
     }
 
     val wb3_ghr_shift = RegNext(wb2_ghr_shift)
-    val wb3_prefix = RegNext(prefix)
+    val wb3_prefix = RegNext(wb2_prefix)
 
     // ---------- pack ----------
     val packedTaken = WireInit(VecInit(
@@ -208,8 +258,27 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
     }
 
     // ---------- GHR update ----------
-    ghist := (ghist << wb3_ghr_shift) | packedTaken(fetchWidth - 1)
+    ghist_commit := (ghist_commit << wb3_ghr_shift) | packedTaken(fetchWidth - 1)
 
+    val wb2_misPred = wb2_update.map(_.misPred)
+    val wb2_misPredIdx = PriorityEncoder(wb2_misPred)
+    val wb2_hasMisPred = Cat(wb2_misPred).orR
+    
+    val wb3_hasMisPred = RegNext(wb2_hasMisPred)
+    val wb3_misPredIdx = RegNext(wb2_misPredIdx)
+
+    // exception
+    when(io.flush && !wb3_hasMisPred) {
+        ghist_spec := (ghist_commit << wb3_ghr_shift) | packedTaken(fetchWidth - 1)
+    }
+    // branch misPred
+    .elsewhen(io.flush && wb3_hasMisPred) {
+        ghist_spec := Cat(wb3_update(wb3_misPredIdx).ghist(globalHistoryBits - 2, 0), wb3_update(wb3_misPredIdx).taken)
+    }
+    // update ghr spec at if2 stage
+    .otherwise {
+        ghist_spec := (ghist_spec << if2_branchCount) | if2_packedTaken(fetchWidth - 1)
+    }
     // for(i <- 0 until p(FETCH_WIDTH)) {
     //     when(io.update(i).valid) {
     //         printf(p"UPDATE pc=${io.update(i).pc} taken=${io.update(i).taken} ctr=${io.update(i).counter},GHR=${io.update(i).ghist}\n")
