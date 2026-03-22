@@ -30,9 +30,23 @@ class ICacheSram(implicit p: Parameters) extends Module {
         // resp
         val if2_icacheline_resp = Output(Vec(p(L1CacheLineLength), UInt(p(DATA_WIDTH).W)))
         val if2_icache_hit = Output(Bool())
+        val if2_predecode = Output(Vec(p(FETCH_WIDTH), new ICacheBranchMetaInfo))
         // stall signal
         val if2_icache_stall_req = Output(Bool())
     })
+
+    val predecoder = Module(new PreDecode)
+
+    // 256x34 if use nangate45
+    val metaInfoWidth = (new ICacheBranchMetaInfo).getWidth * p(L1CacheLineLength)
+    val metaInfoMem = Seq.tabulate(p(L1CacheWayNum))(
+        index => {
+            if(p(UseNangate45)) Module(
+                new Nangate45Bank(1 << p(L1CacheLineLength), UInt(34.W), s"ICacheBranchMetaInfoRam_${index}")
+            )
+            else Module(new LargeBank(1 << p(L1CacheWayNum), new ICacheBranchMetaInfo))
+        }
+    )
 
     val tagWidth = (new PhysicalAddress).getWidth
     val tagVMem = Seq.tabulate(p(L1CacheWayNum))(
@@ -70,6 +84,9 @@ class ICacheSram(implicit p: Parameters) extends Module {
     val if1_data1_rdata = WireInit(VecInit(
         Seq.fill(p(L1CacheWayNum))(0.U((cacheLineWidth / 2).W))
     ))    
+    val if1_predecode_rdata = WireInit(VecInit(
+        Seq.fill(p(L1CacheWayNum))(0.U(metaInfoWidth.W))
+    ))
     val if1_icache_req = RegNext(io.if0_icache_req)
 
     for(i <- 0 until p(L1CacheWayNum)) {
@@ -89,7 +106,12 @@ class ICacheSram(implicit p: Parameters) extends Module {
             p(L1CacheOffsetBits) + p(FETCH_OFFSET)           
         )
         dataMem0(i).io.wmask := ~0.U
-        dataMem0(i).io.wdata := Cat(0.U(p(DATA_WIDTH).W),io.icache_refill_resp.data(1), io.icache_refill_resp.data(0))
+        if(p(UseNangate45)) {
+            dataMem0(i).io.wdata := Cat(0.U(p(DATA_WIDTH).W),io.icache_refill_resp.data(1), io.icache_refill_resp.data(0))
+        }
+        else {
+            dataMem0(i).io.wdata := Cat(io.icache_refill_resp.data(1), io.icache_refill_resp.data(0))
+        }
         dataMem0(i).io.raddr := Mux(io.if0_icache_req.valid, io.if0_icache_req.index, 0.U)
         if1_data0_rdata(i) := dataMem0(i).io.rdata
 
@@ -98,10 +120,30 @@ class ICacheSram(implicit p: Parameters) extends Module {
             p(ICacheIndexBits) + p(L1CacheOffsetBits) + p(FETCH_OFFSET) - 1,
             p(L1CacheOffsetBits) + p(FETCH_OFFSET)           
         )
-        dataMem1(i).io.wdata := Cat(0.U(p(DATA_WIDTH).W), io.icache_refill_resp.data(3), io.icache_refill_resp.data(2))
+        if(p(UseNangate45)) {
+            dataMem1(i).io.wdata := Cat(0.U(p(DATA_WIDTH).W), io.icache_refill_resp.data(3), io.icache_refill_resp.data(2))
+        }
+        else {
+            dataMem1(i).io.wdata := Cat(io.icache_refill_resp.data(3), io.icache_refill_resp.data(2))
+        }
         dataMem1(i).io.raddr := Mux(io.if0_icache_req.valid, io.if0_icache_req.index, 0.U)
         dataMem1(i).io.wmask := ~0.U
         if1_data1_rdata(i) := dataMem1(i).io.rdata
+
+        metaInfoMem(i).io.wen := io.icache_refill_resp.valid && io.icacheReplaceRefillResp.way === i.U
+        if(p(UseNangate45)) {
+            metaInfoMem(i).io.wdata := Cat(0.U((34 - metaInfoWidth).W), predecoder.io.icacheBranchMetaInfo.asUInt)
+        }
+        else {
+            metaInfoMem(i).io.wdata := predecoder.io.icacheBranchMetaInfo.asUInt
+        }
+        metaInfoMem(i).io.wmask := ~0.U
+        metaInfoMem(i).io.waddr := io.icache_refill_resp.pa.bits(
+            p(ICacheIndexBits) + p(L1CacheOffsetBits) + p(FETCH_OFFSET) - 1,
+            p(L1CacheOffsetBits) + p(FETCH_OFFSET)           
+        )
+        metaInfoMem(i).io.raddr := Mux(io.if0_icache_req.valid, io.if0_icache_req.index, 0.U)
+        if1_predecode_rdata(i) := metaInfoMem(i).io.rdata
     }
 
     // itlb must hit
@@ -130,6 +172,7 @@ class ICacheSram(implicit p: Parameters) extends Module {
     // ))
 
     val if2_memReadResult = RegNext(if1_memReadResult)
+    val if2_predecode_rdata = RegNext(if1_predecode_rdata)
     // mshr construct
     io.if2_icache_refill_req.valid := !io.if2_icache_hit && if2_icache_access_valid
     io.if2_icache_refill_req.pa := Cat(
@@ -153,4 +196,6 @@ class ICacheSram(implicit p: Parameters) extends Module {
     io.icacheReplaceHitUpdate.valid := if2_hitArray.reduce(_||_)
     io.icacheReplaceHitUpdate.way := if2_hitwayIndex
     io.icacheReplaceHitUpdate.index := if2_icache_req.index
+
+    io.if2_predecode := if2_predecode_rdata
 }

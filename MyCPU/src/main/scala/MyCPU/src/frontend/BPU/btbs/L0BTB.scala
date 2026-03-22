@@ -20,6 +20,7 @@ class L0BTB(implicit p: Parameters) extends Module {
         val req = Input(Vec(p(FETCH_WIDTH), new L0BTBReqInfo))
         val resp = Output(new L0BTBRespInfo)
         val update = Input(new L0BTBUpdateInfo) // only 1 update from L1 BTB, save area and timing, but may cause more mispredictions than multiple updates in one cycle
+        val if1_l0_btb_hit = Output(Vec(p(FETCH_WIDTH), Bool()))
     })
 
     var l0_btb_target_array = RegInit(VecInit.fill(p(L0BTBParam).btbEntryNum)(0.U(p(ADDR_WIDTH).W)))
@@ -50,6 +51,8 @@ class L0BTB(implicit p: Parameters) extends Module {
     }
 
     val if1_l0_hit_array = RegNext(l0_hit_array)
+    io.if1_l0_btb_hit := if1_l0_hit_array
+    
     val if1_req = RegNext(io.req)
     val if1_rasTopPtr = RegNext(io.rasTopPtr)
 

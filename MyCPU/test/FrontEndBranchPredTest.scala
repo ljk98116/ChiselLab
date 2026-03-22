@@ -42,7 +42,6 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
         Instr(pc, isBranch = true, taken = taken)
       }
 
-
       def getInstr(pc: Long): Instr =
         trace((pc / 4 % trace.length).toInt)
 

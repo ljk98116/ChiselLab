@@ -11,20 +11,31 @@ import MyCPU.io._
 // abstract class Predictor, which is the parent class of all predictors
 abstract class Predictor(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
-        val flush = Input(Bool())
+        val if1_flush = Input(Bool())
+        val if2_flush = Input(Bool())
+        val commit_flush = Input(Bool())
         // stall req
         val if1_stall = Input(Bool())
         val if2_stall = Input(Bool())
         // from if0
         val if0_req = Input(Vec(p(FETCH_WIDTH), new PredictorReqInfo))
+        // from if1
+        val if1_l0_btb_hit = Input(Vec(p(FETCH_WIDTH), Bool()))
+        // ghist & lhist
+        val if0_ghist_pred = Output(UInt(p(GShareParamKey).BPUPredictorGlobalHistoryBits.W))
+        val if0_lhist_pred = Output(UInt(p(GShareParamKey).BPUPredictorLocalHistoryBits.W))
+        // val if1_ghist_pred = Output(UInt(p(GShareParamKey).BPUPredictorGlobalHistoryBits.W))
+        // val if1_lhist_pred = Output(UInt(p(GShareParamKey).BPUPredictorLocalHistoryBits.W))
+        // redirect
+        val if3_redirect = Input(new IF3RedirectInfo)
+        val if1_redirect = Input(new IF1RedirectInfo)
         // with different banks
         val update = Input(Vec(p(FETCH_WIDTH), new PredictorUpdateInfo))
         // predict result
         val if0_predict = Output(Vec(p(FETCH_WIDTH), new PredictorRespInfo))
         val if1_predict = Output(Vec(p(FETCH_WIDTH), new PredictorRespInfo))
-        // predecode result from if1
-        // because we use pageoffset to access icache
-        val if1_predecode = Input(Vec(p(FETCH_WIDTH), new ICacheBranchMetaInfo))
+        // predecode result from if2
+        val if2_predecode = Input(Vec(p(FETCH_WIDTH), new ICacheBranchMetaInfo))
         val if0_stall = Output(Bool())
     })
 }

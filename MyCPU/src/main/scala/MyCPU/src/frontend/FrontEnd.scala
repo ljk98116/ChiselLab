@@ -92,6 +92,9 @@ class FrontEnd(implicit p: Parameters) extends Module {
     l1_btb.io.update := l1_btb_wb_queue.io.deq
     predictor.io.update := pred_wb_queue.io.deq
 
+    // predictor use l0 btb hit to pred if1 GHRSpec
+    predictor.io.if1_l0_btb_hit := l0_btb.io.if1_l0_btb_hit
+
     // if0 stage
     val pc = RegInit(0.U(p(ADDR_WIDTH).W))
     val nextPC = WireInit(0.U(p(ADDR_WIDTH).W))
@@ -208,7 +211,7 @@ class FrontEnd(implicit p: Parameters) extends Module {
     val if1_l0_btb_resp = l0_btb.io.resp
     val if1_pa = io.if1_itlb_resp(0).paddr
 
-    // if2 stage btb judge hit
+    // if2 stage btb judge hit, gshare judge mispred
     val if2_ReqVec = PipeReg(if1_ReqVec, if2_stall, flush)
     val if2_ReqValid = PipeReg(if1_ReqValid, if2_stall, flush)
     val if2_l0_btb_resp = PipeReg(if1_l0_btb_resp, if2_stall, flush)
@@ -223,6 +226,9 @@ class FrontEnd(implicit p: Parameters) extends Module {
 
     val if2_insts = io.if2_icacheline
     val if2_icache_hit = io.if2_icache_hit
+
+    // if2 stage judge redirect, include ghr value & bhr value
+
 
     // if3 stage
     // judge redirect
