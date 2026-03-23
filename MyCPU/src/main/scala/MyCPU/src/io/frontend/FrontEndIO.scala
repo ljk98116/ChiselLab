@@ -7,15 +7,7 @@ import MyCPU.config._
 import org.chipsalliance.cde.config._
 
 class IF3RedirectInfo(implicit p: Parameters) extends Bundle {
-    val redirect = Bool()
-    val isCall = Bool()
-    val isReturn = Bool()
-    val target = UInt(p(ADDR_WIDTH).W)
-    // used for ras recovery, marked as ras top operated after if2 pred 
-    val rasTopPtr = UInt(log2Ceil(p(RASParam).RASSize + 1).W)
-}
-
-class IF1RedirectInfo(implicit p: Parameters) extends Bundle {
+    val pc = UInt(p(ADDR_WIDTH).W)
     val redirect = Bool()
     val isCall = Bool()
     val isReturn = Bool()

@@ -31,4 +31,8 @@ class RAS(implicit p: Parameters) extends Module {
 
     ras_top := Mux(io.next_ras_top_ptr >= ras_stack_depth.U && io.next_ras_top_valid, (ras_stack_depth - 1).U, io.next_ras_top_ptr)
     ras_stack(io.next_ras_top_ptr) := Mux(io.next_ras_top_valid, io.next_ras_top, ras_stack(io.next_ras_top_ptr))
+
+    when(io.next_ras_top_valid) {
+        printf(p"ras top:${io.next_ras_top_ptr}, write value: ${io.next_ras_top}\n")
+    }
 }

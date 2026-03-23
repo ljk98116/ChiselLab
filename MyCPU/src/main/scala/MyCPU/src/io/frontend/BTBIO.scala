@@ -18,6 +18,7 @@ class L0BTBRespInfo(implicit p: Parameters) extends Bundle with HasValid {
     val isReturn = Bool()
     val hitIndex = UInt(log2Ceil(p(FETCH_WIDTH)).W)
     val rasTopPtr = UInt(log2Ceil(p(RASParam).RASSize + 1).W)
+    val pc = UInt(p(ADDR_WIDTH).W)
 }
 
 class L0BTBUpdateInfo(implicit p: Parameters) extends Bundle with HasValid {

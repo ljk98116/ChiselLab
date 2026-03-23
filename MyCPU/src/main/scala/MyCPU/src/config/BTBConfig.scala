@@ -22,7 +22,7 @@ object TwoWayBTBParams extends BTBParams(
     btbEntryNum = 64,
     btbWayNum = 2,
     btbIndexBits = 6,
-    btbTagBits = 22,
+    btbTagBits = 20,
     btbOffsetBits = 2,
     btbBankNum = 4
 )
@@ -39,7 +39,7 @@ object FourWayBTBParams extends BTBParams(
 object L0BTBParams extends BTBParams(
     btbEntryNum = 4,
     btbIndexBits = 2,
-    btbTagBits = 28,
+    btbTagBits = 10,
     btbOffsetBits = 2,
     btbBankNum = 1
 )

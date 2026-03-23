@@ -21,14 +21,8 @@ abstract class Predictor(implicit p: Parameters) extends Module {
         val if0_req = Input(Vec(p(FETCH_WIDTH), new PredictorReqInfo))
         // from if1
         val if1_l0_btb_hit = Input(Vec(p(FETCH_WIDTH), Bool()))
-        // ghist & lhist
-        val if0_ghist_pred = Output(UInt(p(GShareParamKey).BPUPredictorGlobalHistoryBits.W))
-        val if0_lhist_pred = Output(UInt(p(GShareParamKey).BPUPredictorLocalHistoryBits.W))
-        // val if1_ghist_pred = Output(UInt(p(GShareParamKey).BPUPredictorGlobalHistoryBits.W))
-        // val if1_lhist_pred = Output(UInt(p(GShareParamKey).BPUPredictorLocalHistoryBits.W))
         // redirect
         val if3_redirect = Input(new IF3RedirectInfo)
-        val if1_redirect = Input(new IF1RedirectInfo)
         // with different banks
         val update = Input(Vec(p(FETCH_WIDTH), new PredictorUpdateInfo))
         // predict result

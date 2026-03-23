@@ -8,6 +8,7 @@ import MyCPU.frontend.BPU._
 import MyCPU.frontend.BPU.predictors.GSharePredictor
 import MyCPU.cache._
 
+// area: 51495 50589
 object Elaborate extends App {
     val firtoolOptions = Array(
         "--lowering-options=" + List(
@@ -22,7 +23,7 @@ object Elaborate extends App {
         new BTBConfig ++ new BaseConfig ++ 
         new GSharePredictorConfig ++ new L1CacheConfig ++
         new UseSv32Config ++
-        new UseNangate45LibraryConfig
+        new UseCustomLibraryConfig
         
     circt.stage.ChiselStage.emitSystemVerilogFile(new FrontEnd, args, firtoolOptions)
 }

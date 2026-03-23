@@ -5,6 +5,7 @@ import chisel3.util._
 
 import MyCPU.config._
 import MyCPU.io._
+import MyCPU.utils._
 
 import org.chipsalliance.cde.config._
 
@@ -16,7 +17,10 @@ import org.chipsalliance.cde.config._
 // >3GHz on asic
 class L0BTB(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
+        val if1_stall = Input(Bool())
+        val if1_flush = Input(Bool())
         val rasTopPtr = Input(UInt(log2Ceil(p(RASParam).RASSize + 1).W))
+        val rasTop = Input(UInt(p(ADDR_WIDTH).W))
         val req = Input(Vec(p(FETCH_WIDTH), new L0BTBReqInfo))
         val resp = Output(new L0BTBRespInfo)
         val update = Input(new L0BTBUpdateInfo) // only 1 update from L1 BTB, save area and timing, but may cause more mispredictions than multiple updates in one cycle
@@ -50,18 +54,27 @@ class L0BTB(implicit p: Parameters) extends Module {
         l0_btb_valid_array(io.update.pc(l0_btbIndexBits + l0_btbOffsetBits - 1, l0_btbOffsetBits)) := true.B
     }
 
-    val if1_l0_hit_array = RegNext(l0_hit_array)
+    val if1_l0_hit_array = PipeReg(l0_hit_array, io.if1_stall, io.if1_flush)
     io.if1_l0_btb_hit := if1_l0_hit_array
     
-    val if1_req = RegNext(io.req)
-    val if1_rasTopPtr = RegNext(io.rasTopPtr)
+    val if1_req = PipeReg(io.req, io.if1_stall, io.if1_flush)
+    val if1_rasTopPtr = PipeReg(io.rasTopPtr, io.if1_stall, io.if1_flush)
 
     val hit_index = PriorityEncoder(if1_l0_hit_array)
 
     io.resp.valid := if1_l0_hit_array.reduce(_ || _)
-    io.resp.target := Mux(io.resp.valid, l0_btb_target_array(if1_req(hit_index).pc(l0_btbIndexBits + l0_btbOffsetBits - 1, l0_btbOffsetBits)), if1_req(p(FETCH_WIDTH) - 1).pc + 4.U)
+    io.resp.target := Mux(
+        io.resp.valid, 
+        Mux(
+            l0_btb_isReturn_array(if1_req(hit_index).pc(l0_btbIndexBits + l0_btbOffsetBits - 1, l0_btbOffsetBits)),
+            io.rasTop,
+            l0_btb_target_array(if1_req(hit_index).pc(l0_btbIndexBits + l0_btbOffsetBits - 1, l0_btbOffsetBits))
+        ),
+        if1_req(p(FETCH_WIDTH) - 1).pc + 4.U
+    )
     io.resp.isCall := Mux(io.resp.valid, l0_btb_isCall_array(if1_req(hit_index).pc(l0_btbIndexBits + l0_btbOffsetBits - 1, l0_btbOffsetBits)), false.B)
     io.resp.isReturn := Mux(io.resp.valid, l0_btb_isReturn_array(if1_req(hit_index).pc(l0_btbIndexBits + l0_btbOffsetBits - 1, l0_btbOffsetBits)), false.B)
     io.resp.hitIndex := hit_index
     io.resp.rasTopPtr := if1_rasTopPtr
+    io.resp.pc := if1_req(hit_index).pc
 }

@@ -22,6 +22,7 @@ class L1BTB(implicit p: Parameters) extends Module {
         val req = Input(Vec(p(FETCH_WIDTH), new L1BTBReqInfo))
         val resp = Output(new L1BTBRespInfo)
         val update = Input(Vec(p(FETCH_WIDTH), new L1BTBUpdateInfo)) // no bank conflict update
+        val if2_l1_btb_hit = Output(Vec(p(FETCH_WIDTH), Bool()))
     })
 
     val wayNum = p(UseFourWayBTB) match {
@@ -138,6 +139,7 @@ class L1BTB(implicit p: Parameters) extends Module {
     io.resp.isCall := Mux(io.resp.valid, if2_isCallVec(if2_hitIndex)(if2_hitWayArray(if2_hitIndex)), false.B)
     io.resp.isReturn := Mux(io.resp.valid, if2_isReturnVec(if2_hitIndex)(if2_hitWayArray(if2_hitIndex)), false.B)
     io.resp.hitIndex := if2_hitIndex
+    io.if2_l1_btb_hit := if2_hitArray
     
     updateValid := io.update.map(_.valid)
     updatePC := io.update.map(_.pc)

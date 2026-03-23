@@ -77,7 +77,7 @@ object NullPredictorParams extends BPUParams(
 object GSharePredictorParams extends BPUParams(
     BPUPredictorNum = 1,
     BPUPredictorIndexBits = 10, // 1024 entries
-    BPUPredictorGlobalHistoryBits = 10, // 10 bits global history
+    BPUPredictorGlobalHistoryBits = 20, // 20 bits global history
     BPUPredictorLocalHistoryBits = 0,
     BPUPredictorCounterBits = 2, // 2 bits counter
     BPUPredictorBankNum = 4 // equal with fetch_width
@@ -102,7 +102,7 @@ object TAGEPredictorParams extends BPUParams(
 )
 
 object RASParams extends RASParams(
-    RASSize = 16
+    RASSize = 32
 )
 
 class NullPredictorConfig extends Config(new PredictorParameters ++ new BasePredictorConfig ++ new RASConfig ++ new Config((site, here, up) => {
