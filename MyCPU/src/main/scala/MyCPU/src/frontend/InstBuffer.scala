@@ -76,15 +76,6 @@ class InstBuffer(size: Int)(implicit p: Parameters) extends Module {
     // current cycle hit
     val deq_fire = deqHit_r && !io.stall
 
-    when(io.flush) {
-        headPtr := 0.U
-        tailPtr := 0.U
-        freeCount := size.U
-
-        validMem.foreach(_.foreach(_ := false.B))
-        hitMem.foreach(_ := false.B)
-    }
-
     when(deq_fire) {
         headPtr := headPtr + 1.U
         freeCount := freeCount + 1.U - enqValid
@@ -114,4 +105,12 @@ class InstBuffer(size: Int)(implicit p: Parameters) extends Module {
         hitMem(hitIdx) := true.B
     }
 
+    when(io.flush) {
+        headPtr := 0.U
+        tailPtr := 0.U
+        freeCount := size.U
+
+        validMem.foreach(_.foreach(_ := false.B))
+        hitMem.foreach(_ := false.B)
+    }
 }

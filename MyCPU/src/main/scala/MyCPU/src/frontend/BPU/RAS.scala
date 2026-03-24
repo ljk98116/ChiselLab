@@ -29,7 +29,12 @@ class RAS(implicit p: Parameters) extends Module {
     io.rasTopPtr := ras_top
     io.rasTopValid := ras_top < ras_stack_depth.U && ras_top =/= 0.U
 
-    ras_top := Mux(io.next_ras_top_ptr >= ras_stack_depth.U && io.next_ras_top_valid, (ras_stack_depth - 1).U, io.next_ras_top_ptr)
+    ras_top := Mux(
+        io.next_ras_top_valid,
+        Mux(io.next_ras_top_ptr >= ras_stack_depth.U, (ras_stack_depth - 1).U, io.next_ras_top_ptr),
+        ras_top
+    )
+    
     ras_stack(io.next_ras_top_ptr) := Mux(io.next_ras_top_valid, io.next_ras_top, ras_stack(io.next_ras_top_ptr))
 
     when(io.next_ras_top_valid) {

@@ -9,6 +9,32 @@ import org.chipsalliance.cde.config._
 import MyCPU.frontend._
 import MyCPU.config._
 import MyCPU.io._
+import chisel3.util.PopCount
+
+case class Instr(
+  pc: Long,
+  isCall: Boolean = false,
+  isReturn: Boolean = false,
+  isBranch:Boolean = false,
+  taken: Boolean = false,
+  target: Long = 0
+)
+
+class Meta(
+  isCall: Boolean = false,
+  isReturn: Boolean = false,
+  isDirectJump: Boolean = false,
+  isIndirectJump: Boolean = false,
+  isConditionalBranch: Boolean = false,
+  isUnconditionalBranch: Boolean = false
+) {
+  def isCall(): Boolean = isCall
+  def isReturn(): Boolean = isReturn
+  def isDirectJump(): Boolean = isDirectJump
+  def isIndirectJump(): Boolean = isIndirectJump
+  def isConditionalBranch(): Boolean = isConditionalBranch
+  def isUnconditionalBranch(): Boolean = isUnconditionalBranch
+}
 
 class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
 
@@ -17,305 +43,396 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
     new GSharePredictorConfig ++ new L1CacheConfig ++
     new UseSv32Config ++ new UseCustomLibraryConfig
 
-    case class Instr(
-      pc: Long,
-      isCall: Boolean = false,
-      isReturn: Boolean = false,
-      isBranch:Boolean = false,
-      taken: Boolean = false,
-      target: Long = 0
-    )
-
   "Frontend Branch Prediction (Correct Redirect Model)" in {
 
     test(new FrontEnd).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
 
       val fetchWidth = p(FETCH_WIDTH)
 
-      val base = 0x80000000L
+      val base     = 0x80000000L
+      val funcA    = base + 0x400
+      val funcB    = base + 0x800
 
-      val trace = (0 until 512).map { i =>
+      val trace = (0 until 2048).map { i =>
         val pc = base + i * 4
 
-        if (i % 16 == 0) {
-          Instr(pc, isCall = true, taken = true, isBranch = true, target = base + 0x1000)
+        // =========================
+        // main loop
+        // =========================
+        if (pc < funcA) {
+
+          if (i % 16 == 0) {
+            // call funcA
+            Instr(pc,
+              isCall = true,
+              isReturn = false,
+              isBranch = true,
+              taken = true,
+              target = funcA
+            )
+          }
+          else if (i % 4 == 0) {
+            // conditional branch（pattern）
+            val taken = ((i / 4) % 2 == 0)   // 0101 pattern（GShare友好）
+            Instr(pc,
+              isBranch = true,
+              taken = taken,
+              target = pc + 16
+            )
+          }
+          else {
+            Instr(pc) // normal
+          }
         }
-        else if (i % 16 == 8) {
-          Instr(pc, isReturn = true, taken = true, isBranch = true, target = 0)
+
+        // =========================
+        // funcA
+        // =========================
+        else if (pc >= funcA && pc < funcA + 0x40) {
+
+          if (pc == funcA) {
+            // entry cond branch
+            Instr(pc,
+              isBranch = true,
+              taken = true,
+              target = pc + 8
+            )
+          }
+          else if (pc == funcA + 0x8) {
+            // call funcB
+            Instr(pc,
+              isCall = true,
+              isReturn = false,
+              isBranch = true,
+              taken = true,
+              target = funcB
+            )
+          }
+          else if (pc == funcA + 0x10) {
+            // pattern branch
+            val taken = ((i / 8) % 2 == 0)
+            Instr(pc,
+              isBranch = true,
+              taken = taken,
+              target = pc + 12
+            )
+          }
+          else if (pc == funcA + 0x3C) {
+            // return
+            Instr(pc,
+              isReturn = true,
+              isBranch = true,
+              taken = true,
+              target = 0
+            )
+          }
+          else {
+            Instr(pc)
+          }
         }
+
+        // =========================
+        // funcB
+        // =========================
+        else if (pc >= funcB && pc < funcB + 0x20) {
+
+          if (pc == funcB) {
+            val taken = ((i / 2) % 2 == 0)
+            Instr(pc,
+              isBranch = true,
+              taken = taken,
+              target = pc + 8
+            )
+          }
+          else if (pc == funcB + 0x1C) {
+            // return
+            Instr(pc,
+              isReturn = true,
+              isBranch = true,
+              taken = true,
+              target = 0
+            )
+          }
+          else {
+            Instr(pc)
+          }
+        }
+
+        // =========================
+        // fallback
+        // =========================
         else {
-          val taken = (i % 2 == 0)
-          Instr(pc, taken = taken, isBranch = true, target = pc + 16)
+          Instr(pc)
         }
       }
-
-      val goldenRAS = scala.collection.mutable.Stack[Long]()
 
       def getInstr(pc: Long): Instr =
         trace(((pc - 0x80000000) / 4 % trace.length).toInt)
 
-      // =========================
-      // pipeline model
-      // =========================
-      val commitQ = Queue[Seq[(Long, BranchPredInfo)]]()
+      def predecoder(pc: Long): Meta = {
+        val inst = getInstr(pc)
+        var res = new Meta(inst.isCall, inst.isReturn, false, false, !(inst.isCall || inst.isReturn), inst.isCall || inst.isReturn)
+        return res
+      }
 
-      val PIPELINE_LAT = 6   // IF0→IF5
-      val TRAIN_LAT = 4      // WB1→WB3
+      class GoldenCPU(initPC: Long) {
+        var pc: Long = initPC
+        var goldenRAS = scala.collection.mutable.Stack[Long]()
+        var nextpc = pc + 4L
+        def step(): Long = {
+          var oldpc = pc
+          val inst = getInstr(pc)
+          if(inst.isCall) {
+            goldenRAS.push(pc + 4L)
+            nextpc = inst.target
+          }
+          else if(inst.isReturn) {
+            nextpc = goldenRAS.top
+            goldenRAS.pop()
+          }
+          else if(inst.isBranch && inst.taken) nextpc = inst.target
+          else nextpc = pc + 4L
+          
+          pc = nextpc
+          return oldpc
+        }
 
-      val statQ = Queue[(Boolean, Boolean)]()
+        def target():Long = {
+          var target = pc + 4L
+          val inst = getInstr(pc)
+          if(inst.isCall) {
+            target = inst.target
+          }
+          else if(inst.isReturn) {
+            target = goldenRAS.top
+          }
+          else if(inst.isBranch && inst.taken) target = inst.target
 
-      var correct = 0
-      var total = 0
+          return target
+        }
+      }
 
-      var rasCorrectCnt = 0
-      var rasTotalCnt = 0
+      var cycle = 0
+      var predecodeQueue = new Queue[Array[Meta]]
+      var predecodeCounter = 2 // if2 output
 
-      var commit_isCall = false
-      var commit_isReturn = false
+      var instQueue = new Queue[(Boolean, Instr)]
+      var icacheCounter = 2 // if2 output
 
-      // =========================
-      // init
-      // =========================
-      dut.io.icache_stall_req.poke(false.B)
-      dut.io.stall_from_backpipe.poke(false.B)
+      var branchTotal = 0 // cond jumps
+      var correctTotal = 0
+      var rasTotal = 0 // call/return
+      var rasCorrectTotal = 0 
 
-      dut.io.commit_redirect.flush.poke(false.B)
-      dut.io.commit_redirect.flush_pc.poke(0.U)
-      dut.io.commit_redirect.pc.poke(0.U)
-      dut.io.commit_redirect.isCall.poke(false.B)
-      dut.io.commit_redirect.isReturn.poke(false.B)
-
-      dut.io.icache_refill_valid.poke(false.B)
-      dut.io.icache_refill_pa.bits.poke(0.U)
-
-      // =========================
-      // 主循环
-      // =========================
-      for (cycle <- 0 until 1000) {
-
-        // 默认
+      var goldencpu = new GoldenCPU(0x80000000L)
+      var btbAccessCount = 0
+      
+      while(cycle < 1501) {
+        // commit redirect
+        var commit_redirect = false
+        // all reset to zero
         dut.io.commit_redirect.flush.poke(false.B)
         dut.io.icache_stall_req.poke(false.B)
         dut.io.stall_from_backpipe.poke(false.B)
+        dut.io.icache_refill_valid.poke(false.B)
 
+        var if2_predecodeRes = Array.fill(fetchWidth)(new Meta)
+        var if2_instQueue = new Queue[(Boolean, Instr)]
+        
         // icache always hit
         dut.io.if2_icache_hit.poke(true.B)
+
+        // // wait 2 cycle, then output per cycle
+        if(predecodeCounter == 0) {
+          if(predecodeQueue.nonEmpty) {
+            if2_predecodeRes = predecodeQueue.dequeue()
+          }
+          else println(s"[PREDECODE INFO]: cycle [$cycle] predecode queue empty")
+        }
+        else predecodeCounter -= 1
+
+        // wait 2 cycle, then output per cycle
+        if(icacheCounter == 0) {
+          for(i <- 0 until fetchWidth) {
+            if(instQueue.nonEmpty) {
+              if2_instQueue.enqueue(instQueue.dequeue())
+            }
+            else println(s"[ICACHE INFO]: cycle [$cycle] inst queue empty")
+          }
+        }
+        else icacheCounter -= 1
+
+        // if2 predecode result drive
+        for(i <- 0 until fetchWidth) {
+          dut.io.if2_predecode(i).isCall.poke(if2_predecodeRes(i).isCall().B)
+          dut.io.if2_predecode(i).isReturn.poke(if2_predecodeRes(i).isReturn().B)
+          dut.io.if2_predecode(i).isDirectJump.poke(if2_predecodeRes(i).isCall().B)
+          dut.io.if2_predecode(i).isIndirectJump.poke(
+            if2_predecodeRes(i).isIndirectJump().B
+          )
+          dut.io.if2_predecode(i).isConditionalBranch.poke(
+            if2_predecodeRes(i).isConditionalBranch().B
+          )
+          dut.io.if2_predecode(i).isUnconditionalBranch.poke(
+            if2_predecodeRes(i).isUnconditionalBranch().B
+          )
+        }
+
+        // get predecode result, enq
+        val if0_pcVec = dut.io.if0_itlb_req.peek()
+        val if0_pcValid = dut.io.if0_itlb_req.peek()
+
+        var predecodeArray = Array.fill(fetchWidth)(new Meta)
+
+        // if2 predecode
+        for(i <- 0 until fetchWidth) {
+          if(if0_pcValid(i).valid.litToBoolean) {
+            predecodeArray(i) = predecoder(if0_pcVec(i).litValue.longValue)
+          }
+        }
+        predecodeQueue.enqueue(predecodeArray)
+
+        // if2 icache
+        for(i <- 0 until fetchWidth) {
+          instQueue.enqueue((if0_pcValid(i).valid.litToBoolean, getInstr(if0_pcVec(i).litValue.longValue)))
+        }
+
+        // ITLB always hit VA=PA
+        for(i <- 0 until fetchWidth) {
+          dut.io.if1_itlb_resp(i).hit.poke(true.B)
+          dut.io.if1_itlb_resp(i).paddr.bits.poke(if0_pcVec(i).litValue.longValue.U)
+          dut.io.if1_itlb_resp(i).valid.poke(if0_pcValid(i).valid.litToBoolean.B)
+        }
+
+        // inst set to 0, because no decode in frontend 
         for (i <- 0 until p(L1CacheLineLength)) {
           dut.io.if2_icacheline(i).poke((1000 + i).U)
         }
 
-        // =========================
-        // ⭐ 核心：if2_predecode 注入
-        // =========================
-        for (i <- 0 until fetchWidth) {
-          val pc = dut.io.if5_pc_vec(i).peek().litValue.toLong
-          val instr = getInstr(pc)
+        val if5_valids = dut.io.if5_instValid.peek()
+        val if5_pcs = dut.io.if5_pc_vec.peek()
 
-          val meta = dut.io.if2_predecode(i)
+        // get if5 output, get branch result and judge redirect
+        val if5_branchPreds = dut.io.if5_br_pred_info_vec.peek()
 
-          // 默认清零
-          meta.isCall.poke(false.B)
-          meta.isReturn.poke(false.B)
-          meta.isDirectJump.poke(false.B)
-          meta.isIndirectJump.poke(false.B)
-          meta.isConditionalBranch.poke(false.B)
-          meta.isUnconditionalBranch.poke(false.B)
+        for(i <- 0 until fetchWidth) {
+          dut.io.wb1_predictor_update(i).valid.poke(false.B)
+          dut.io.wb1_predictor_update(i).counter.poke(0.U)
+          dut.io.wb1_predictor_update(i).ghist.poke(0.U)
+          dut.io.wb1_predictor_update(i).lhist.poke(0.U)
+          dut.io.wb1_predictor_update(i).misPred.poke(0.B)
+          dut.io.wb1_predictor_update(i).pc.poke(0.U)
+          dut.io.wb1_predictor_update(i).taken.poke(false.B)
 
-          meta.isCall.poke(instr.isCall.B)
-          meta.isReturn.poke(instr.isReturn.B)
-
-          if(instr.isCall || instr.isReturn) {
-            meta.isUnconditionalBranch.poke(true.B)
-          }
-          else if(instr.taken || !instr.taken) {
-            meta.isConditionalBranch.poke(true.B)
-          }
+          dut.io.wb1_l1_btb_update(i).valid.poke(false.B)
+          dut.io.wb1_l1_btb_update(i).pc.poke(0.U)
+          dut.io.wb1_l1_btb_update(i).isCall.poke(false.B)
+          dut.io.wb1_l1_btb_update(i).isReturn.poke(false.B)
+          dut.io.wb1_l1_btb_update(i).target.poke(0.U) 
         }
 
-        // ITLB 直通
-        for (i <- 0 until fetchWidth) {
-          dut.io.if1_itlb_resp(i).paddr.bits.poke(
-            dut.io.if0_itlb_req(i).addr.peek()
-          )
-        }
+        for(i <- 0 until fetchWidth) {
+          if(if5_branchPreds(i).valid.litToBoolean && !commit_redirect) {
+            val if5_predTarget = if5_branchPreds(i).target.litValue.longValue
+            val if5_isCall = if5_branchPreds(i).isCall.litToBoolean
+            val if5_isReturn = if5_branchPreds(i).isReturn.litToBoolean
+            val if5_taken = if5_branchPreds(i).counter.litValue.longValue >= 2
+            val if5_pc = if5_pcs(i).litValue.longValue
+            val if5_ghist = if5_branchPreds(i).ghist.litValue.longValue
+            val if5_lhist = if5_branchPreds(i).lhist.litValue.longValue
+            val if5_rasTopPtr = if5_branchPreds(i).rasTopPtr.litValue.longValue
+            val if5_counter = if5_branchPreds(i).counter.litValue.longValue
 
-        // =========================
-        // IF5 收集
-        // =========================
-        val bundle = (0 until fetchWidth).flatMap { i =>
-          val valid = dut.io.if5_instValid(i).peek().litToBoolean
-          if (!valid) None
-          else {
-            val pc = dut.io.if5_pc_vec(i).peek().litValue.longValue
-            val pred = dut.io.if5_br_pred_info_vec(i)
-            Some((pc, pred))
-          }
-        }
+            val realTarget = goldencpu.target()
+            val realPC = goldencpu.step()
 
-        commitQ.enqueue(bundle)
+            val instr = getInstr(realPC)
+            val realIsCall = instr.isCall
+            val realIsReturn = instr.isReturn
+            val realTaken = instr.taken
+            val realIsBranch = instr.isBranch
 
-        // =========================
-        // WB1 update + redirect
-        // =========================
-        var redirect = false
-        var redirectPC = 0L
-        var currentPC = 0L
-        if (commitQ.size > PIPELINE_LAT) {
+            val misPred = realTaken != if5_taken || realTarget != if5_predTarget
 
-          val b = commitQ.dequeue()
+            if(realPC != if5_pc) {
+              println(s"[PC ERROR]: cycle[${cycle}] if5 pc 0x${if5_pc.toHexString} golden pc 0x${realPC.toHexString}")
+            }
+            // else println(s"[PC INFO]: cycle[${cycle}] if5 pc 0x${if5_pc.toHexString} golden pc 0x${realPC.toHexString}")
 
-          for (i <- 0 until fetchWidth) {
+            if(realIsReturn) {
+              rasTotal += 1
+              if(realIsReturn && !misPred) {
+                rasCorrectTotal += 1
+              }
+            }
 
-            if (i < b.length) {
+            // branch but not call/return
+            if(realIsBranch && !realIsCall && !realIsReturn) {
+              branchTotal += 1
+              if(!misPred) correctTotal += 1
+            }
 
-              val (pc, predInfo) = b(i)
-              val instr = getInstr(pc)
+            if(realIsBranch && !realIsCall && !realIsReturn) {
+              btbAccessCount += 1
+            }
 
-              if (instr.isBranch) {
+            if(misPred) {
+              // flush
+              icacheCounter = 2
+              predecodeCounter = 2
+              instQueue.clear()
+              predecodeQueue.clear()
 
-                val predTaken =
-                  predInfo.counter.peek().litValue.toInt >= 2
-
-                val realTaken = instr.taken
-
-                val misPred = predTaken != realTaken
-
-                // -------- predictor update --------
-                val upd = dut.io.wb1_predictor_update(i)
-
-                upd.valid.poke(true.B)
-                upd.pc.poke(pc.U)
-                upd.taken.poke(realTaken.B)
-                upd.misPred.poke(misPred.B)
-                upd.counter.poke(predInfo.counter.peek())
-                upd.ghist.poke(predInfo.ghist.peek())
-                upd.lhist.poke(predInfo.lhist.peek())
-
-                // -------- BTB update --------
-                val btb = dut.io.wb1_l1_btb_update(i)
-
-                btb.valid.poke(true.B)
-                btb.pc.poke(pc.U)
-
-                val isCall = instr.isCall
-                val isReturn = instr.isReturn
-
-                val realTarget =
-                  if (isReturn && goldenRAS.nonEmpty) goldenRAS.top
-                  else instr.target
-
-                btb.target.poke(realTarget.U)
-                btb.isCall.poke(isCall.B)
-                btb.isReturn.poke(isReturn.B)
-
-                if (isCall) {
-                  goldenRAS.push(pc + 4)
-                  println(s"[RAS INFO] golden pushed target=0x${(pc+4).toHexString}")
-                }
-
-                if (isReturn && goldenRAS.nonEmpty) {
-
-                  val goldenTarget = goldenRAS.top   // ⭐ 不 pop
-
-                  val predTarget = predInfo.target.peek().litValue.toLong
-
-                  rasTotalCnt += 1
-
-                  if (predTarget == goldenTarget) {
-                    rasCorrectCnt += 1
-                  } else {
-                    println(s"[RAS ERROR] pc=0x${pc.toHexString} pred=0x${predTarget.toHexString} golden=0x${goldenTarget.toHexString}")
-                  }
-
-                  goldenRAS.pop()   // ⭐ 最后再 pop
-                  println(s"[RAS INFO] golden poped target=${goldenTarget.toHexString}")
-                }
-
-                // -------- redirect --------
-                if (misPred && !redirect) {
-                  redirect = true
-                  val isCall = instr.isCall
-                  val isReturn = instr.isReturn
-
-                  redirectPC =
-                    if (isReturn && goldenRAS.nonEmpty) goldenRAS.top
-                    else if (realTaken) instr.target
-                    else pc + 4
-
-                  currentPC = pc
-                  commit_isCall = isCall
-                  commit_isReturn = isReturn
-                }
-
-                statQ.enqueue((predTaken, realTaken))
-
-              } else {
-                dut.io.wb1_predictor_update(i).valid.poke(false.B)
-                dut.io.wb1_l1_btb_update(i).valid.poke(false.B)
+              // redirect only once per cycle
+              if(!commit_redirect) {
+                dut.io.commit_redirect.flush.poke(true.B)
+                dut.io.commit_redirect.flush_pc.poke(realTarget.U)
+                dut.io.commit_redirect.isCall.poke(realIsCall.B)
+                dut.io.commit_redirect.isReturn.poke(realIsReturn.B)
+                dut.io.commit_redirect.pc.poke(realPC.U)
+                dut.io.commit_redirect.rasTopPtr.poke(if5_rasTopPtr.U)
+                commit_redirect = true
               }
 
-            } else {
-              dut.io.wb1_predictor_update(i).valid.poke(false.B)
-              dut.io.wb1_l1_btb_update(i).valid.poke(false.B)
+              dut.io.wb1_predictor_update(i).valid.poke(true.B)
+              dut.io.wb1_predictor_update(i).counter.poke(if5_counter.U)
+              dut.io.wb1_predictor_update(i).ghist.poke(if5_ghist.U)
+              dut.io.wb1_predictor_update(i).lhist.poke(if5_lhist.U)
+              dut.io.wb1_predictor_update(i).misPred.poke(true.B)
+              dut.io.wb1_predictor_update(i).pc.poke(if5_pc.U)
+              dut.io.wb1_predictor_update(i).taken.poke(realTaken.B)
+
+              dut.io.wb1_l1_btb_update(i).valid.poke(true.B)
+              dut.io.wb1_l1_btb_update(i).pc.poke(if5_pc.U)
+              dut.io.wb1_l1_btb_update(i).isCall.poke(realIsCall.B)
+              dut.io.wb1_l1_btb_update(i).isReturn.poke(realIsReturn.B)
+              dut.io.wb1_l1_btb_update(i).target.poke(realTarget.U)
             }
           }
-        } else {
-          for (i <- 0 until fetchWidth) {
-            dut.io.wb1_predictor_update(i).valid.poke(false.B)
-            dut.io.wb1_l1_btb_update(i).valid.poke(false.B)
+        }
+
+        // stat
+        if(cycle % 50 == 0 && cycle > 0) {
+          if(branchTotal > 0 && rasTotal > 0) {
+            val l0btbhitCount = dut.io.l0btbhitCount.peek().litValue.longValue
+            val l1btbhitCount = dut.io.l1btbhitCount.peek().litValue.longValue
+            val acc = correctTotal.toDouble / branchTotal * 100.0
+            val l0Rate = l0btbhitCount.toDouble / btbAccessCount * 100
+            val l1Rate = l1btbhitCount.toDouble / btbAccessCount * 100
+            val rasRate = rasCorrectTotal.toDouble / rasTotal * 100
+            println(s"Branch Pred Acc: ${acc}%")
+            println(s"l0 btb hit rate: ${l0Rate}%, btbAccessCount:$btbAccessCount")
+            println(s"l1 btb hit rate: ${l1Rate}%, btbAccessCount:$btbAccessCount")
+            println(s"ras correct rate: ${rasRate}%, rasTotal: $rasTotal")
           }
-        }
-
-        // =========================
-        // redirect（关键修复点）
-        // =========================
-        if (redirect) {
-          dut.io.commit_redirect.flush.poke(true.B)
-          dut.io.commit_redirect.flush_pc.poke(redirectPC.U)
-          dut.io.commit_redirect.pc.poke(currentPC.U)
-          dut.io.commit_redirect.isCall.poke(commit_isCall.B)
-          dut.io.commit_redirect.isReturn.poke(commit_isReturn.B)
-
-          println(s"commit redirect at cycle[${cycle}]: pc 0x${currentPC.toHexString} redirectPC: 0x${redirectPC.toHexString}")
-          // ❗只 flush pipeline depth
-          for (_ <- 0 until PIPELINE_LAT if commitQ.nonEmpty) {
-            commitQ.dequeue()
-          }
-        }
-
-        // =========================
-        // 延迟统计
-        // =========================
-        if (statQ.size > TRAIN_LAT) {
-          val (predTaken, realTaken) = statQ.dequeue()
-          total += 1
-          if (predTaken == realTaken) correct += 1
-        }
-
-        // =========================
-        // step
-        // =========================
-        dut.clock.step()
-
-        if (cycle % 50 == 0 && total > 0) {
-          val l0_btb_hitCount = dut.io.l0btbhitCount.peek().litValue.longValue
-          val l1_btb_hitCount = dut.io.l1btbhitCount.peek().litValue.longValue
-          val btb_accessCount = dut.io.btbaccessCount.peek().litValue.longValue
-          val l0_hitrate = (l0_btb_hitCount + 0.0) / btb_accessCount * 100.0
-          val l1_hitrate = (l1_btb_hitCount + 0.0) / btb_accessCount * 100.0
-          println(s"[cycle=$cycle] acc=${correct.toDouble / total}")
-          println(s"[cycle=$cycle] l0_btb_hitRate=${l0_hitrate}%")
-          println(s"[cycle=$cycle] l1_btb_hitRate=${l1_hitrate}%")
-          val rasAcc =
-            if (rasTotalCnt == 0) 0.0
-            else rasCorrectCnt.toDouble / rasTotalCnt
-
-          println(s"[cycle=$cycle] RAS acc=$rasAcc, rastotalCnt=${rasTotalCnt}")
+          else println(s"cycle[${cycle}]: no branch found")
           println("")
         }
+        // if1 itlb
+        dut.clock.step(1)
+        
+        cycle += 1
       }
-
-      println(s"Final accuracy = ${correct.toDouble / total}")
     }
   }
 }

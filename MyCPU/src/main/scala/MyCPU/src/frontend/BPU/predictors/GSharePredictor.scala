@@ -141,7 +141,6 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
     val wb2_update = RegNext(io.update)
     val wb3_update = RegNext(wb2_update)
 
-    io.if0_stall := false.B
     // update PHT
     // ----------- 先把所有 i 的信息整理成 Vec -----------
 
@@ -251,19 +250,20 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
     val wb3_hasMisPred = RegNext(wb2_hasMisPred)
     val wb3_misPredIdx = RegNext(wb2_misPredIdx)
 
-    // exception
-    when(io.commit_flush && !wb3_hasMisPred) {
-        ghist_spec := (ghist_commit << wb3_ghr_shift) | packedTaken(fetchWidth - 1)
+    // when flush reset to 4
+    val specUpdateCounter = RegInit(4.U(3.W))
+    // exception occurred
+    when(io.commit_flush) {
+        ghist_spec := ghist_commit
     }
     // branch misPred
-    .elsewhen(io.commit_flush && wb3_hasMisPred) {
+    .elsewhen(wb3_hasMisPred) {
         ghist_spec := Cat(wb3_update(wb3_misPredIdx).ghist(globalHistoryBits - 2, 0), wb3_update(wb3_misPredIdx).taken)
     }
     // update ghr spec at if2 stage
-    .otherwise {
+    .elsewhen(!io.if0_stall) {
         ghist_spec := (if2_ghist << if2_branchCount) | if2_packedTaken(fetchWidth - 1)
     }
-
     // for(i <- 0 until p(FETCH_WIDTH)) {
     //     when(io.update(i).valid) {
     //         printf(p"UPDATE pc=${io.update(i).pc} taken=${io.update(i).taken} ctr=${io.update(i).counter},GHR=${io.update(i).ghist}\n")

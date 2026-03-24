@@ -41,4 +41,5 @@ class BranchPredInfo(implicit p: Parameters) extends Bundle with HasValid {
 
     val ghist = UInt(BPUPredictorGlobalHistoryBits.W)
     val lhist = UInt(BPUPredictorLocalHistoryBits.W) 
+    val rasTopPtr = UInt(log2Ceil(p(RASParam).RASSize + 1).W)
 }

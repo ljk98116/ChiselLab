@@ -15,6 +15,7 @@ abstract class Predictor(implicit p: Parameters) extends Module {
         val if2_flush = Input(Bool())
         val commit_flush = Input(Bool())
         // stall req
+        val if0_stall = Input(Bool())
         val if1_stall = Input(Bool())
         val if2_stall = Input(Bool())
         // from if0
@@ -30,6 +31,5 @@ abstract class Predictor(implicit p: Parameters) extends Module {
         val if1_predict = Output(Vec(p(FETCH_WIDTH), new PredictorRespInfo))
         // predecode result from if2
         val if2_predecode = Input(Vec(p(FETCH_WIDTH), new ICacheBranchMetaInfo))
-        val if0_stall = Output(Bool())
     })
 }
