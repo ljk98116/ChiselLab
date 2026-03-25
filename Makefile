@@ -60,7 +60,7 @@ verilog:
 
 .PHONY: test
 test:
-	@mill $(PROJ).test
+	@mill $(PROJ).test > test_run_dir/test.log
 
 .PHONY: cpp
 cpp: $(RTL_SRC)

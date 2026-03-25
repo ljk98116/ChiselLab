@@ -49,118 +49,90 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
 
       val fetchWidth = p(FETCH_WIDTH)
 
-      val base     = 0x80000000L
-      val funcA    = base + 0x400
-      val funcB    = base + 0x800
+      val trace = (0 until 4096).map { i =>
+        val base = 0x80000000L
+        val pc = base + (i % 512) * 4
 
-      val trace = (0 until 2048).map { i =>
-        val pc = base + i * 4
+        val funcA = base + 0x100
+        val funcB = base + 0x200
+        val funcC = base + 0x300
 
-        // =========================
-        // main loop
-        // =========================
-        if (pc < funcA) {
-
-          if (i % 16 == 0) {
-            // call funcA
-            Instr(pc,
-              isCall = true,
-              isReturn = false,
-              isBranch = true,
-              taken = true,
-              target = funcA
-            )
-          }
-          else if (i % 4 == 0) {
-            // conditional branch（pattern）
-            val taken = ((i / 4) % 2 == 0)   // 0101 pattern（GShare友好）
-            Instr(pc,
-              isBranch = true,
-              taken = taken,
-              target = pc + 16
-            )
-          }
-          else {
-            Instr(pc) // normal
-          }
+        // ====== 主入口 ======
+        if (pc == base) {
+          Instr(pc, isCall = true, isBranch = true, taken = true, target = funcA)
         }
 
-        // =========================
-        // funcA
-        // =========================
+        // ====== 函数 A ======
         else if (pc >= funcA && pc < funcA + 0x40) {
+          val idx = ((pc - funcA) / 4).toInt
 
-          if (pc == funcA) {
-            // entry cond branch
-            Instr(pc,
-              isBranch = true,
-              taken = true,
-              target = pc + 8
-            )
+          if (idx == 0) {
+            // call B
+            Instr(pc, isCall = true, isBranch = true, taken = true, target = funcB)
           }
-          else if (pc == funcA + 0x8) {
-            // call funcB
-            Instr(pc,
-              isCall = true,
-              isReturn = false,
-              isBranch = true,
-              taken = true,
-              target = funcB
-            )
+          else if (idx % 4 == 0) {
+            // pattern: TTNT
+            Instr(pc, isBranch = true, taken = true, target = pc + 8)
           }
-          else if (pc == funcA + 0x10) {
-            // pattern branch
-            val taken = ((i / 8) % 2 == 0)
-            Instr(pc,
-              isBranch = true,
-              taken = taken,
-              target = pc + 12
-            )
+          else if (idx % 4 == 1) {
+            Instr(pc, isBranch = true, taken = true, target = pc + 8)
           }
-          else if (pc == funcA + 0x3C) {
-            // return
-            Instr(pc,
-              isReturn = true,
-              isBranch = true,
-              taken = true,
-              target = 0
-            )
+          else if (idx % 4 == 2) {
+            Instr(pc, isBranch = true, taken = false)
           }
           else {
-            Instr(pc)
+            Instr(pc) // 顺序执行
           }
         }
+        else if (pc == funcA + 0x40) {
+          // return
+          Instr(pc, isReturn = true, isBranch = true, taken = true)
+        }
 
-        // =========================
-        // funcB
-        // =========================
-        else if (pc >= funcB && pc < funcB + 0x20) {
+        // ====== 函数 B ======
+        else if (pc >= funcB && pc < funcB + 0x40) {
+          val idx = ((pc - funcB) / 4).toInt
 
-          if (pc == funcB) {
-            val taken = ((i / 2) % 2 == 0)
-            Instr(pc,
-              isBranch = true,
-              taken = taken,
-              target = pc + 8
-            )
+          if (idx == 0) {
+            // call C
+            Instr(pc, isCall = true, isBranch = true, taken = true, target = funcC)
           }
-          else if (pc == funcB + 0x1C) {
-            // return
-            Instr(pc,
-              isReturn = true,
-              isBranch = true,
-              taken = true,
-              target = 0
-            )
+          else if (idx % 3 == 0) {
+            // pattern: TNN
+            Instr(pc, isBranch = true, taken = true, target = pc + 8)
           }
           else {
-            Instr(pc)
+            Instr(pc, isBranch = true, taken = false)
           }
         }
+        else if (pc == funcB + 0x40) {
+          Instr(pc, isReturn = true, isBranch = true, taken = true)
+        }
 
-        // =========================
-        // fallback
-        // =========================
+        // ====== 函数 C ======
+        else if (pc >= funcC && pc < funcC + 0x40) {
+          val idx = ((pc - funcC) / 4).toInt
+
+          if (idx % 2 == 0) {
+            // pattern: TN
+            Instr(pc, isBranch = true, taken = true, target = pc + 8)
+          }
+          else {
+            Instr(pc, isBranch = true, taken = false)
+          }
+        }
+        else if (pc == funcC + 0x40) {
+          Instr(pc, isReturn = true, isBranch = true, taken = true)
+        }
+
+        // ====== 干扰区（alias + noise）======
+        else if ((i % 16) == 0) {
+          // 跳回入口（制造全局历史扰动）
+          Instr(pc, isBranch = true, taken = true, target = base)
+        }
+        else if ((i % 7) == 0) {
+          Instr(pc, isBranch = true, taken = false)
+        }
         else {
           Instr(pc)
         }
@@ -177,6 +149,7 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
 
       class GoldenCPU(initPC: Long) {
         var pc: Long = initPC
+        var ghr: Long = 0
         var goldenRAS = scala.collection.mutable.Stack[Long]()
         var nextpc = pc + 4L
         def step(): Long = {
@@ -192,7 +165,13 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
           }
           else if(inst.isBranch && inst.taken) nextpc = inst.target
           else nextpc = pc + 4L
-          
+
+          if(inst.isBranch) {
+            ghr = ghr >> 1L
+            if(inst.taken) {
+              ghr |= (1L << 19)
+            }
+          }
           pc = nextpc
           return oldpc
         }
@@ -210,6 +189,8 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
 
           return target
         }
+        def PC(): Long = pc
+        def GHR(): Long = ghr & 0xFFFFF
       }
 
       var cycle = 0
@@ -227,81 +208,65 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
       var goldencpu = new GoldenCPU(0x80000000L)
       var btbAccessCount = 0
       
-      while(cycle < 1501) {
+      var if0_pcVec = IndexedSeq.fill(fetchWidth)(0.U(p(ADDR_WIDTH).W))
+      var if0_pcValid = IndexedSeq.fill(fetchWidth)(false.B)
+
+      while(cycle < 5001) {
         // commit redirect
         var commit_redirect = false
         // all reset to zero
         dut.io.commit_redirect.flush.poke(false.B)
+        dut.io.commit_redirect.flush_pc.poke(0.U)
+        dut.io.commit_redirect.isCall.poke(false.B)
+        dut.io.commit_redirect.isReturn.poke(false.B)
+        dut.io.commit_redirect.pc.poke(0.U)
+        dut.io.commit_redirect.rasTopPtr.poke(0.U)
+
         dut.io.icache_stall_req.poke(false.B)
         dut.io.stall_from_backpipe.poke(false.B)
         dut.io.icache_refill_valid.poke(false.B)
-
-        var if2_predecodeRes = Array.fill(fetchWidth)(new Meta)
-        var if2_instQueue = new Queue[(Boolean, Instr)]
         
         // icache always hit
         dut.io.if2_icache_hit.poke(true.B)
 
-        // // wait 2 cycle, then output per cycle
-        if(predecodeCounter == 0) {
-          if(predecodeQueue.nonEmpty) {
-            if2_predecodeRes = predecodeQueue.dequeue()
-          }
-          else println(s"[PREDECODE INFO]: cycle [$cycle] predecode queue empty")
-        }
-        else predecodeCounter -= 1
-
-        // wait 2 cycle, then output per cycle
-        if(icacheCounter == 0) {
-          for(i <- 0 until fetchWidth) {
-            if(instQueue.nonEmpty) {
-              if2_instQueue.enqueue(instQueue.dequeue())
-            }
-            else println(s"[ICACHE INFO]: cycle [$cycle] inst queue empty")
-          }
-        }
-        else icacheCounter -= 1
-
         // if2 predecode result drive
         for(i <- 0 until fetchWidth) {
-          dut.io.if2_predecode(i).isCall.poke(if2_predecodeRes(i).isCall().B)
-          dut.io.if2_predecode(i).isReturn.poke(if2_predecodeRes(i).isReturn().B)
-          dut.io.if2_predecode(i).isDirectJump.poke(if2_predecodeRes(i).isCall().B)
-          dut.io.if2_predecode(i).isIndirectJump.poke(
-            if2_predecodeRes(i).isIndirectJump().B
-          )
-          dut.io.if2_predecode(i).isConditionalBranch.poke(
-            if2_predecodeRes(i).isConditionalBranch().B
-          )
-          dut.io.if2_predecode(i).isUnconditionalBranch.poke(
-            if2_predecodeRes(i).isUnconditionalBranch().B
-          )
-        }
-
-        // get predecode result, enq
-        val if0_pcVec = dut.io.if0_itlb_req.peek()
-        val if0_pcValid = dut.io.if0_itlb_req.peek()
-
-        var predecodeArray = Array.fill(fetchWidth)(new Meta)
-
-        // if2 predecode
-        for(i <- 0 until fetchWidth) {
-          if(if0_pcValid(i).valid.litToBoolean) {
-            predecodeArray(i) = predecoder(if0_pcVec(i).litValue.longValue)
+          if(dut.io.if2_valid_vec(i).peek().litToBoolean) {
+            val if2_predecodeRes = predecoder(dut.io.if2_pc_vec(i).peek().litValue.longValue)
+            dut.io.if2_predecode(i).isCall.poke(if2_predecodeRes.isCall().B)
+            dut.io.if2_predecode(i).isReturn.poke(if2_predecodeRes.isReturn().B)
+            dut.io.if2_predecode(i).isDirectJump.poke(if2_predecodeRes.isCall().B)
+            dut.io.if2_predecode(i).isIndirectJump.poke(
+              if2_predecodeRes.isIndirectJump().B
+            )
+            dut.io.if2_predecode(i).isConditionalBranch.poke(
+              if2_predecodeRes.isConditionalBranch().B
+            )
+            dut.io.if2_predecode(i).isUnconditionalBranch.poke(
+              if2_predecodeRes.isUnconditionalBranch().B
+            )
           }
-        }
-        predecodeQueue.enqueue(predecodeArray)
-
-        // if2 icache
-        for(i <- 0 until fetchWidth) {
-          instQueue.enqueue((if0_pcValid(i).valid.litToBoolean, getInstr(if0_pcVec(i).litValue.longValue)))
+          else {
+            dut.io.if2_predecode(i).isCall.poke(false.B)
+            dut.io.if2_predecode(i).isReturn.poke(false.B)
+            dut.io.if2_predecode(i).isDirectJump.poke(false.B)
+            dut.io.if2_predecode(i).isIndirectJump.poke(
+              false.B
+            )
+            dut.io.if2_predecode(i).isConditionalBranch.poke(
+              false.B
+            )
+            dut.io.if2_predecode(i).isUnconditionalBranch.poke(
+              false.B
+            )            
+          }
         }
 
         // ITLB always hit VA=PA
         for(i <- 0 until fetchWidth) {
           dut.io.if1_itlb_resp(i).hit.poke(true.B)
           dut.io.if1_itlb_resp(i).paddr.bits.poke(if0_pcVec(i).litValue.longValue.U)
-          dut.io.if1_itlb_resp(i).valid.poke(if0_pcValid(i).valid.litToBoolean.B)
+          dut.io.if1_itlb_resp(i).valid.poke(if0_pcValid(i).litToBoolean.B)
         }
 
         // inst set to 0, because no decode in frontend 
@@ -332,6 +297,10 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
         }
 
         for(i <- 0 until fetchWidth) {
+          if(if5_branchPreds(i).valid.litToBoolean) {
+            val meta = predecoder(goldencpu.PC())
+            if(meta.isCall() || meta.isReturn() || meta.isConditionalBranch()) btbAccessCount += 1
+          }
           if(if5_branchPreds(i).valid.litToBoolean && !commit_redirect) {
             val if5_predTarget = if5_branchPreds(i).target.litValue.longValue
             val if5_isCall = if5_branchPreds(i).isCall.litToBoolean
@@ -352,7 +321,7 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
             val realTaken = instr.taken
             val realIsBranch = instr.isBranch
 
-            val misPred = realTaken != if5_taken || realTarget != if5_predTarget
+            val misPred = (realTaken != if5_taken || realTarget != if5_predTarget)
 
             if(realPC != if5_pc) {
               println(s"[PC ERROR]: cycle[${cycle}] if5 pc 0x${if5_pc.toHexString} golden pc 0x${realPC.toHexString}")
@@ -368,13 +337,24 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
 
             // branch but not call/return
             if(realIsBranch && !realIsCall && !realIsReturn) {
+              val branchmisPred = (realTaken != if5_taken || realTarget != if5_predTarget)
               branchTotal += 1
-              if(!misPred) correctTotal += 1
+              if(!branchmisPred) correctTotal += 1
             }
 
-            if(realIsBranch && !realIsCall && !realIsReturn) {
-              btbAccessCount += 1
-            }
+            dut.io.wb1_predictor_update(i).valid.poke(realIsBranch.B)
+            dut.io.wb1_predictor_update(i).counter.poke(if5_counter.U)
+            dut.io.wb1_predictor_update(i).ghist.poke(if5_ghist.U)
+            dut.io.wb1_predictor_update(i).lhist.poke(if5_lhist.U)
+            dut.io.wb1_predictor_update(i).misPred.poke(misPred.B)
+            dut.io.wb1_predictor_update(i).pc.poke(if5_pc.U)
+            dut.io.wb1_predictor_update(i).taken.poke(realTaken.B)
+
+            dut.io.wb1_l1_btb_update(i).valid.poke(realIsBranch.B)
+            dut.io.wb1_l1_btb_update(i).pc.poke(if5_pc.U)
+            dut.io.wb1_l1_btb_update(i).isCall.poke(realIsCall.B)
+            dut.io.wb1_l1_btb_update(i).isReturn.poke(realIsReturn.B)
+            dut.io.wb1_l1_btb_update(i).target.poke(realTarget.U)
 
             if(misPred) {
               // flush
@@ -393,20 +373,6 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
                 dut.io.commit_redirect.rasTopPtr.poke(if5_rasTopPtr.U)
                 commit_redirect = true
               }
-
-              dut.io.wb1_predictor_update(i).valid.poke(true.B)
-              dut.io.wb1_predictor_update(i).counter.poke(if5_counter.U)
-              dut.io.wb1_predictor_update(i).ghist.poke(if5_ghist.U)
-              dut.io.wb1_predictor_update(i).lhist.poke(if5_lhist.U)
-              dut.io.wb1_predictor_update(i).misPred.poke(true.B)
-              dut.io.wb1_predictor_update(i).pc.poke(if5_pc.U)
-              dut.io.wb1_predictor_update(i).taken.poke(realTaken.B)
-
-              dut.io.wb1_l1_btb_update(i).valid.poke(true.B)
-              dut.io.wb1_l1_btb_update(i).pc.poke(if5_pc.U)
-              dut.io.wb1_l1_btb_update(i).isCall.poke(realIsCall.B)
-              dut.io.wb1_l1_btb_update(i).isReturn.poke(realIsReturn.B)
-              dut.io.wb1_l1_btb_update(i).target.poke(realTarget.U)
             }
           }
         }
@@ -420,17 +386,23 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
             val l0Rate = l0btbhitCount.toDouble / btbAccessCount * 100
             val l1Rate = l1btbhitCount.toDouble / btbAccessCount * 100
             val rasRate = rasCorrectTotal.toDouble / rasTotal * 100
-            println(s"Branch Pred Acc: ${acc}%")
-            println(s"l0 btb hit rate: ${l0Rate}%, btbAccessCount:$btbAccessCount")
-            println(s"l1 btb hit rate: ${l1Rate}%, btbAccessCount:$btbAccessCount")
-            println(s"ras correct rate: ${rasRate}%, rasTotal: $rasTotal")
+            println(s"cycle[$cycle]: Branch Pred Acc: ${acc}%, branchTotal:$branchTotal")
+            println(s"cycle[$cycle]: l0 btb hit rate: ${l0Rate}%, btbAccessCount:$btbAccessCount")
+            println(s"cycle[$cycle]: l1 btb hit rate: ${l1Rate}%, btbAccessCount:$btbAccessCount")
+            println(s"cycle[$cycle]: ras correct rate: ${rasRate}%, rasTotal: $rasTotal")
           }
           else println(s"cycle[${cycle}]: no branch found")
           println("")
         }
+
+        dut.io.refGHR.poke(goldencpu.GHR().U)
+
         // if1 itlb
         dut.clock.step(1)
         
+        if0_pcVec = dut.io.if0_itlb_req.peek().map(_.addr)
+        if0_pcValid = dut.io.if0_itlb_req.peek().map(_.valid)
+
         cycle += 1
       }
     }

@@ -11,6 +11,8 @@ import org.chipsalliance.cde.config._
 // access & update ras at if1 stage
 class RAS(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
+        val next_isCall = Input(Bool())
+        val next_isReturn = Input(Bool())
         val next_ras_top_ptr = Input(UInt(log2Ceil(p(RASParam).RASSize + 1).W))
         val next_ras_top = Input(UInt(p(ADDR_WIDTH).W))
         val next_ras_top_valid = Input(Bool())
@@ -29,15 +31,28 @@ class RAS(implicit p: Parameters) extends Module {
     io.rasTopPtr := ras_top
     io.rasTopValid := ras_top < ras_stack_depth.U && ras_top =/= 0.U
 
-    ras_top := Mux(
-        io.next_ras_top_valid,
-        Mux(io.next_ras_top_ptr >= ras_stack_depth.U, (ras_stack_depth - 1).U, io.next_ras_top_ptr),
+    val nextRasTopAfterCheckCall = Mux(
+        io.next_ras_top_valid, 
+        Mux(io.next_isCall && io.next_ras_top_ptr < ras_stack_depth.U,  io.next_ras_top_ptr + 1.U, ras_top),
         ras_top
     )
+
+    val nextRasTopAfterCheckRet = Mux(
+        io.next_ras_top_valid, 
+        Mux(io.next_isReturn && nextRasTopAfterCheckCall > 0.U,  nextRasTopAfterCheckCall - 1.U, nextRasTopAfterCheckCall),
+        ras_top
+    )
+
+    ras_top := nextRasTopAfterCheckRet
     
-    ras_stack(io.next_ras_top_ptr) := Mux(io.next_ras_top_valid, io.next_ras_top, ras_stack(io.next_ras_top_ptr))
+    ras_stack(nextRasTopAfterCheckRet) := 
+        Mux(
+            io.next_ras_top_valid && io.next_isCall, 
+            io.next_ras_top, 
+            ras_stack(nextRasTopAfterCheckRet)
+        )
 
     when(io.next_ras_top_valid) {
-        printf(p"ras top:${io.next_ras_top_ptr}, write value: ${io.next_ras_top}\n")
+        printf(p"ras top:${nextRasTopAfterCheckRet}, write value: ${io.next_ras_top} isCall:${io.next_isCall}, isReturn:${io.next_isReturn} \n")
     }
 }

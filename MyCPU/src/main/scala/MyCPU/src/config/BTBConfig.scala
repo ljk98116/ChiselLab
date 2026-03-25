@@ -17,9 +17,12 @@ case class BTBParams(
     btbBankNum: Int = 4
 )
 
-// L1 BTB is 2-way or 4-way set associative, use offset bits 
+// L1 BTB is 2-way or 4-way set associative, use offset bits
+// pc[7, 2] -> index
+// pc[2] -> bankid
+// pc[7, 3] -> rowid => 32 lines per bank x 2 way <=>  64 items perbank
 object TwoWayBTBParams extends BTBParams(
-    btbEntryNum = 64,
+    btbEntryNum = 256,
     btbWayNum = 2,
     btbIndexBits = 6,
     btbTagBits = 20,
@@ -27,8 +30,12 @@ object TwoWayBTBParams extends BTBParams(
     btbBankNum = 4
 )
 
+// L1 BTB is 2-way or 4-way set associative, use offset bits
+// pc[7, 2] -> index
+// pc[3, 2] -> bankid
+// pc[7, 4] -> rowid => 16 lines per bank x 4 way <=> 64 items perbank
 object FourWayBTBParams extends BTBParams(
-    btbEntryNum = 64,
+    btbEntryNum = 256,
     btbWayNum = 4,
     btbIndexBits = 6,
     btbTagBits = 22,

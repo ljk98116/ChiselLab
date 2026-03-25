@@ -78,9 +78,10 @@ class InstBuffer(size: Int)(implicit p: Parameters) extends Module {
 
     when(deq_fire) {
         headPtr := headPtr + 1.U
-        freeCount := freeCount + 1.U - enqValid
     }
 
+    freeCount := freeCount + deq_fire - enqValid
+    
     for(i <- 0 until p(FETCH_WIDTH)) {
         io.if5_pc_o(i) := Mux(deq_fire, deqPC_r(i), 0.U)
         io.if5_instValid_o(i) := Mux(deq_fire, deqValid_r(i), false.B)

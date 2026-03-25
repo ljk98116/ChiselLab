@@ -17,7 +17,8 @@ import org.chipsalliance.cde.config._
 // >3GHz on asic, small size synth as DFFs
 class L1BTB(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
-        val flush = Input(Bool())
+        val if1_flush = Input(Bool())
+        val if2_flush = Input(Bool())
         val if1_stall = Input(Bool())
         val if2_stall = Input(Bool())
         val req = Input(Vec(p(FETCH_WIDTH), new L1BTBReqInfo))
@@ -48,8 +49,8 @@ class L1BTB(implicit p: Parameters) extends Module {
 
     val l1_btb_target_array = Seq.fill(bankNum)(Seq.fill(wayNum)(SyncReadMem(EntryNum / bankNum / wayNum, UInt(p(ADDR_WIDTH).W))))
     
-    val if1_reqValid = PipeReg(VecInit(io.req.map(_.valid)), io.if1_stall, io.flush)
-    val if1_reqPC = PipeReg(VecInit(io.req.map(_.pc)), io.if1_stall, io.flush)
+    val if1_reqValid = PipeReg(VecInit(io.req.map(_.valid)), io.if1_stall, io.if1_flush)
+    val if1_reqPC = PipeReg(VecInit(io.req.map(_.pc)), io.if1_stall, io.if1_flush)
 
     val if1_hitVec = WireInit(VecInit(
         Seq.fill(bankNum)(
@@ -75,12 +76,29 @@ class L1BTB(implicit p: Parameters) extends Module {
         )
     ))
 
+    val if1_targetVec = WireInit(VecInit(
+        Seq.fill(bankNum)(VecInit(
+            Seq.fill(wayNum)(0.U(p(ADDR_WIDTH).W))
+        ))
+    ))
+
+    val numRows = EntryNum / bankNum / wayNum
+
+    val fifoPtr = RegInit(VecInit(
+        Seq.fill(bankNum)(
+            VecInit(Seq.fill(numRows)(0.U(log2Ceil(wayNum).W)))
+        )
+    ))
+
     // read at if0 stage, use io.req
     for(j <- 0 until p(FETCH_WIDTH)) {
+        val if1_reqBankId = PipeReg(io.req(j).pc(bankBits + offsetBits - 1, offsetBits), io.if1_stall, io.if1_flush)
+        val if1_reqBankRow = PipeReg(io.req(j).pc(indexBits + offsetBits -1, offsetBits + bankBits), io.if1_stall, io.if1_flush)
+
         for(i <- 0 until wayNum) {
             val if1_tag = l1_btb_tag_array(j)(i).read(io.req(j).pc(indexBits + offsetBits - 1, offsetBits + bankBits))
             val if1_prop = l1_btb_prop_array(j)(i).read(io.req(j).pc(indexBits + offsetBits - 1, offsetBits + bankBits))
-
+            if1_targetVec(j)(i) := l1_btb_target_array(j)(i).read(io.req(j).pc(indexBits + offsetBits - 1, offsetBits + bankBits))
             val valid = if1_prop(2)
             val isCall = if1_prop(1)
             val isReturn = if1_prop(0)
@@ -91,27 +109,18 @@ class L1BTB(implicit p: Parameters) extends Module {
             if1_isCallVec(j)(i) := isCall
             if1_isReturnVec(j)(i) := isReturn
         }
+        // when(if1_reqValid(j)) {
+        //     printf(p"l1 btb bank[$j($if1_reqBankId)] req! pc: ${if1_reqPC(j)} index: ${if1_reqBankRow} \n")
+        // }
     }
 
-    val if1_targetVec = WireInit(VecInit(
-        Seq.fill(bankNum)(VecInit(
-            Seq.fill(wayNum)(0.U(p(ADDR_WIDTH).W))
-        ))
-    ))
+    val if2_reqPC = PipeReg(if1_reqPC, io.if2_stall, io.if2_flush)
+    val if2_reqValid = PipeReg(if1_reqValid, io.if2_stall, io.if2_flush)
 
-    for(j <- 0 until bankNum) {
-        for(i <- 0 until wayNum) {
-            if1_targetVec(j)(i) := l1_btb_target_array(j)(i).read(io.req(j).pc(indexBits + offsetBits - 1, offsetBits + bankBits))
-        }
-    }
-
-    val if2_reqPC = PipeReg(if1_reqPC, io.if2_stall, io.flush)
-    val if2_reqValid = PipeReg(if1_reqValid, io.if2_stall, io.flush)
-
-    val if2_hitVec = PipeReg(if1_hitVec, io.if2_stall, io.flush)
-    val if2_targetVec = PipeReg(if1_targetVec, io.if2_stall, io.flush)
-    val if2_isCallVec = PipeReg(if1_isCallVec, io.if2_stall, io.flush)
-    val if2_isReturnVec = PipeReg(if1_isReturnVec, io.if2_stall, io.flush)
+    val if2_hitVec = PipeReg(if1_hitVec, io.if2_stall, io.if2_flush)
+    val if2_targetVec = PipeReg(if1_targetVec, io.if2_stall, io.if2_flush)
+    val if2_isCallVec = PipeReg(if1_isCallVec, io.if2_stall, io.if2_flush)
+    val if2_isReturnVec = PipeReg(if1_isReturnVec, io.if2_stall, io.if2_flush)
 
     // double PE may be a critical timing path
     val if2_hitWayArray = WireInit(VecInit(Seq.tabulate(bankNum)(i => PriorityEncoder(if2_hitVec(i)))))
@@ -125,9 +134,9 @@ class L1BTB(implicit p: Parameters) extends Module {
     io.resp.hitIndex := if2_hitIndex
     io.if2_l1_btb_hit := if2_hitArray
 
-    val lfsr = chisel3.util.random.LFSR(4)
-    val victimWay = WireInit(0.U(log2Ceil(wayNum).W))
-    victimWay := lfsr(log2Ceil(wayNum) - 1, 0)
+    // val lfsr = chisel3.util.random.LFSR(4)
+    // val victimWay = WireInit(0.U(log2Ceil(wayNum).W))
+    // victimWay := lfsr(log2Ceil(wayNum) - 1, 0)
 
     // same update logic for hit and update
     val updatePC = io.update.map(_.pc)
@@ -136,19 +145,20 @@ class L1BTB(implicit p: Parameters) extends Module {
     val updateTarget = io.update.map(_.target)
     val updateValid = io.update.map(_.valid)
 
-    for(j <- 0 until bankNum) {
+    for(j <- 0 until p(FETCH_WIDTH)) {
         val updateBankId = updatePC(j)(bankBits + offsetBits - 1, offsetBits)
         val updateRowId = updatePC(j)(indexBits + offsetBits - 1, offsetBits + bankBits)
         val updateTag = updatePC(j)(tagBits + indexBits + offsetBits - 1, offsetBits + indexBits)
-
+        val waySel = fifoPtr(j)(updateRowId)
         for(i <- 0 until wayNum) {
-            when(i.U === victimWay) {
-                when(updateValid(j)) {
-                    l1_btb_tag_array(j)(i).write(updateRowId, updateTag)
-                    l1_btb_prop_array(j)(i).write(updateRowId, Cat(1.U(1.W), updateIsCall(j), updateIsReturn(j)))
-                    l1_btb_target_array(j)(i).write(updateRowId, updateTarget(j))
-                }
+            when(i.U === waySel && updateValid(j)) {
+                l1_btb_tag_array(j)(i).write(updateRowId, updateTag)
+                l1_btb_prop_array(j)(i).write(updateRowId, Cat(1.U(1.W), updateIsCall(j), updateIsReturn(j)))
+                l1_btb_target_array(j)(i).write(updateRowId, updateTarget(j))
+                fifoPtr(j)(updateRowId) := waySel + 1.U
+                // printf(p"l1 btb bank[$j($updateBankId)] way[$i] pc[${updatePC(j)}] update! index: $updateRowId \n")
             }
         }
     }
+
 }   

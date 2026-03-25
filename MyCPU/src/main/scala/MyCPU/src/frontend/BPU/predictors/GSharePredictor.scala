@@ -60,7 +60,7 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
     if2_packedTaken(0) := if2_predict(0) << if2_ghr_spec_prefix(0)
     for(i <- 1 until fetchWidth) {
         if2_packedTaken(i) := if2_packedTaken(i-1) | (if2_predict(i) << if2_ghr_spec_prefix(i))
-    } 
+    }
 
     val if0_phtReqIndex = WireInit(VecInit(
         Seq.fill(p(FETCH_WIDTH))(0.U(indexBits.W))
@@ -68,7 +68,7 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
 
     for(i <- 0 until p(FETCH_WIDTH)) {
         if0_phtReqIndex(i) := 
-            (io.if0_req(i).pc >> 2)(indexBits - 1, 0) ^ ghist_spec(globalHistoryBits - 1, globalHistoryBits - indexBits)
+            (io.if0_req(i).pc >> 2)(indexBits - 1, 0) ^ ghist_spec(indexBits - 1, 0)
     }
 
     val if0_phtReqIndexBankIds = if0_phtReqIndex.map(
@@ -153,7 +153,7 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
 
         val wb2_updatePhtIndex =
             (wb2_update(i).pc >> 2)(indexBits - 1, 0) ^
-            wb2_update(i).ghist(globalHistoryBits - 1, globalHistoryBits - indexBits)
+            wb2_update(i).ghist(indexBits - 1, 0)
 
         val wb2_bankId  = wb2_updatePhtIndex(log2Ceil(fetchWidth) - 1, 0)
         val wb2_bankRow = wb2_updatePhtIndex(indexBits - 1, log2Ceil(fetchWidth))
@@ -174,6 +174,24 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
 
         val wb3_next =
             Mux(wb3_taken, wb3_nextTaken, wb3_nextNotTaken)
+
+        // when(wb2_update(i).valid) {
+        //     printf(p"""
+        //     [DEBUG]
+        //     pc=${wb2_update(i).pc}
+        //     ghist_used=${wb2_update(i).ghist}
+        //     index=${wb2_updatePhtIndex}
+        //     """)
+        // }
+
+        // when(io.if0_req(i).valid) {
+        //     printf(p"""
+        //     [PREDICT]
+        //     pc=${io.if0_req(i).pc}
+        //     ghist=${ghist_spec}
+        //     index=${if0_phtReqIndex(i)}
+        //     """)
+        // }
 
         wb3_bankId_vec(i)         := wb3_bankId
         wb3_bankRow_vec(i)        := wb3_bankRow
@@ -209,6 +227,7 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
     // valid x x x x
     // taken x x x x
     val wb2_ghr_shift = PopCount(wb2_update.map(_.valid))
+
     // target loc -> origin array mapping
 
     val wb2_takenVec = Wire(Vec(fetchWidth, Bool()))
@@ -224,6 +243,8 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
     for (i <- 1 until fetchWidth) {
         wb2_prefix(i) := wb2_prefix(i-1) + wb2_validVec(i-1)
     }
+
+    val wb2_mask = WireInit(0.U((fetchWidth + 1).W))
 
     val wb3_ghr_shift = RegNext(wb2_ghr_shift)
     val wb3_prefix = RegNext(wb2_prefix)
@@ -241,7 +262,13 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
     }
 
     // ---------- GHR update ----------
-    ghist_commit := (ghist_commit << wb3_ghr_shift) | packedTaken(fetchWidth - 1)
+    val shiftAmt = WireInit(0.U(log2Ceil(globalHistoryBits).W))
+    shiftAmt := globalHistoryBits.U - wb3_ghr_shift
+
+    val if2_shiftAmt = WireInit(0.U(log2Ceil(globalHistoryBits).W))
+    if2_shiftAmt := globalHistoryBits.U - if2_branchCount
+
+    ghist_commit := (ghist_commit >> wb3_ghr_shift) | (packedTaken(fetchWidth - 1) << shiftAmt)
 
     val wb2_misPred = wb2_update.map(_.misPred)
     val wb2_misPredIdx = PriorityEncoder(wb2_misPred)
@@ -256,21 +283,13 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
     when(io.commit_flush) {
         ghist_spec := ghist_commit
     }
-    // branch misPred
+    // flush because branch misPred, use newly updated ghr_commit
     .elsewhen(wb3_hasMisPred) {
-        ghist_spec := Cat(wb3_update(wb3_misPredIdx).ghist(globalHistoryBits - 2, 0), wb3_update(wb3_misPredIdx).taken)
+        ghist_spec := (ghist_commit >> wb3_ghr_shift) | (packedTaken(fetchWidth - 1) << shiftAmt)
     }
     // update ghr spec at if2 stage
     .elsewhen(!io.if0_stall) {
-        ghist_spec := (if2_ghist << if2_branchCount) | if2_packedTaken(fetchWidth - 1)
+        ghist_spec := (if2_ghist >> if2_branchCount) | (if2_packedTaken(fetchWidth - 1) << if2_shiftAmt)
     }
-    // for(i <- 0 until p(FETCH_WIDTH)) {
-    //     when(io.update(i).valid) {
-    //         printf(p"UPDATE pc=${io.update(i).pc} taken=${io.update(i).taken} ctr=${io.update(i).counter},GHR=${io.update(i).ghist}\n")
-    //     }
-    //     when(io.if1_predict(i).valid) {
-    //         printf(p"PRED pc=${RegNext(io.if0_req(i).pc)} ctr=${io.if1_predict(i).counter}\n")
-    //     }
-    //     // printf(p"REQ pc=${io.if0_req(i).pc}, valid:${io.if0_req(i).valid}\n")
-    // }
+
 }
