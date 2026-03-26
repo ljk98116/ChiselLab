@@ -169,7 +169,7 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
           if(inst.isBranch) {
             ghr = ghr >> 1L
             if(inst.taken) {
-              ghr |= (1L << 19)
+              ghr |= (1L << 7)
             }
           }
           pc = nextpc
@@ -190,7 +190,7 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
           return target
         }
         def PC(): Long = pc
-        def GHR(): Long = ghr & 0xFFFFF
+        def GHR(): Long = ghr & 0xFF
       }
 
       var cycle = 0
@@ -211,7 +211,7 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
       var if0_pcVec = IndexedSeq.fill(fetchWidth)(0.U(p(ADDR_WIDTH).W))
       var if0_pcValid = IndexedSeq.fill(fetchWidth)(false.B)
 
-      while(cycle < 5001) {
+      while(cycle < 651) {
         // commit redirect
         var commit_redirect = false
         // all reset to zero
@@ -354,7 +354,7 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
             dut.io.wb1_l1_btb_update(i).pc.poke(if5_pc.U)
             dut.io.wb1_l1_btb_update(i).isCall.poke(realIsCall.B)
             dut.io.wb1_l1_btb_update(i).isReturn.poke(realIsReturn.B)
-            dut.io.wb1_l1_btb_update(i).target.poke(realTarget.U)
+            dut.io.wb1_l1_btb_update(i).target.poke(((realTarget - realPC) & 0xFF).U)
 
             if(misPred) {
               // flush

@@ -12,5 +12,5 @@ class CommitUpdateInfo(implicit p: Parameters) extends Bundle {
     val pc = UInt(p(ADDR_WIDTH).W)
     val isCall = Bool()
     val isReturn = Bool()
-    val rasTopPtr = UInt(log2Ceil(p(RASParam).RASSize).W)
+    val rasTopPtr = UInt(log2Ceil(p(RASParam).RASSize + 1).W)
 }

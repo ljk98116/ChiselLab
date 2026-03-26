@@ -14,38 +14,58 @@ case class BTBParams(
     btbIndexBits: Int,
     btbTagBits: Int,
     btbOffsetBits: Int,
-    btbBankNum: Int = 4
+    btbBankNum: Int = 2
 )
 
 // L1 BTB is 2-way or 4-way set associative, use offset bits
 // pc[7, 2] -> index
 // pc[2] -> bankid
 // pc[7, 3] -> rowid => 32 lines per bank x 2 way <=>  64 items perbank
+
+// pc[4, 2] -> index
+// pc[3, 2] => bankid
+// pc[4] -> rowid
+// 2 line per bank x 2way <=> 4 items perbank
+
 object TwoWayBTBParams extends BTBParams(
-    btbEntryNum = 256,
+    btbEntryNum = 16,
     btbWayNum = 2,
-    btbIndexBits = 6,
-    btbTagBits = 20,
+    btbIndexBits = 3,
+    btbTagBits = 2,
     btbOffsetBits = 2,
-    btbBankNum = 4
+    btbBankNum = 2
+)
+
+object DirectMapBTBParams extends BTBParams (
+    btbEntryNum = 8,
+    btbWayNum = 1,
+    btbIndexBits = 3,
+    btbTagBits = 8,
+    btbOffsetBits = 2,
+    btbBankNum = 2    
 )
 
 // L1 BTB is 2-way or 4-way set associative, use offset bits
 // pc[7, 2] -> index
 // pc[3, 2] -> bankid
 // pc[7, 4] -> rowid => 16 lines per bank x 4 way <=> 64 items perbank
+
+// pc[4, 2] -> index
+// pc[3, 2] => bankid
+// pc[4] -> rowid
+// 2 line per bank x 4way <=> 8 items perbank
 object FourWayBTBParams extends BTBParams(
-    btbEntryNum = 256,
+    btbEntryNum = 32,
     btbWayNum = 4,
-    btbIndexBits = 6,
-    btbTagBits = 22,
+    btbIndexBits = 3,
+    btbTagBits = 2,
     btbOffsetBits = 2,
-    btbBankNum = 4
+    btbBankNum = 2
 )
 
 object L0BTBParams extends BTBParams(
-    btbEntryNum = 4,
-    btbIndexBits = 2,
+    btbEntryNum = 2,
+    btbIndexBits = 1,
     btbTagBits = 10,
     btbOffsetBits = 2,
     btbBankNum = 1
@@ -56,19 +76,30 @@ trait BTBParamsKey extends Field[BTBParams]
 
 object UseTwoWayBTB extends BTBConfigKey
 object UseFourWayBTB extends BTBConfigKey  
+object UseDirectMapBTB extends BTBConfigKey
+
 object L0BTBParam extends BTBParamsKey
 object L1BTBParam extends BTBParamsKey
 
 class TwoWayL1BTBConfig extends Config((site, here, up) => {
     case UseTwoWayBTB => true
     case UseFourWayBTB => false
+    case UseDirectMapBTB => false
     case L1BTBParam => TwoWayBTBParams
 })
 
 class FourWayL1BTBConfig extends Config((site, here, up) => {
     case UseTwoWayBTB => false
     case UseFourWayBTB => true
+    case UseDirectMapBTB => false
     case L1BTBParam => FourWayBTBParams
+})
+
+class DirectMapL1BTBConfig extends Config((site, here, up) => {
+    case UseTwoWayBTB => false
+    case UseFourWayBTB => false
+    case UseDirectMapBTB => true
+    case L1BTBParam => DirectMapBTBParams
 })
 
 class L0BTBConfig extends Config((site, here, up) => {
@@ -77,4 +108,4 @@ class L0BTBConfig extends Config((site, here, up) => {
     case L0BTBParam => L0BTBParams
 })
 
-class BTBConfig extends Config(new L0BTBConfig ++ new FourWayL1BTBConfig)
+class BTBConfig extends Config(new L0BTBConfig ++ new DirectMapL1BTBConfig)

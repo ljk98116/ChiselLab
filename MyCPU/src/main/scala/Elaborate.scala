@@ -8,7 +8,6 @@ import MyCPU.frontend.BPU._
 import MyCPU.frontend.BPU.predictors.GSharePredictor
 import MyCPU.cache._
 
-// area: 51495 50589
 object Elaborate extends App {
     val firtoolOptions = Array(
         "--lowering-options=" + List(

@@ -49,11 +49,11 @@ class InstBuffer(size: Int)(implicit p: Parameters) extends Module {
     val tailPtr = RegInit(0.U(ptrWidth.W))
     val freeCount = RegInit(size.U((ptrWidth + 1).W))
 
-    val enqValid = io.if4_instValid_i.asUInt.orR && (freeCount =/= 0.U)
+    val enqValid = io.if4_instValid_i.asUInt.orR
     val canEnq = freeCount =/= 0.U
     io.canEnq := canEnq
 
-    when(enqValid) {
+    when(enqValid && canEnq) {
         instMem.write(tailPtr, io.if4_inst_i)
         branchMem.write(tailPtr, io.if4_branch_result_i)
         pcMem.write(tailPtr, io.if4_pc_i)
@@ -73,14 +73,21 @@ class InstBuffer(size: Int)(implicit p: Parameters) extends Module {
     val deqHit_r    = hitMem(headPtr)
     val deqPA_r     = paMem(headPtr)
 
-    // current cycle hit
-    val deq_fire = deqHit_r && !io.stall
+    // current cycle hit 
+    val deq_fire = deqHit_r && !io.stall && freeCount < size.U
 
     when(deq_fire) {
         headPtr := headPtr + 1.U
     }
 
-    freeCount := freeCount + deq_fire - enqValid
+    val freeCountAfterDeq = Mux(deq_fire && freeCount < size.U, freeCount + 1.U, freeCount)
+    val freeCountAfterEnq = Mux(enqValid && freeCountAfterDeq > 0.U, freeCountAfterDeq - 1.U, freeCountAfterDeq)
+
+    when(io.flush) {
+        freeCount := size.U
+    }.otherwise {
+        freeCount := freeCountAfterEnq
+    }
     
     for(i <- 0 until p(FETCH_WIDTH)) {
         io.if5_pc_o(i) := Mux(deq_fire, deqPC_r(i), 0.U)
@@ -109,7 +116,6 @@ class InstBuffer(size: Int)(implicit p: Parameters) extends Module {
     when(io.flush) {
         headPtr := 0.U
         tailPtr := 0.U
-        freeCount := size.U
 
         validMem.foreach(_.foreach(_ := false.B))
         hitMem.foreach(_ := false.B)

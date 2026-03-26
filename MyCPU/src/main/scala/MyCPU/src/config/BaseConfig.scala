@@ -19,7 +19,7 @@ case object SIM_FLAG extends FlagConfig
 
 class BaseConfig extends Config(
     (site, here, up) => {
-        case FETCH_WIDTH => 4
+        case FETCH_WIDTH => 2
         case DATA_WIDTH => 32
         case ADDR_WIDTH => 32
         case AREG_WIDTH => 5

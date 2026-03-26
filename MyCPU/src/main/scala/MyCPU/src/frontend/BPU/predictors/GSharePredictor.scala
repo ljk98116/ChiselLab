@@ -15,6 +15,7 @@ import MyCPU.utils._
 // use update info from PredictorWbQueue to update PHT
 // update infos are assumed to be on different bank
 // udpate GHR/PHT in 2 cycles
+// area: 2998.24, top freq: 1890MHz
 class GSharePredictor(implicit p: Parameters) extends Predictor {
     val fetchWidth = p(FETCH_WIDTH)
     val indexBits = p(GShareParamKey).BPUPredictorIndexBits // 10
@@ -212,10 +213,6 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
         val selIdx = PriorityEncoder(hits)
 
         when(hasHit) {
-            if(p(UseNangate45)) {
-                io.if0_stall := true.B
-            }
-
             phtBanks(b).io.wen   := true.B
             phtBanks(b).io.waddr := wb3_bankRow_vec(selIdx)
             phtBanks(b).io.wdata := wb3_nextPhtResult_vec(selIdx)
