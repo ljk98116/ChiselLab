@@ -211,7 +211,7 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
       var if0_pcVec = IndexedSeq.fill(fetchWidth)(0.U(p(ADDR_WIDTH).W))
       var if0_pcValid = IndexedSeq.fill(fetchWidth)(false.B)
 
-      while(cycle < 651) {
+      while(cycle < 9551) {
         // commit redirect
         var commit_redirect = false
         // all reset to zero

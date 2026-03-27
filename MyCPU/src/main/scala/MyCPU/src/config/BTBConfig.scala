@@ -33,16 +33,16 @@ object TwoWayBTBParams extends BTBParams(
     btbIndexBits = 3,
     btbTagBits = 2,
     btbOffsetBits = 2,
-    btbBankNum = 2
+    btbBankNum = 4
 )
 
 object DirectMapBTBParams extends BTBParams (
-    btbEntryNum = 8,
+    btbEntryNum = 64,
     btbWayNum = 1,
-    btbIndexBits = 3,
-    btbTagBits = 8,
+    btbIndexBits = 6,
+    btbTagBits = 15,
     btbOffsetBits = 2,
-    btbBankNum = 2    
+    btbBankNum = 4    
 )
 
 // L1 BTB is 2-way or 4-way set associative, use offset bits
@@ -54,19 +54,22 @@ object DirectMapBTBParams extends BTBParams (
 // pc[3, 2] => bankid
 // pc[4] -> rowid
 // 2 line per bank x 4way <=> 8 items perbank
+
+// pc[5, 2]
+// pc[5, 4] -> rowid => 4 lines perbank x 4way = 16items perbank 
 object FourWayBTBParams extends BTBParams(
-    btbEntryNum = 32,
+    btbEntryNum = 64,
     btbWayNum = 4,
-    btbIndexBits = 3,
-    btbTagBits = 2,
+    btbIndexBits = 4,
+    btbTagBits = 14,
     btbOffsetBits = 2,
-    btbBankNum = 2
+    btbBankNum = 4
 )
 
 object L0BTBParams extends BTBParams(
     btbEntryNum = 2,
     btbIndexBits = 1,
-    btbTagBits = 10,
+    btbTagBits = 14,
     btbOffsetBits = 2,
     btbBankNum = 1
 )
@@ -108,4 +111,4 @@ class L0BTBConfig extends Config((site, here, up) => {
     case L0BTBParam => L0BTBParams
 })
 
-class BTBConfig extends Config(new L0BTBConfig ++ new DirectMapL1BTBConfig)
+class BTBConfig extends Config(new L0BTBConfig ++ new FourWayL1BTBConfig)

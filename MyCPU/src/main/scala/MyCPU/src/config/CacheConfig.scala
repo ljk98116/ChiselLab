@@ -61,7 +61,7 @@ class OneWayL1CacheConfig extends Config(
 // e.g. 128x8x4Bx4 = 16KB
 class L1CacheBaseConfig extends Config(
     (site, here, up) => {
-        case L1CacheOffsetBits => 1
+        case L1CacheOffsetBits => 2
         case ICacheIndexBits => 8
         case DCacheIndexBits => 8
         case ICacheTagBits => 

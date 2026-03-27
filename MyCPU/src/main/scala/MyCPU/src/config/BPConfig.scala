@@ -80,7 +80,7 @@ object GSharePredictorParams extends BPUParams(
     BPUPredictorGlobalHistoryBits = 8, // 10 bits global history
     BPUPredictorLocalHistoryBits = 0,
     BPUPredictorCounterBits = 2, // 2 bits counter
-    BPUPredictorBankNum = 2 // equal with fetch_width
+    BPUPredictorBankNum = 4 // equal with fetch_width
 )
 
 object TournamentPredictorParams extends BPUParams(
@@ -98,11 +98,11 @@ object TAGEPredictorParams extends BPUParams(
     BPUPredictorGlobalHistoryBits = 20, // 20 bits global history
     BPUPredictorLocalHistoryBits = 0,
     BPUPredictorCounterBits = 3, // 3 bits counter for each table
-    BPUPredictorBankNum = 2
+    BPUPredictorBankNum = 4
 )
 
 object RASParams extends RASParams(
-    RASSize = 4
+    RASSize = 16
 )
 
 class NullPredictorConfig extends Config(new PredictorParameters ++ new BasePredictorConfig ++ new RASConfig ++ new Config((site, here, up) => {

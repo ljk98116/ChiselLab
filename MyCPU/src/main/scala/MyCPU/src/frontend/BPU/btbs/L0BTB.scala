@@ -17,8 +17,6 @@ import org.chipsalliance.cde.config._
 // area: 1653.96, top freq >= 5.0GHz
 class L0BTB(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
-        val rasTopPtr = Input(UInt(log2Ceil(p(RASParam).RASSize + 1).W))
-        val rasTop = Input(UInt(p(ADDR_WIDTH).W))
         val req = Input(Vec(p(FETCH_WIDTH), new L0BTBReqInfo))
         val resp = Output(new L0BTBRespInfo)
         val update = Input(new L0BTBUpdateInfo) // only 1 update from L1 BTB, save area and timing, but may cause more mispredictions than multiple updates in one cycle
@@ -58,17 +56,12 @@ class L0BTB(implicit p: Parameters) extends Module {
     io.resp.valid := l0_hit_array.reduce(_ || _)
     io.resp.target := Mux(
         io.resp.valid, 
-        Mux(
-            l0_btb_isReturn_array(io.req(hit_index).pc(l0_btbIndexBits + l0_btbOffsetBits - 1, l0_btbOffsetBits)),
-            io.rasTop,
-            l0_btb_target_array(io.req(hit_index).pc(l0_btbIndexBits + l0_btbOffsetBits - 1, l0_btbOffsetBits)) + io.req(hit_index).pc
-        ),
+        l0_btb_target_array(io.req(hit_index).pc(l0_btbIndexBits + l0_btbOffsetBits - 1, l0_btbOffsetBits)) + io.req(hit_index).pc,
         io.req(p(FETCH_WIDTH) - 1).pc + 4.U
     )
     io.resp.isCall := Mux(io.resp.valid, l0_btb_isCall_array(io.req(hit_index).pc(l0_btbIndexBits + l0_btbOffsetBits - 1, l0_btbOffsetBits)), false.B)
     io.resp.isReturn := Mux(io.resp.valid, l0_btb_isReturn_array(io.req(hit_index).pc(l0_btbIndexBits + l0_btbOffsetBits - 1, l0_btbOffsetBits)), false.B)
     io.resp.hitIndex := hit_index
-    io.resp.rasTopPtr := io.rasTopPtr
     io.resp.pc := io.req(hit_index).pc
     io.l0_btb_hit := l0_hit_array
 }
