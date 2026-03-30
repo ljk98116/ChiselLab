@@ -61,7 +61,7 @@ object FourWayBTBParams extends BTBParams(
     btbEntryNum = 64,
     btbWayNum = 4,
     btbIndexBits = 4,
-    btbTagBits = 14,
+    btbTagBits = 22,
     btbOffsetBits = 2,
     btbBankNum = 4
 )

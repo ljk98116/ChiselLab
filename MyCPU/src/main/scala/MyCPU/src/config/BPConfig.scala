@@ -76,8 +76,8 @@ object NullPredictorParams extends BPUParams(
 
 object GSharePredictorParams extends BPUParams(
     BPUPredictorNum = 1,
-    BPUPredictorIndexBits = 5, // 32 entries
-    BPUPredictorGlobalHistoryBits = 8, // 10 bits global history
+    BPUPredictorIndexBits = 10, // 32 entries
+    BPUPredictorGlobalHistoryBits = 20, // 20 bits global history
     BPUPredictorLocalHistoryBits = 0,
     BPUPredictorCounterBits = 2, // 2 bits counter
     BPUPredictorBankNum = 4 // equal with fetch_width

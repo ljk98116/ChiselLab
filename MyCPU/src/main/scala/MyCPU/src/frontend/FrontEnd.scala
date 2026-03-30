@@ -89,8 +89,8 @@ class FrontEnd(implicit p: Parameters) extends Module {
     val predictor = Module(new GSharePredictor)
     val ras = Module(new RAS)
 
-    val l1_btb_wb_queue = Module(new L1BTBWbQueue(p(FETCH_WIDTH)))
-    val pred_wb_queue = Module(new PredictorWbQueue(p(FETCH_WIDTH)))
+    val l1_btb_wb_queue = Module(new L1BTBWbQueue(32))
+    val pred_wb_queue = Module(new PredictorWbQueue(32))
     val inst_buffer = Module(new InstBuffer(p(FETCH_WIDTH)))
 
     val offsetBits = 2
@@ -312,10 +312,25 @@ class FrontEnd(implicit p: Parameters) extends Module {
     l1_btb.io.if2_reqPC := if2_ReqVec
     l1_btb.io.if2_reqValid := if2_ReqValid
     
-    ras.io.if2_isCall := io.if2_predecode.map(_.isCall)
-    ras.io.if2_isReturn := io.if2_predecode.map(_.isReturn)
-    ras.io.if2_pcVec := if2_ReqVec
-    ras.io.if2_pcValid := if2_ReqValid
+    // use real predecode result to update RAS
+    // 在 if2 阶段连接 RAS 的位置，原代码：
+    // ras.io.if2_isCall := VecInit(io.if2_predecode.map(_.isCall))(if2_l1_btb_resp.hitIndex)
+    // ras.io.if2_isReturn := VecInit(io.if2_predecode.map(_.isReturn))(if2_l1_btb_resp.hitIndex)
+    // ras.io.if2_pc := if2_ReqVec(if2_l1_btb_resp.hitIndex)
+    // ras.io.if2_pcValid := if2_ReqValid(if2_l1_btb_resp.hitIndex)
+
+    // 替换为：
+    val l1_hit_index = if2_l1_btb_resp.hitIndex
+    val l1_hit_valid = if2_l1_btb_resp.valid
+    val isCall = VecInit(io.if2_predecode.map(_.isCall))(l1_hit_index)
+    val isReturn = VecInit(io.if2_predecode.map(_.isReturn))(l1_hit_index)
+    val if2_pc = if2_ReqVec(l1_hit_index)
+    val if2_pcValid = if2_ReqValid(l1_hit_index)
+
+    ras.io.if2_isCall   := l1_hit_valid && isCall && !if2_stall
+    ras.io.if2_isReturn := l1_hit_valid && isReturn && !if2_stall
+    ras.io.if2_pc       := if2_pc
+    ras.io.if2_pcValid  := l1_hit_valid && if2_pcValid && !if2_stall
 
     // if3 stage
     // judge redirect
@@ -357,8 +372,8 @@ class FrontEnd(implicit p: Parameters) extends Module {
             if3_l0_btb_resp.valid && predValid && predResult &&
             ((if3_l0_btb_resp.isCall ^ if3_l1_btb_resp.isCall) ||
             (if3_l0_btb_resp.isReturn ^ if3_l1_btb_resp.isReturn) ||
-            (if3_l0_btb_resp.target =/= if3_l1_btb_resp.target)) ||
-            (if3_l0_btb_resp.hitIndex =/= if3_l1_btb_resp.hitIndex)
+            (if3_l0_btb_resp.target =/= if3_l1_btb_resp.target) ||
+            (if3_l0_btb_resp.hitIndex =/= if3_l1_btb_resp.hitIndex))
         )
     if3_l0_btb_update.pc := if3_ReqVec(if3_l1_btb_resp.hitIndex)
     if3_l0_btb_update.isCall := if3_l1_btb_resp.isCall
@@ -369,7 +384,14 @@ class FrontEnd(implicit p: Parameters) extends Module {
     // l0 btb miss l1 btb hit && jump
     if3_redirect.redirect :=
         (if3_l0_btb_resp.valid && !l1_taken) ||
-        (!if3_l0_btb_resp.valid && l1_taken)
+        (!if3_l0_btb_resp.valid && l1_taken) ||
+        (
+            if3_l0_btb_resp.valid && l1_taken && 
+            ((if3_l0_btb_resp.isCall ^ if3_l1_btb_resp.isCall) ||
+            (if3_l0_btb_resp.isReturn ^ if3_l1_btb_resp.isReturn) ||
+            (if3_l0_btb_resp.target =/= if3_l1_btb_resp.target) ||
+            (if3_l0_btb_resp.hitIndex =/= if3_l1_btb_resp.hitIndex))
+        )
 
     // target
     val seqTarget = if3_ReqVec(firstValidIndex) + 4.U

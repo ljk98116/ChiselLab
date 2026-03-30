@@ -1,0 +1,105 @@
+/*
+
+AMD Vivado v2024.2 (64-bit) [Major: 2024, Minor: 2]
+SW Build: 5239630 on Fri Nov 08 22:34:34 MST 2024
+IP Build: 5239520 on Sun Nov 10 16:12:51 MST 2024
+IP Build: 5239520 on Sun Nov 10 16:12:51 MST 2024
+
+Process ID (PID): 78101
+License: Customer
+Mode: GUI Mode
+
+Current time: 	Sat Mar 28 20:59:42 CST 2026
+Time zone: 	China Standard Time (Asia/Shanghai)
+
+OS: Ubuntu
+OS Version: 6.6.87.2-microsoft-standard-WSL2
+OS Architecture: amd64
+Available processors (cores): 32
+LSB Release Description: DISTRIB_ID=Ubuntu
+
+Display: 0
+Screen size: 2560x1600
+Local screen bounds: x = 0, y = 0, width = 2560, height = 1600
+Screen resolution (DPI): 100
+Available screens: 1
+Default font: family=Dialog,name=Dialog,style=plain,size=18
+Scale size: 27
+OS font scaling: 100%
+Anti-Alias Enabled: true
+
+Java version: 	21.0.1 64-bit
+
+Java home: 	/home/ljk/tools/Xilinx/Vivado/2024.2/tps/lnx64/jre21.0.1_12
+Java executable: 	/home/ljk/tools/Xilinx/Vivado/2024.2/tps/lnx64/jre21.0.1_12/bin/java
+Java arguments: 	[-Dsun.java2d.pmoffscreen=false, -Dhttps.protocols=TLSv1,TLSv1.1,TLSv1.2, -Dsun.java2d.xrender=false, -Dsun.java2d.uiScale.enabled=false, -Dswing.aatext=true, -XX:-UsePerfData, -Djdk.map.althashing.threshold=512, -XX:StringTableSize=4072, -XX:+UseStringDeduplication, -XX:MaxGCPauseMillis=200, -XX:ParallelGCThreads=4, -XX:+ParallelRefProcEnabled, --add-opens=java.desktop/javax.swing.plaf.synth=ALL-UNNAMED, --add-opens=java.base/java.nio=ALL-UNNAMED, --add-opens=java.desktop/sun.swing=ALL-UNNAMED, --add-opens=java.desktop/javax.swing=ALL-UNNAMED, --add-opens=java.desktop/javax.swing.tree=ALL-UNNAMED, --add-opens=java.desktop/javax.swing.plaf.basic=ALL-UNNAMED, --add-opens=java.desktop/javax.swing.plaf.synth=ALL-UNNAMED, --add-opens=java.desktop/javax.swing.plaf.basic=ALL-UNNAMED, --add-opens=java.desktop/javax.swing=ALL-UNNAMED, --add-opens=java.desktop/javax.swing.tree=ALL-UNNAMED, --add-opens=java.desktop/java.awt.event=ALL-UNNAMED, --add-opens=java.desktop/sun.awt.X11=ALL-UNNAMED, --add-exports=java.desktop/javax.swing.plaf.synth=ALL-UNNAMED, --add-exports=java.base/java.nio=ALL-UNNAMED, --add-exports=java.desktop/sun.swing=ALL-UNNAMED, --add-exports=java.desktop/javax.swing=ALL-UNNAMED, --add-exports=java.desktop/javax.swing.tree=ALL-UNNAMED, --add-exports=java.desktop/javax.swing.plaf.basic=ALL-UNNAMED, --add-exports=java.desktop/sun.swing=ALL-UNNAMED, --add-exports=java.desktop/sun.swing.table=ALL-UNNAMED, --add-exports=java.desktop/sun.swing.plaf.synth=ALL-UNNAMED, --add-exports=java.desktop/sun.awt.shell=ALL-UNNAMED, --add-exports=java.base/sun.security.action=ALL-UNNAMED, --add-exports=java.desktop/sun.font=ALL-UNNAMED, --add-opens=java.desktop/sun.awt.X11=ALL-UNNAMED, -XX:NewSize=80m, -XX:MaxNewSize=80m, -Xms512m, -Xmx4072m, -Xss10m, -Xrs]
+Java initial memory (-Xms): 	512 MB
+Java maximum memory (-Xmx):	 3 GB
+
+User name: 	ljk
+User home directory: /home/ljk
+User working directory: /home/ljk/Arch/riscv_lab/ChiselLab
+User country: 	US
+User language: 	en
+User locale: 	en_US
+
+RDI_BASEROOT: /home/ljk/tools/Xilinx/Vivado
+HDI_APPROOT: /home/ljk/tools/Xilinx/Vivado/2024.2
+RDI_DATADIR: /home/ljk/tools/Xilinx/Vivado/2024.2/data
+RDI_BINDIR: /home/ljk/tools/Xilinx/Vivado/2024.2/bin
+
+Vivado preferences file: /home/ljk/.Xilinx/Vivado/2024.2/vivado.xml
+Vivado preferences directory: /home/ljk/.Xilinx/Vivado/2024.2/
+Vivado layouts directory: /home/ljk/.Xilinx/Vivado/2024.2/data/layouts
+PlanAhead jar file: 	/home/ljk/tools/Xilinx/Vivado/2024.2/lib/classes/planAhead.jar
+Vivado log file: 	/home/ljk/Arch/riscv_lab/ChiselLab/vivado.log
+Vivado journal file: 	/home/ljk/Arch/riscv_lab/ChiselLab/vivado.jou
+Engine tmp dir: 	./.Xil/Vivado-78101-ljk
+Non-Default Parameters:	[]
+
+Xilinx & AMD Environment Variables
+--------------------------------------------------------------------------------------------
+JAVA_HOME: /usr/lib/jvm/temurin-21-jdk-amd64/
+RDI_APPROOT: /home/ljk/tools/Xilinx/Vivado/2024.2
+RDI_BASEROOT: /home/ljk/tools/Xilinx/Vivado
+RDI_BINROOT: /home/ljk/tools/Xilinx/Vivado/2024.2/bin
+RDI_BUILD: yes
+RDI_DATADIR: /home/ljk/tools/Xilinx/Vivado/2024.2/data
+RDI_INSTALLROOT: /home/ljk/tools/Xilinx
+RDI_INSTALLVER: 2024.2
+RDI_JAVA_PLATFORM: 
+RDI_JAVA_VERSION: 21.0.1_12
+RDI_LIBDIR: /home/ljk/tools/Xilinx/Vivado/2024.2/lib/lnx64.o/Ubuntu/22:/home/ljk/tools/Xilinx/Vivado/2024.2/lib/lnx64.o/Ubuntu:/home/ljk/tools/Xilinx/Vivado/2024.2/lib/lnx64.o
+RDI_OPT_EXT: .o
+RDI_PATCHROOT: 
+RDI_PLATFORM: lnx64
+RDI_PREPEND_PATH: /home/ljk/tools/Xilinx/Vitis/2024.2/bin:/home/ljk/tools/Xilinx/Vivado/2024.2/ids_lite/ISE/bin/lin64
+RDI_PROG: /home/ljk/tools/Xilinx/Vivado/2024.2/bin/unwrapped/lnx64.o/vivado
+RDI_SESSION_INFO: /home/ljk/Arch/riscv_lab/ChiselLab:ljk_1774702766_78054
+RDI_SHARED_DATA: /home/ljk/tools/Xilinx/SharedData/2024.2/data
+RDI_TPS_ROOT: /home/ljk/tools/Xilinx/Vivado/2024.2/tps/lnx64
+RDI_USE_JDK21: True
+SHELL: /bin/bash
+VERDI_HOME: /home/ljk/Arch/Synopsys2024_Software/verdi/W-2024.09-SP1
+XILINX: /home/ljk/tools/Xilinx/Vivado/2024.2/ids_lite/ISE
+XILINX_DSP: /home/ljk/tools/Xilinx/Vivado/2024.2/ids_lite/ISE
+XILINX_HLS: /home/ljk/tools/Xilinx/Vitis/2024.2
+XILINX_PLANAHEAD: /home/ljk/tools/Xilinx/Vivado/2024.2
+XILINX_SDK: /home/ljk/tools/Xilinx/Vitis/2024.2
+XILINX_VITIS: /home/ljk/tools/Xilinx/Vitis/2024.2
+XILINX_VIVADO: /home/ljk/tools/Xilinx/Vivado/2024.2
+
+
+GUI allocated memory:	512 MB
+GUI max memory:		4,072 MB
+Engine allocated memory: 1,396 MB
+
+Copyright 1986-2022 Xilinx, Inc. All Rights Reserved.
+Copyright 2022-2024 Advanced Micro Devices, Inc. All Rights Reserved.
+
+*/
+
+// TclEventType: START_GUI
+// Tcl Message: start_gui 
+// HMemoryUtils.trashcanNow. Engine heap size: 1,404 MB. GUI used memory: 79 MB. Current time: 3/28/26, 8:59:43 PM CST
+// WARNING: HEventQueue.dispatchEvent() is taking  1001 ms.

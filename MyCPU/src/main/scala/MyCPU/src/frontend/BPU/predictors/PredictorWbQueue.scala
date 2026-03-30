@@ -10,100 +10,56 @@ import org.chipsalliance.cde.config._
 class PredictorWbQueue(size: Int)(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
         val enq = Input(Vec(p(FETCH_WIDTH), new PredictorUpdateInfo))
-        val deq = Output(Vec(p(GShareParamKey).BPUPredictorBankNum, new PredictorUpdateInfo))
+        val deq = Output(Vec(p(L1BTBParam).btbBankNum, new PredictorUpdateInfo))
         val enqReady = Output(Bool())
-        val deqReady = Output(Vec(p(GShareParamKey).BPUPredictorBankNum, Bool()))
+        val deqReady = Output(Vec(p(L1BTBParam).btbBankNum, Bool()))
     })
 
-    val bankNum    = p(GShareParamKey).BPUPredictorBankNum
+    val bankNum    = p(L1BTBParam).btbBankNum
     val bankBits   = log2Ceil(bankNum)
     val offsetBits = p(L1BTBParam).btbOffsetBits
 
-    // =========================
-    // 1️⃣ bankIdx + valid
-    // =========================
-    val bankIdxVec = VecInit(io.enq.map(e => e.pc(bankBits + offsetBits - 1, offsetBits)))
-    val validsVec  = VecInit(io.enq.map(_.valid))
+    val skidBuffers = Seq.fill(bankNum)(
+        Module(new MultiPortQueueNW1R(size / bankNum, p(FETCH_WIDTH), new PredictorUpdateInfo))
+    )
 
-    // =========================
-    // 2️⃣ first entry
-    // =========================
-    val firstOH    = PriorityEncoderOH(validsVec)
-    val firstValid = validsVec.asUInt.orR
+    for(b <- 0 until bankNum) {
+        val bankHits = (0 until p(FETCH_WIDTH)).map(
+            index => io.enq(index).pc(bankBits + offsetBits - 1, offsetBits) === b.U && 
+                io.enq(index).valid 
+        )
 
-    val firstData = Mux1H(firstOH, io.enq)
-    val firstBank = Mux1H(firstOH, bankIdxVec)
+        val hasBankHit = VecInit(bankHits).asUInt.orR
+        val bankHitIndex = PriorityEncoder(bankHits)
 
-    // =========================
-    // 3️⃣ second entry（不同 bank）
-    // =========================
-    val secondMask = Wire(Vec(p(FETCH_WIDTH), Bool()))
-    for (i <- 0 until p(FETCH_WIDTH)) {
-        secondMask(i) := validsVec(i) && (bankIdxVec(i) =/= firstBank)
-    }
+        io.deq(b) := Mux(
+            skidBuffers(b).io.deqReady, 
+            skidBuffers(b).io.deq, 
+            Mux(hasBankHit, io.enq(bankHitIndex), 0.U.asTypeOf(new PredictorUpdateInfo))
+        )
 
-    val secondOH    = PriorityEncoderOH(secondMask)
-    val secondValid = secondMask.asUInt.orR
+        io.deqReady(b) := skidBuffers(b).io.deqReady || hasBankHit
 
-    val secondData = Mux1H(secondOH, io.enq)
+        // wb1 calculate the prefix sum, 
+        val wb1_bankHitPrefixSum = WireInit(VecInit(
+            Seq.fill(p(FETCH_WIDTH))(0.U(log2Ceil(p(FETCH_WIDTH)).W))
+        ))
 
-    // =========================
-    // 4️⃣ skid buffer（2-entry）
-    // =========================
-    val skidValid = RegInit(VecInit(Seq.fill(2)(false.B)))
-    val skidData  = Reg(Vec(2, new PredictorUpdateInfo))
+        wb1_bankHitPrefixSum(0) := 0.U
+        for(i <- 1 until p(FETCH_WIDTH)) {
+            wb1_bankHitPrefixSum(i) := wb1_bankHitPrefixSum(i-1) + bankHits(i-1)
+        }
 
-    when(firstValid) {
-        skidValid(0) := true.B
-        skidData(0)  := firstData
-    }
+        val wb2_bankHitPrefixSum = RegNext(wb1_bankHitPrefixSum)
+        val wb2_enq = RegNext(io.enq)
 
-    when(secondValid) {
-        skidValid(1) := true.B
-        skidData(1)  := secondData
-    }
-
-    io.enqReady := !(skidValid(0) && skidValid(1))
-
-    // =========================
-    // 5️⃣ 单队列（1W1R）
-    // =========================
-    val queue = Module(new Queue(new PredictorUpdateInfo, size))
-
-    val use0 = skidValid(0)
-    val use1 = skidValid(1) && !use0
-
-    queue.io.enq.valid := use0 || use1
-    queue.io.enq.bits  := Mux(use0, skidData(0), skidData(1))
-
-    when(queue.io.enq.fire) {
-        when(use0) {
-            skidValid(0) := false.B
-        }.elsewhen(use1) {
-            skidValid(1) := false.B
+        for(i <- 0 until p(FETCH_WIDTH)) {
+            skidBuffers(b).io.enq(i) := wb2_enq(wb2_bankHitPrefixSum(i))
+            skidBuffers(b).io.enqValid(i) := wb2_enq(wb2_bankHitPrefixSum(i)).valid
         }
     }
 
-    // =========================
-    // 6️⃣ 出队 + bank 分发
-    // =========================
-    val head      = queue.io.deq.bits
-    val headValid = queue.io.deq.valid
-    val headBank  = head.pc(bankBits + offsetBits - 1, offsetBits)
-
-    val bankHit = Wire(Vec(bankNum, Bool()))
-    for (b <- 0 until bankNum) {
-        bankHit(b) := headValid && (headBank === b.U)
-    }
-
-    val doDeq = bankHit.asUInt.orR
-    queue.io.deq.ready := doDeq
-
-    // =========================
-    // 7️⃣ 输出
-    // =========================
-    for (b <- 0 until bankNum) {
-        io.deq(b) := Mux(bankHit(b), head, 0.U.asTypeOf(new PredictorUpdateInfo))
-        io.deqReady(b) := bankHit(b)
-    }      
+    io.enqReady := Cat((0 until bankNum).map(
+        b => skidBuffers(b).io.enqReady
+    )).andR      
 }
