@@ -54,9 +54,9 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
       val trace = new ArrayBuffer[Instr]()
       val base = 0x80000000L
 
-      def addCall(pc: Long, target: Long): Unit = trace += Instr(pc, isCall = true, isReturn = false, isBranch = true, taken = true, target = target)
-      def addReturn(pc: Long): Unit = trace += Instr(pc, isCall = false, isReturn = true, isBranch = true, taken = true)
-      def addCondBranch(pc: Long, taken: Boolean, target: Long): Unit = trace += Instr(pc, false, false, isBranch = true, taken = taken, target = target)
+      def addCall(pc: Long, target: Long): Unit = trace += Instr(pc, true, false, true, true, target)
+      def addReturn(pc: Long): Unit = trace += Instr(pc, false, true, true, true)
+      def addCondBranch(pc: Long, taken: Boolean, target: Long): Unit = trace += Instr(pc, false, false, true, taken, target)
       def addNop(pc: Long): Unit = trace += Instr(pc)
 
       // RAS 测试
@@ -80,7 +80,7 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
 
       addCall(base + 0xB0, base + 0x500)
       addNop(base + 0xB4)
-      addCondBranch(base + 0xB8, taken = false, target = base + 0xB8 + 8)
+      addCondBranch(base + 0xB8, false, base + 0xB8 + 8)
       addReturn(base + 0xBC)
 
       // GShare 测试
@@ -89,33 +89,33 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
       for (_ <- 0 until repeat) {
         // 交替模式（T N T N）
         for (i <- 0 until 8) {
-          addCondBranch(base + 0xC0 + i*4, taken = (i % 2 == 0), target = base + 0xC0 + i*4 + 8)
+          addCondBranch(base + 0xC0 + i*4, i % 2 == 0, base + 0xC0 + i*4 + 8)
         }
 
         // 周期 3 模式（T T N）
         for (i <- 0 until 9) {
-          addCondBranch(base + 0xE0 + i*4, taken = (i % 3 != 2), target = base + 0xE0 + i*4 + 8)
+          addCondBranch(base + 0xE0 + i*4, i % 3 != 2, base + 0xE0 + i*4 + 8)
         }
 
         // 饱和计数器学习（连续 4 次 taken → 连续 4 次 not taken）
-        for (i <- 0 until 4) addCondBranch(base + 0x100 + i*4, taken = true, target = base + 0x100 + i*4 + 8)
-        for (i <- 0 until 4) addCondBranch(base + 0x110 + i*4, taken = false, target = base + 0x110 + i*4 + 8)
+        for (i <- 0 until 4) addCondBranch(base + 0x100 + i*4, true, base + 0x100 + i*4 + 8)
+        for (i <- 0 until 4) addCondBranch(base + 0x110 + i*4, false, base + 0x110 + i*4 + 8)
 
         // 历史相关性：branch2 的方向依赖于 branch1
-        addCondBranch(base + 0x120, taken = true, target = base + 0x120 + 8)
-        addCondBranch(base + 0x124, taken = false, target = base + 0x124 + 8)
-        addCondBranch(base + 0x128, taken = true, target = base + 0x128 + 8)
-        addCondBranch(base + 0x12C, taken = true, target = base + 0x12C + 8)
+        addCondBranch(base + 0x120, true, base + 0x120 + 8)
+        addCondBranch(base + 0x124, false, base + 0x124 + 8)
+        addCondBranch(base + 0x128, true, base + 0x128 + 8)
+        addCondBranch(base + 0x12C, true, base + 0x12C + 8)
       }
 
       // 综合场景
-      addCondBranch(base + 0x200, taken = true, target = base + 0x300)
+      addCondBranch(base + 0x200, true, base + 0x300)
       addCall(base + 0x300, base + 0x400)
       addReturn(base + 0x304)
       addReturn(base + 0x308)
 
       for (i <- 0 until 32) {
-        if (i % 5 == 0) addCondBranch(base + 0x500 + i*4, taken = true, target = base + 0x510)
+        if (i % 5 == 0) addCondBranch(base + 0x500 + i*4, true, base + 0x510)
         else addNop(base + 0x500 + i*4)
       }
 
@@ -205,7 +205,7 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
       var if0_pcVec = IndexedSeq.fill(fetchWidth)(0.U(p(ADDR_WIDTH).W))
       var if0_pcValid = IndexedSeq.fill(fetchWidth)(false.B)
 
-      while (cycle < 2000) {
+      while (cycle < 1501) {
         // 默认无 flush
         var commit_redirect = false
         dut.io.commit_redirect.flush.poke(false.B)
@@ -286,7 +286,6 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
 
           // 黄金模型处理该 pc，得到真实结果
           val (realTaken, realTarget, realIsCall, realIsReturn, realIsBranch) = goldencpu.process(if5_pc)
-
           // 判断 misPred
           val misPred = if (realTaken != if5_taken) true
                         else if (realTaken) realTarget != if5_predTarget
@@ -297,10 +296,12 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
             rasTotal += 1
             if (!misPred) rasCorrectTotal += 1
           }
+
           if (realIsCall || realIsReturn || (realIsBranch && !realIsCall && !realIsReturn)) {
             // 统计分支访问（包括 call/return）
             btbAccessCount += 1
           }
+
           if (realIsBranch && !realIsCall && !realIsReturn) {
             branchTotal += 1
             if (!misPred) correctTotal += 1

@@ -43,14 +43,16 @@ class L1BTBWbQueue(size: Int)(implicit p: Parameters) extends Module {
 
         io.deqReady(b) := skidBuffers(b).io.deqReady || hasBankHit
 
-        // wb1 calculate the prefix sum, 
+        // wb1 calculate the prefix sum, write all not hit index to skidbuffer
         val wb1_bankHitPrefixSum = WireInit(VecInit(
             Seq.fill(p(FETCH_WIDTH))(0.U(log2Ceil(p(FETCH_WIDTH)).W))
         ))
 
         wb1_bankHitPrefixSum(0) := 0.U
         for(i <- 1 until p(FETCH_WIDTH)) {
-            wb1_bankHitPrefixSum(i) := wb1_bankHitPrefixSum(i-1) + bankHits(i-1)
+            wb1_bankHitPrefixSum(i) := wb1_bankHitPrefixSum(i-1) + bankHits(i-1) & (
+                !hasBankHit || (hasBankHit && (i-1).U =/= bankHitIndex)
+            )
         }
 
         val wb2_enq = RegNext(io.enq)

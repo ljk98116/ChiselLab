@@ -47,7 +47,9 @@ class PredictorWbQueue(size: Int)(implicit p: Parameters) extends Module {
 
         wb1_bankHitPrefixSum(0) := 0.U
         for(i <- 1 until p(FETCH_WIDTH)) {
-            wb1_bankHitPrefixSum(i) := wb1_bankHitPrefixSum(i-1) + bankHits(i-1)
+            wb1_bankHitPrefixSum(i) := wb1_bankHitPrefixSum(i-1) + bankHits(i-1) & (
+                !hasBankHit || (hasBankHit && (i-1).U =/= bankHitIndex)
+            )
         }
 
         val wb2_bankHitPrefixSum = RegNext(wb1_bankHitPrefixSum)

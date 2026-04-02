@@ -146,7 +146,7 @@ class L1BTB(implicit p: Parameters) extends Module {
 
         io.resp.valid := if2_hitArray.reduce(_ || _)
 
-        io.resp.target := Mux(io.resp.valid, if2_targetVec(if2_hitIndex)(if2_hitWayArray(if2_hitIndex)) + io.if2_reqPC(if2_hitIndex), io.if2_reqPC(0) + (p(FETCH_WIDTH) << 2).U)
+        io.resp.target := Mux(io.resp.valid, Cat(Fill(p(ADDR_WIDTH) * 3 / 4, if2_targetVec(if2_hitIndex)(if2_hitWayArray(if2_hitIndex))(p(ADDR_WIDTH) / 4 - 1)), if2_targetVec(if2_hitIndex)(if2_hitWayArray(if2_hitIndex))) + io.if2_reqPC(if2_hitIndex), io.if2_reqPC(0) + (p(FETCH_WIDTH) << 2).U)
         io.resp.isCall := Mux(io.resp.valid, if2_isCallVec(if2_hitIndex)(if2_hitWayArray(if2_hitIndex)), false.B)
         io.resp.isReturn := Mux(io.resp.valid, if2_isReturnVec(if2_hitIndex)(if2_hitWayArray(if2_hitIndex)), false.B)
 
