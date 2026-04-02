@@ -6,12 +6,25 @@ import chisel3.util.experimental.decode._
 import org.chipsalliance.cde.config._
 import MyCPU.config._
 import MyCPU.io._
+import MyCPU.utils._
 
 class DecodeStage(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
-        val insts_i = Input(Vec(p(FETCH_WIDTH), UInt(p(ADDR_WIDTH).W)))
+        val flush = Input(Bool())
+        val stall = Input(Bool())
+        val if5_pc_vec_i = Input(Vec(p(FETCH_WIDTH), UInt(p(ADDR_WIDTH).W)))
+        val if5_inst_i = Input(Vec(p(FETCH_WIDTH), UInt(p(DATA_WIDTH).W)))
+        val if5_instValid_i = Input(Vec(p(FETCH_WIDTH), Bool()))
+        val if5_br_pred_info_vec_i = Input(Vec(p(FETCH_WIDTH), new BranchPredInfo))
         val decodeRes_o = Output(Vec(p(FETCH_WIDTH), new DecodeResultBundle))
+        val br_pred_info_vec = Output(Vec(p(FETCH_WIDTH), new BranchPredInfo))
+        val pc_vec = Output(Vec(p(FETCH_WIDTH), UInt(p(ADDR_WIDTH).W)))
     })
+
+    val pc_vec = PipeReg(io.if5_pc_vec_i, io.stall, io.flush)
+    val insts = PipeReg(io.if5_inst_i, io.stall, io.flush)
+    val instValids = PipeReg(io.if5_instValid_i, io.stall, io.flush)
+    val br_pred_info_vec = PipeReg(io.if5_br_pred_info_vec_i, io.stall, io.flush)
 
     val patterns: Seq[DecodePattern] = Seq(
         RVUTypeInstPattern(opcode = OpcodeVal.LUI), 
@@ -44,16 +57,23 @@ class DecodeStage(implicit p: Parameters) extends Module {
     ))
 
     for(i <- 0 until p(FETCH_WIDTH)) {
-        var decodeResult = decoderTable.decode(io.insts_i(i))
-
-        decodeRes(i).rs1 := decodeResult(Rs1)
-        decodeRes(i).rs2 := decodeResult(Rs2)
-        decodeRes(i).imm := decodeResult(Imm)
-        decodeRes(i).rd := decodeResult(Rd)
-        decodeRes(i).opcode := decodeResult(Opcode)
-        decodeRes(i).funct3 := decodeResult(Funct3)
-        decodeRes(i).funct7 := decodeResult(Funct7)
+        when(instValids(i)) {
+            var decodeResult = decoderTable.decode(insts(i))
+            decodeRes(i).rs1 := decodeResult(Rs1)
+            decodeRes(i).rs2 := decodeResult(Rs2)
+            decodeRes(i).imm := decodeResult(Imm)
+            decodeRes(i).rd := decodeResult(Rd)
+            decodeRes(i).opcode := decodeResult(Opcode)
+            decodeRes(i).funct3 := decodeResult(Funct3)
+            decodeRes(i).funct7 := decodeResult(Funct7)
+            decodeRes(i).lat := decodeResult(Lat)
+            decodeRes(i).valid := true.B
+        }.otherwise {
+            decodeRes(i) := 0.U.asTypeOf(new DecodeResultBundle)
+        }
     }
 
     io.decodeRes_o := decodeRes
+    io.br_pred_info_vec := br_pred_info_vec
+    io.pc_vec := pc_vec
 }
