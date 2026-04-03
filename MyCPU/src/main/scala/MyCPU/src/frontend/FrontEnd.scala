@@ -8,8 +8,7 @@ import MyCPU.io._
 import MyCPU.frontend.BPU._
 import MyCPU.frontend.BPU.predictors._
 import org.chipsalliance.cde.config._
-import MyCPU.utils.PipeReg
-
+import MyCPU.utils._
 // area stat fetchWidth 4
 // l0 btb: 1653.96
 // l1 btb: 2595.32
@@ -43,8 +42,6 @@ class FrontEnd(implicit p: Parameters) extends Module {
         // to commit stage
         val wb1_l1_btb_enqReady = Output(Bool())
         val wb1_predictor_enqReady = Output(Bool())
-        // from middle end
-        val decode_l1_btb_update = Input(Vec(p(FETCH_WIDTH), new L1BTBUpdateInfo))
         // to iTLB
         val if0_itlb_req = Output(Vec(p(FETCH_WIDTH), new ITLBReqInfo))
         // from iTLB

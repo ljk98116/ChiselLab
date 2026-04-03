@@ -230,11 +230,83 @@ object OpcodeVal {
     val BGE: BitPat     = BEQ
     val BLTU: BitPat    = BEQ
     val BGEU: BitPat    = BEQ
+
+    val LB: BitPat = BitPat("b000 0011")
+    val LH: BitPat = LB
+    val LW: BitPat = LB
+    val LBU: BitPat = LB
+    val LHU: BitPat = LB
+
+    val SB: BitPat = BitPat("b010 0011")
+    val SH: BitPat = SB
+    val SW: BitPat = SB
+
+    val ADDI: BitPat = BitPat("b001 0011")
+    val SLTI: BitPat = ADDI
+    val SLTIU: BitPat = ADDI
+    val XORI: BitPat = ADDI
+    val ORI: BitPat = ADDI
+    val ANDI: BitPat = ADDI
+    val SLLI: BitPat = ADDI
+    val SRLI: BitPat = ADDI
+    val SRAI: BitPat = ADDI
+
+    val R: BitPat = BitPat("b011 0011")
+
 }
 
 object Funct3Val {
     val JALR: BitPat = BitPat("b000")
 
     val BEQ: BitPat = BitPat("b000")
+    val BNE: BitPat = BitPat("b001")
+    val BLT: BitPat = BitPat("b100")
+    val BGE: BitPat = BitPat("b101")
+    val BLTU: BitPat = BitPat("b110")
+    val BGEU: BitPat = BitPat("b111")
 
+    val LB: BitPat = BitPat("b000")
+    val LH: BitPat = BitPat("b001")
+    val LW: BitPat = BitPat("b010")
+    val LBU: BitPat = BitPat("b100")
+    val LHU: BitPat = BitPat("b101")
+
+    val SB: BitPat = BitPat("b000")
+    val SH: BitPat = BitPat("b001")
+    val SW: BitPat = BitPat("b010")
+
+    val ADDI: BitPat = BitPat("b000")
+    val SLTI: BitPat = BitPat("b010")
+    val SLTIU: BitPat = BitPat("b011")
+    val XORI: BitPat = BitPat("b100")
+    val ORI: BitPat = BitPat("b110")
+    val ANDI: BitPat = BitPat("b111")
+    val SLLI: BitPat = BitPat("b001")
+    val SRLI: BitPat = BitPat("b101")
+    val SRAI: BitPat = BitPat("b101")
+
+    val ADD: BitPat = BitPat("b000")
+    val SUB: BitPat = ADD
+
+    val SLL: BitPat = BitPat("b001")
+    val SLT: BitPat = BitPat("b010")
+    val SLTU: BitPat = BitPat("b011")
+    val XOR: BitPat = BitPat("b100")
+    val SRL: BitPat = BitPat("b101")
+    val SRA: BitPat = SRL
+    val OR: BitPat = BitPat("b110")
+    val AND: BitPat = BitPat("b111")
+}
+
+object Funct7Val {
+    val ADD: BitPat = BitPat("b000 0000")
+    val SUB: BitPat = BitPat("b010 0000")
+    val SLL: BitPat = ADD
+    val SLT: BitPat = ADD
+    val SLTU: BitPat = ADD
+    val XOR: BitPat = ADD
+    val SRL: BitPat = ADD
+    val SRA: BitPat = SUB
+    val OR: BitPat = ADD
+    val AND: BitPat = ADD
 }

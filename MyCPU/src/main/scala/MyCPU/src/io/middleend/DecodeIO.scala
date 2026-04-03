@@ -8,6 +8,7 @@ import org.chipsalliance.cde.config._
 
 class DecodeResultBundle(implicit p: Parameters) extends Bundle with HasValid {
     val valid = Bool()
+    val pc = UInt(p(ADDR_WIDTH).W)
     val imm = UInt(p(DATA_WIDTH).W)
     val rs1 = UInt(p(AREG_WIDTH).W)
     val rs2 = UInt(p(AREG_WIDTH).W)
