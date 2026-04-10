@@ -9,6 +9,21 @@ import MyCPU.config._
 import MyCPU.io._
 import MyCPU.utils._
 
+// MultiPort Write Single Read Queue
 class CheckPointQueue(size: Int)(implicit p: Parameters) extends Module {
-    
+    val io = IO(new Bundle {
+        val flush = Input(Bool())
+        val enq = Input(Vec(p(FETCH_WIDTH), new CheckPointInfo))
+        val deq = Output(new CheckPointInfo)
+        val deqReady = Output(Bool())
+    })
+
+    val queue = Module(new MultiPortQueueNW1R(size, p(FETCH_WIDTH), new CheckPointInfo))
+
+    queue.io.flush := io.flush
+    queue.io.enq := io.enq
+    queue.io.enqValid := VecInit(io.enq.map(_.valid))
+
+    io.deq := queue.io.deq
+    io.deqReady := queue.io.deqReady
 }

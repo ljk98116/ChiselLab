@@ -216,6 +216,63 @@ class LatField(implicit p: Parameters) extends DecodeField[DecodePattern, UInt] 
     }
 }
 
+class HasRs1Field(implicit p: Parameters) extends DecodeField[DecodePattern, Bool] {
+    def name: String = "HasRs1Field"
+    def chiselType: Bool = Bool()
+    def genTable(op: DecodePattern): BitPat = {
+        if(op.isInstanceOf[RVRTypeInstPattern]) {
+            return BitPat("b1")
+        }        
+        if(op.isInstanceOf[RVITypeInstPattern]) {
+            return BitPat("b1")
+        }
+        if(op.isInstanceOf[RVSTypeInstPattern]) {
+            return BitPat("b1")
+        }
+        if(op.isInstanceOf[RVSBTypeInstPattern]) {
+            return BitPat("b1")
+        }
+        return BitPat("b0")
+    }
+}
+
+class HasRs2Field(implicit p: Parameters) extends DecodeField[DecodePattern, Bool] {
+    def name: String = "HasRs2Field"
+    def chiselType: Bool = Bool()
+    def genTable(op: DecodePattern): BitPat = {
+        if(op.isInstanceOf[RVRTypeInstPattern]) {
+            return BitPat("b1")
+        }        
+        if(op.isInstanceOf[RVSTypeInstPattern]) {
+            return BitPat("b1")
+        }
+        if(op.isInstanceOf[RVSBTypeInstPattern]) {
+            return BitPat("b1")
+        }
+        return BitPat("b0")
+    }
+}
+
+class HasRdField(implicit p: Parameters) extends DecodeField[DecodePattern, Bool] {
+    def name: String = "HasRdField"
+    def chiselType: Bool = Bool()
+    def genTable(op: DecodePattern): BitPat = {
+        if(op.isInstanceOf[RVRTypeInstPattern]) {
+            return BitPat("b1")
+        }        
+        if(op.isInstanceOf[RVITypeInstPattern]) {
+            return BitPat("b1")
+        }
+        if(op.isInstanceOf[RVUTypeInstPattern]) {
+            return BitPat("b1")
+        }
+        if(op.isInstanceOf[RVUJTypeInstPattern]) {
+            return BitPat("b1")
+        }
+        return BitPat("b0")
+    }
+}
+
 object OpcodeVal {
     val LUI: BitPat     = BitPat("b011 0111")
     val AUIPC: BitPat   = BitPat("b001 0111")

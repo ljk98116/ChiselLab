@@ -9,6 +9,7 @@ import org.chipsalliance.cde.config._
 
 class PredictorWbQueue(size: Int)(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
+        val flush = Input(Bool())
         val enq = Input(Vec(p(FETCH_WIDTH), new PredictorUpdateInfo))
         val deq = Output(Vec(p(L1BTBParam).btbBankNum, new PredictorUpdateInfo))
         val enqReady = Output(Bool())
@@ -59,6 +60,8 @@ class PredictorWbQueue(size: Int)(implicit p: Parameters) extends Module {
             skidBuffers(b).io.enq(i) := wb2_enq(wb2_bankHitPrefixSum(i))
             skidBuffers(b).io.enqValid(i) := wb2_enq(wb2_bankHitPrefixSum(i)).valid
         }
+
+        skidBuffers(b).io.flush := io.flush
     }
 
     io.enqReady := Cat((0 until bankNum).map(

@@ -29,6 +29,7 @@ class DecodeStage(implicit p: Parameters) extends Module {
     val br_pred_info_vec = PipeReg(io.if5_br_pred_info_vec_i, io.stall, io.flush)
 
     val patterns: Seq[DecodePattern] = Seq(
+        
         RVUTypeInstPattern(opcode = OpcodeVal.LUI), 
         RVUTypeInstPattern(opcode = OpcodeVal.AUIPC),
         RVUJTypeInstPattern(opcode = OpcodeVal.JAL),
@@ -144,9 +145,12 @@ class DecodeStage(implicit p: Parameters) extends Module {
     val Funct3: Funct3Field = new Funct3Field
     val Funct7: Funct7Field = new Funct7Field
     val Lat: LatField = new LatField
+    val HasRs1: HasRs1Field = new HasRs1Field
+    val HasRs2: HasRs2Field = new HasRs2Field
+    val HasRd: HasRdField = new HasRdField
 
     val fields = Seq(
-        Imm, Rs1, Rs2, Rd, Opcode, Funct3, Funct7, Lat
+        Imm, Rs1, Rs2, Rd, Opcode, Funct3, Funct7, Lat, HasRs1, HasRs2, HasRd
     )
 
     val decoderTable: DecodeTable[DecodePattern] = new DecodeTable(
@@ -171,6 +175,9 @@ class DecodeStage(implicit p: Parameters) extends Module {
             decodeRes(i).lat := decodeResult(Lat)
             decodeRes(i).valid := true.B
             decodeRes(i).pc := pc_vec(i)
+            decodeRes(i).HasRs1 := decodeResult(HasRs1)
+            decodeRes(i).HasRs2 := decodeResult(HasRs2)
+            decodeRes(i).HasRd := decodeResult(HasRd)
         }.otherwise {
             decodeRes(i) := 0.U.asTypeOf(new DecodeResultBundle)
         }

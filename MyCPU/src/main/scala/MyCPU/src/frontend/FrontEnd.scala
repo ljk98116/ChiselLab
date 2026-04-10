@@ -9,14 +9,6 @@ import MyCPU.frontend.BPU._
 import MyCPU.frontend.BPU.predictors._
 import org.chipsalliance.cde.config._
 import MyCPU.utils._
-// area stat fetchWidth 4
-// l0 btb: 1653.96
-// l1 btb: 2595.32
-// gshare predictor: 2998.24
-// l1 btb wb queue: 4488.4
-// predictor wb queue: 3087.0
-
-// area stat fetchWidth 2
 
 class FrontEnd(implicit p: Parameters) extends Module {
     // if0 stage: generate fetch pc, access L0 & L1 BTB
@@ -121,7 +113,10 @@ class FrontEnd(implicit p: Parameters) extends Module {
         Seq.fill(p(FETCH_WIDTH))(0.U.asTypeOf(new PredictorUpdateInfo))
     ))
 
+    l1_btb_wb_queue.io.flush := flush
     l1_btb_wb_queue.io.enq := io.wb1_l1_btb_update
+
+    pred_wb_queue.io.flush := flush
     pred_wb_queue.io.enq := io.wb1_predictor_update
 
     io.wb1_l1_btb_enqReady := l1_btb_wb_queue.io.enqReady

@@ -17,4 +17,7 @@ class DecodeResultBundle(implicit p: Parameters) extends Bundle with HasValid {
     val funct7 = UInt(7.W)
     val opcode = UInt(7.W)
     val lat = UInt(3.W)
+    val HasRs1 = Bool()
+    val HasRs2 = Bool()
+    val HasRd = Bool()
 }

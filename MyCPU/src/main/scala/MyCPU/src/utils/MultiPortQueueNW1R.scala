@@ -7,6 +7,7 @@ import MyCPU.io._
 // Mem Impl[LutRam]
 class MultiPortQueueNW1R[T <: Bundle with HasValid](size: Int, nWritePorts: Int, gen: T) extends Module {
     val io = IO(new Bundle {
+        val flush = Input(Bool())
         val enq = Input(Vec(nWritePorts, gen))
         val enqValid = Input(Vec(nWritePorts, Bool()))
         val enqReady = Output(Bool())
@@ -66,6 +67,6 @@ class MultiPortQueueNW1R[T <: Bundle with HasValid](size: Int, nWritePorts: Int,
 
     io.deq := readVec(headPtrBank)
 
-    headPtr := headPtr + io.deqReady
-    tailPtr := tailPtr + writeCount
+    headPtr := Mux(io.flush, 0.U, headPtr + io.deqReady)
+    tailPtr := Mux(io.flush, 0.U, tailPtr + writeCount)
 }

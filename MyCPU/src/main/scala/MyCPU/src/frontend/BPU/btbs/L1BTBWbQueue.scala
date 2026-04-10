@@ -12,6 +12,7 @@ import org.chipsalliance.cde.config._
 // wb stage2: get bank enq items, and write into multi bank queue
 class L1BTBWbQueue(size: Int)(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
+        val flush = Input(Bool())
         val enq = Input(Vec(p(FETCH_WIDTH), new L1BTBUpdateInfo))
         val deq = Output(Vec(p(L1BTBParam).btbBankNum, new L1BTBUpdateInfo))
         val enqReady = Output(Bool())
@@ -62,6 +63,8 @@ class L1BTBWbQueue(size: Int)(implicit p: Parameters) extends Module {
             skidBuffers(b).io.enq(i) := wb2_enq(wb2_bankHitPrefixSum(i))
             skidBuffers(b).io.enqValid(i) := wb2_enq(wb2_bankHitPrefixSum(i)).valid
         }
+
+        skidBuffers(b).io.flush := io.flush
     }
 
     io.enqReady := Cat((0 until bankNum).map(
