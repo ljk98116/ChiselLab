@@ -64,12 +64,21 @@ class RATSpec(implicit p: Parameters) extends Module {
                 RATSpecTable(io.rd_rat_write_req(i).areg).valid := true.B
             }
         }
+        io.commit_refill_write_back.ready := false.B
     }.otherwise {
+        for(i <- 0 until p(FETCH_WIDTH)) {
+            io.rs1_rat_read_resp(i) := 0.U.asTypeOf(new RATSpecReadResp)
+            io.rs2_rat_read_resp(i) := 0.U.asTypeOf(new RATSpecReadResp)
+            io.rd_rat_read_resp(i) := 0.U.asTypeOf(new RATSpecReadResp)
+        }
         when(io.commit_refill_write_back.valid) {
             for(i <- 0 until p(FETCH_WIDTH)) {
-                RATSpecTable(io.commit_refill_write_back.bits(i).areg) := io.commit_refill_write_back.bits(i).preg
+                RATSpecTable(io.commit_refill_write_back.bits(i).areg).preg := io.commit_refill_write_back.bits(i).preg
                 RATSpecTable(io.commit_refill_write_back.bits(i).areg).valid := io.commit_refill_write_back.bits(i).valid
             }
+            io.commit_refill_write_back.ready := true.B
+        }.otherwise {
+            io.commit_refill_write_back.ready := false.B
         }
     }
 }

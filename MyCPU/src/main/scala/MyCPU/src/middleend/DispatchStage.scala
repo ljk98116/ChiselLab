@@ -78,10 +78,14 @@ class DispatchStage(implicit p: Parameters) extends Module {
 
         when(alu_hit) {
             io.alu_uops(b) := dispatch2_renameRes(alu_idx)
+        }.otherwise {
+            io.alu_uops(b) := 0.U.asTypeOf(new uOp)
         }
 
         when(mem_hit) {
             io.mem_uops(b) := dispatch2_renameRes(mem_idx)
+        }.otherwise {
+            io.mem_uops(b) := 0.U.asTypeOf(new uOp)
         }
     }
 }

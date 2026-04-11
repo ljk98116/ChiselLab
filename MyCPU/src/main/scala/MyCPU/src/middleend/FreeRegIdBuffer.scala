@@ -22,7 +22,7 @@ class FreeRegIdBuffer(implicit p: Parameters) extends Module {
         // to rename2 stage
         val readResp = Output(Vec(p(FETCH_WIDTH), new FreeRegIdBufferReadResp))
         val deqReady = Output(Bool())
-        // from freeRegIdBufferWbQueue, zipped with deq
+        // from commit stage
         val writeReq = Input(Vec(p(FETCH_WIDTH), new FreeRegIdBufferWriteReq))
         // from checkPointQueue
         val checkpointInfo = Input(new CheckPointInfo)

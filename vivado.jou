@@ -3,8 +3,8 @@
 # SW Build 5239630 on Fri Nov 08 22:34:34 MST 2024
 # IP Build 5239520 on Sun Nov 10 16:12:51 MST 2024
 # SharedData Build 5239561 on Fri Nov 08 14:39:27 MST 2024
-# Start of session at: Sat Mar 28 21:04:05 2026
-# Process ID         : 79873
+# Start of session at: Sat Apr 11 19:09:15 2026
+# Process ID         : 48963
 # Current directory  : /home/ljk/Arch/riscv_lab/ChiselLab
 # Command line       : vivado
 # Log file           : /home/ljk/Arch/riscv_lab/ChiselLab/vivado.log
@@ -13,41 +13,28 @@
 # Platform           : Ubuntu
 # Operating System   : Ubuntu 22.04.5 LTS
 # Processor Detail   : Intel(R) Core(TM) i9-14900HX
-# CPU Frequency      : 2419.199 MHz
+# CPU Frequency      : 2419.198 MHz
 # CPU Physical cores : 16
 # CPU Logical cores  : 32
 # Host memory        : 32438 MB
 # Swap memory        : 8589 MB
 # Total Virtual      : 41028 MB
-# Available Virtual  : 32438 MB
+# Available Virtual  : 30206 MB
 #-----------------------------------------------------------
 start_gui
 open_project /home/ljk/Arch/riscv_lab/ChiselLabFpga/ChiselLabFpga.xpr
 update_compile_order -fileset sources_1
-remove_files  /home/ljk/Arch/riscv_lab/ChiselLab/verilog/MyCPU/L1BTB.sv
-add_files -scan_for_includes {/home/ljk/Arch/riscv_lab/ChiselLab/verilog/MyCPU/PredictorWbQueue.sv /home/ljk/Arch/riscv_lab/ChiselLab/verilog/MyCPU/FrontEnd.sv /home/ljk/Arch/riscv_lab/ChiselLab/verilog/MyCPU/Nangate45RAM.sv /home/ljk/Arch/riscv_lab/ChiselLab/verilog/MyCPU/ICache.sv /home/ljk/Arch/riscv_lab/ChiselLab/verilog/MyCPU/pLRUReplacePolicy.sv /home/ljk/Arch/riscv_lab/ChiselLab/verilog/MyCPU/GSharePredictor.sv}
+add_files -norecurse -scan_for_includes /home/ljk/Arch/riscv_lab/ChiselLab/verilog/MyCPU/MiddleEnd.sv
 update_compile_order -fileset sources_1
-update_compile_order -fileset sources_1
-remove_files  /home/ljk/Arch/riscv_lab/ChiselLab/verilog/MyCPU/Nangate45RAM.sv
-reset_run synth_1
-launch_runs synth_1 -jobs 8
-wait_on_run synth_1
-open_run synth_1 -name synth_1
-create_clock -period 10.000 -name clock -waveform {0.000 5.000} [get_ports clock]
-report_timing_summary -delay_type min_max -report_unconstrained -check_timing_verbose -max_paths 10 -input_pins -routable_nets -name timing_1
-report_timing_summary -delay_type min_max -report_unconstrained -check_timing_verbose -max_paths 10 -input_pins -routable_nets -name timing_1
-report_timing_summary -delay_type min_max -report_unconstrained -check_timing_verbose -max_paths 10 -input_pins -routable_nets -name timing_1
-report_timing_summary -delay_type min_max -report_unconstrained -check_timing_verbose -max_paths 10 -input_pins -routable_nets -name timing_1
-report_timing_summary -delay_type min_max -report_unconstrained -check_timing_verbose -max_paths 10 -input_pins -routable_nets -name timing_1
-close_design
-launch_runs impl_1 -jobs 8
-wait_on_run impl_1
 # Disabling source management mode.  This is to allow the top design properties to be set without GUI intervention.
 set_property source_mgmt_mode None [current_project]
-set_property top ICache [current_fileset]
+set_property top MiddleEnd [current_fileset]
 # Re-enabling previously disabled source management mode.
 set_property source_mgmt_mode All [current_project]
 update_compile_order -fileset sources_1
 reset_run synth_1
 launch_runs synth_1 -jobs 8
 wait_on_run synth_1
+open_run synth_1 -name synth_1
+create_clock -period 10.000 -name clock -waveform {0.000 5.000} [get_ports clock]
+report_timing_summary -delay_type min_max -report_unconstrained -check_timing_verbose -max_paths 10 -input_pins -routable_nets -name timing_1

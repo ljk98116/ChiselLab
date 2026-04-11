@@ -28,6 +28,7 @@ class RenameStages(implicit p: Parameters) extends Module {
         // freeRegIdBuffer io
         val freeRegBufferReadReq = Output(Vec(p(FETCH_WIDTH), new FreeRegIdBufferReadReq))
         val freeRegBufferReadResp = Input(Vec(p(FETCH_WIDTH), new FreeRegIdBufferReadResp))
+        val deqReady = Input(Bool())
         // to dispatch
         val renameRes = Output(Vec(p(FETCH_WIDTH), new uOp))
         val rename2_stall = Output(Bool())
@@ -176,7 +177,7 @@ class RenameStages(implicit p: Parameters) extends Module {
 
     // hasRd should be equal to freeregIdResp Valid <=> freeRegIdBuffer can not provide enough preg for rename
     io.rename2_stall := 
-        VecInit(rename2_decodeRes.map(_.HasRd)).asUInt === 
-            VecInit(io.freeRegBufferReadResp.map(_.valid)).asUInt
+        (VecInit(rename2_decodeRes.map(_.HasRd)).asUInt =/= 
+            VecInit(io.freeRegBufferReadResp.map(_.valid)).asUInt) || !io.deqReady
 
 }

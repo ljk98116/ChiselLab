@@ -15,7 +15,6 @@ class CheckPointQueue(size: Int)(implicit p: Parameters) extends Module {
         val flush = Input(Bool())
         val enq = Input(Vec(p(FETCH_WIDTH), new CheckPointInfo))
         val deq = Output(new CheckPointInfo)
-        val deqReady = Output(Bool())
     })
 
     val queue = Module(new MultiPortQueueNW1R(size, p(FETCH_WIDTH), new CheckPointInfo))
@@ -24,6 +23,6 @@ class CheckPointQueue(size: Int)(implicit p: Parameters) extends Module {
     queue.io.enq := io.enq
     queue.io.enqValid := VecInit(io.enq.map(_.valid))
 
-    io.deq := queue.io.deq
-    io.deqReady := queue.io.deqReady
+    io.deq.freeRegIdBufferHeads := queue.io.deq.freeRegIdBufferHeads
+    io.deq.valid := queue.io.deqReady
 }

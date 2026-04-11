@@ -1,11 +1,10 @@
 import MyCPU.utils._
 import MyCPU._
 import MyCPU.frontend._
+import MyCPU.middleend._
 import chisel3._
 import org.chipsalliance.cde.config._
 import MyCPU.config._
-import MyCPU.frontend.BPU._
-import MyCPU.frontend.BPU.predictors.GSharePredictor
 import MyCPU.cache._
 
 object Elaborate extends App {
@@ -24,5 +23,5 @@ object Elaborate extends App {
         new UseSv32Config ++
         new UseCustomLibraryConfig
         
-    circt.stage.ChiselStage.emitSystemVerilogFile(new FrontEnd, args, firtoolOptions)
+    circt.stage.ChiselStage.emitSystemVerilogFile(new MiddleEnd, args, firtoolOptions)
 }
