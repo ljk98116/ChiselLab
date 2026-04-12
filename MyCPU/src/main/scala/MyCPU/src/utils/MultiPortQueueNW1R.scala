@@ -12,6 +12,7 @@ class MultiPortQueueNW1R[T <: Bundle with HasValid](size: Int, nWritePorts: Int,
         val enqValid = Input(Vec(nWritePorts, Bool()))
         val enqReady = Output(Bool())
         val deq = Output(gen)
+        val deqValid = Input(Bool())
         val deqReady = Output(Bool())
     })
     
@@ -65,8 +66,8 @@ class MultiPortQueueNW1R[T <: Bundle with HasValid](size: Int, nWritePorts: Int,
         readVec(i) := banks(i).io.rdata
     }
 
-    io.deq := readVec(headPtrBank)
+    io.deq := Mux(io.deqValid, readVec(headPtrBank), 0.U.asTypeOf(gen))
 
-    headPtr := Mux(io.flush, 0.U, headPtr + io.deqReady)
+    headPtr := Mux(io.flush, 0.U, headPtr + (io.deqReady && io.deqValid))
     tailPtr := Mux(io.flush, 0.U, tailPtr + writeCount)
 }

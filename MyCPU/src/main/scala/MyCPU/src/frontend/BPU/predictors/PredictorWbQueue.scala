@@ -40,6 +40,7 @@ class PredictorWbQueue(size: Int)(implicit p: Parameters) extends Module {
         )
 
         io.deqReady(b) := skidBuffers(b).io.deqReady || hasBankHit
+        skidBuffers(b).io.deqValid := true.B
 
         // wb1 calculate the prefix sum, 
         val wb1_bankHitPrefixSum = WireInit(VecInit(

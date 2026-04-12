@@ -22,7 +22,8 @@ class CheckPointQueue(size: Int)(implicit p: Parameters) extends Module {
     queue.io.flush := io.flush
     queue.io.enq := io.enq
     queue.io.enqValid := VecInit(io.enq.map(_.valid))
+    queue.io.deqValid := io.flush
 
     io.deq.freeRegIdBufferHeads := queue.io.deq.freeRegIdBufferHeads
-    io.deq.valid := queue.io.deqReady
+    io.deq.valid := queue.io.deqReady && io.flush
 }

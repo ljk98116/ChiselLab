@@ -33,9 +33,11 @@ class FreeRegIdBuffer(implicit p: Parameters) extends Module {
     val heads = Seq.fill(p(FETCH_WIDTH))(RegInit(0.U(ptrWidth.W)))
     val tails = Seq.fill(p(FETCH_WIDTH))(RegInit((perBankSize - 1).U(ptrWidth.W)))
 
-    val banks = Seq.fill(p(FETCH_WIDTH))(
-        Module(new LargeBank(perBankSize, UInt(p(PREG_WIDTH).W)))
-    )
+    val banks = RegInit(VecInit(
+        Seq.tabulate(p(FETCH_WIDTH))(
+            b => VecInit(Seq.tabulate(perBankSize)(i => ((b << (p(PREG_WIDTH) - p(FETCH_WIDTH))) + i).U(p(PREG_WIDTH).W)))
+        )
+    ))
 
     val canDeq = VecInit((0 until p(FETCH_WIDTH)).map(i => {
         heads(i) =/= tails(i)
@@ -49,16 +51,14 @@ class FreeRegIdBuffer(implicit p: Parameters) extends Module {
 
     for(i <- 0 until p(FETCH_WIDTH)) {
         // bank read
-        banks(i).io.raddr := heads(i)
-        readDatas(i) := Mux(io.readReq(i).valid, banks(i).io.rdata, 0.U)
+        readDatas(i) := Mux(io.readReq(i).valid, banks(i)(heads(i)), 0.U)
 
         // bank write
-        banks(i).io.wen := io.writeReq(i).valid
-        banks(i).io.waddr := tails(i)
-        banks(i).io.wmask := ~(0.U)
-        banks(i).io.wdata := io.writeReq(i).preg
+        when(io.writeReq(i).valid) {
+            banks(i)(tails(i)) := io.writeReq(i).preg
+        }
 
-        io.readResp(i).valid := canDeq(i)
+        io.readResp(i).valid := canDeq(i) && io.readReq(i).valid
         io.readResp(i).preg := readDatas(i)
 
         val currentHeads = WireInit(VecInit(
