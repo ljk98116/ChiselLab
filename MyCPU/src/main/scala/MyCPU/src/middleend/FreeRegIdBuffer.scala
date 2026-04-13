@@ -1,4 +1,5 @@
-package MyCPU.middleend;
+package MyCPU.middleend
+
 import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.decode._

@@ -1,7 +1,6 @@
 package MyCPU.config
 
 import org.chipsalliance.cde.config._
-import os.truncate
 
 case class BPUParams(
     BPUPredictorNum: Int,

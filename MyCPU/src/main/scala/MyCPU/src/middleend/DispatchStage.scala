@@ -10,6 +10,9 @@ import MyCPU.io._
 import MyCPU.utils._
 
 // 2 stages dispatch
+// to do, judge spec exec load and non spec exec load
+// spec exec load may be replayed due to MDP Error, may set spec state for issue items
+// no spec exec load is safe, though mdp has pred error
 class DispatchStage(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
         val flush = Input(Bool())

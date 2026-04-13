@@ -25,6 +25,15 @@ class RenameStages(implicit p: Parameters) extends Module {
         val rs1_rat_read_resp = Input(Vec(p(FETCH_WIDTH), new RATSpecReadResp))
         val rs2_rat_read_resp = Input(Vec(p(FETCH_WIDTH), new RATSpecReadResp))
         val rd_rat_read_resp = Input(Vec(p(FETCH_WIDTH), new RATSpecReadResp))
+        // rob free id buffer io <rename 1>
+        val robFreeIdAllocReq = Output(Vec(p(FETCH_WIDTH), new ROBFreeIdAllocReq))
+        val robFreeIdAllocResp = Output(Vec(p(FETCH_WIDTH), new ROBFreeIdAllocResp))
+        // MDP IO
+        // (StoreSet: access SSIT at rename1, access LFST at rename2)
+        val rename1_is_store = Output(Vec(p(FETCH_WIDTH), Bool()))
+        val rename1_is_load = Output(Vec(p(FETCH_WIDTH), Bool()))
+        val rename1_pcs = Output(Vec(p(FETCH_WIDTH), UInt(p(ADDR_WIDTH).W)))
+        val rename2_canSpecExec = Input(Vec(p(FETCH_WIDTH), Bool()))
         // freeRegIdBuffer io
         val freeRegBufferReadReq = Output(Vec(p(FETCH_WIDTH), new FreeRegIdBufferReadReq))
         val freeRegBufferReadResp = Input(Vec(p(FETCH_WIDTH), new FreeRegIdBufferReadResp))
@@ -100,6 +109,12 @@ class RenameStages(implicit p: Parameters) extends Module {
         rename1_rs2_has_raw(i) := rename1_rs2_raw_masks(i).reduce(_ || _)
         rename1_has_waw_before(i) := rename1_waw_masks_before(i).reduce(_ || _)
         rename1_has_waw_after(i) := rename1_waw_masks_after(i).reduce(_ || _)
+
+        io.rename1_is_store(i) := (rename1_decodeRes(i).opcode === OpcodeVal.SB) && rename1_decodeRes(i).valid
+        io.rename1_is_load(i) := (rename1_decodeRes(i).opcode === OpcodeVal.LB) && rename1_decodeRes(i).valid
+        io.rename1_pcs(i) := rename1_decodeRes(i).pc
+
+        io.robFreeIdAllocReq(i).valid := rename1_decodeRes(i).valid
     }
 
     /// rename2 judge raw hazard with rename1 result, and generate rename2 result
@@ -114,6 +129,7 @@ class RenameStages(implicit p: Parameters) extends Module {
     val rename2_rs2_has_raw = PipeReg(rename1_rs2_has_raw, io.stall_from_backpipe, io.flush)
     val rename2_has_waw_before = PipeReg(rename1_has_waw_before, io.stall_from_backpipe, io.flush)
     val rename2_has_waw_after = PipeReg(rename1_has_waw_after, io.stall_from_backpipe, io.flush)
+    val rename2_rob_ids = PipeReg(io.robFreeIdAllocResp, io.stall_from_backpipe, io.flush)
 
     for(i <- 0 until p(FETCH_WIDTH)) {
         io.rs1_rat_read_req(i).valid := rename2_decodeRes(i).valid && rename2_decodeRes(i).HasRs1 && !rename2_rs1_has_raw(i)
@@ -173,11 +189,14 @@ class RenameStages(implicit p: Parameters) extends Module {
             io.rs2_rat_read_resp(i).preg
         )
         io.renameRes(i).branchPredInfo := rename2_br_pred_info_vec(i)
+        io.renameRes(i).LDSpecExec := io.rename2_canSpecExec(i)
+        io.renameRes(i).rob_id := rename2_rob_ids(i).robId
     }
 
     // hasRd should be equal to freeregIdResp Valid <=> freeRegIdBuffer can not provide enough preg for rename
+    // robid valid should be equal to insts Valid <=> ROBIdBuffer can not provide enough id for insts
     io.rename2_stall := 
-        (VecInit(rename2_decodeRes.map(_.HasRd)).asUInt =/= 
-            VecInit(io.freeRegBufferReadResp.map(_.valid)).asUInt) || !io.deqReady
-
+        (VecInit(rename2_decodeRes.map(_.HasRd)).asUInt =/= VecInit(io.freeRegBufferReadResp.map(_.valid)).asUInt) || 
+        !io.deqReady ||
+        (VecInit(rename1_decodeRes.map(_.valid)).asUInt =/= VecInit(io.robFreeIdAllocResp.map(_.valid)).asUInt)
 }
