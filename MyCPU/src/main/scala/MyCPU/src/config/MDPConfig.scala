@@ -8,8 +8,8 @@ case object SLOT_NUM extends Field[Int]
 
 class StoreSetConfig(implicit p: Parameters) extends Config(
     (site, here, up) => {
-        case SSIT_SIZE => 128
-        case LFST_SIZE => 32
+        case SSIT_SIZE => 64
+        case LFST_SIZE => 8
         case SLOT_NUM => 2
     }
 )

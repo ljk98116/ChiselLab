@@ -33,7 +33,6 @@ class RenameStages(implicit p: Parameters) extends Module {
         val rename1_is_store = Output(Vec(p(FETCH_WIDTH), Bool()))
         val rename1_is_load = Output(Vec(p(FETCH_WIDTH), Bool()))
         val rename1_pcs = Output(Vec(p(FETCH_WIDTH), UInt(p(ADDR_WIDTH).W)))
-        val rename2_canSpecExec = Input(Vec(p(FETCH_WIDTH), Bool()))
         // freeRegIdBuffer io
         val freeRegBufferReadReq = Output(Vec(p(FETCH_WIDTH), new FreeRegIdBufferReadReq))
         val freeRegBufferReadResp = Input(Vec(p(FETCH_WIDTH), new FreeRegIdBufferReadResp))
@@ -189,7 +188,7 @@ class RenameStages(implicit p: Parameters) extends Module {
             io.rs2_rat_read_resp(i).preg
         )
         io.renameRes(i).branchPredInfo := rename2_br_pred_info_vec(i)
-        io.renameRes(i).LDSpecExec := io.rename2_canSpecExec(i)
+        io.renameRes(i).LDSpecExec := false.B
         io.renameRes(i).rob_id := rename2_rob_ids(i).robId
     }
 
