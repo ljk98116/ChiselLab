@@ -21,7 +21,8 @@ object Elaborate extends App {
         new BTBConfig ++ new BaseConfig ++ 
         new GSharePredictorConfig ++ new L1CacheConfig ++
         new UseSv32Config ++
-        new UseCustomLibraryConfig
+        new UseCustomLibraryConfig ++
+        new MDPConfig
         
     circt.stage.ChiselStage.emitSystemVerilogFile(new MiddleEnd, args, firtoolOptions)
 }

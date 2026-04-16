@@ -23,7 +23,10 @@ class MiddleEnd(implicit p: Parameters) extends Module {
         val stall_from_backpipe = Input(Bool())
         val commit_refill_write_back = Flipped(DecoupledIO(Vec(p(FETCH_WIDTH), new RATSpecWriteReq)))
         val commit_spec_write_back = Input(Vec(p(FETCH_WIDTH), new FreeRegIdBufferWriteReq))
+        val commit_spec_robId_write_back = Input(Vec(p(FETCH_WIDTH), new ROBFreeIdWriteReq))
+        val loadRAWHarvard = Flipped(DecoupledIO(new LoadRAWHarvardInfo))
         // to front end
+        val rename1_stall = Output(Bool())
         val rename2_stall = Output(Bool())
         // to issue enq stage
         val mem_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
@@ -36,6 +39,8 @@ class MiddleEnd(implicit p: Parameters) extends Module {
     val freeRegIdBuffer = Module(new FreeRegIdBuffer)
     val checkPointQueue = Module(new CheckPointQueue(64))
     val ratSpec = Module(new RATSpec)
+    val mdp = Module(new StoreSet)
+    val robFreeIdBuffer = Module(new ROBFreeIdBuffer)
 
     val flush = io.commit_redirect.flush
 
@@ -75,6 +80,7 @@ class MiddleEnd(implicit p: Parameters) extends Module {
 
     dispatch.io.flush := flush
     dispatch.io.stall_from_backpipe := io.stall_from_backpipe
+    dispatch.io.dispatch1_canSpecExec := mdp.io.dispatch1_canSpecExec
 
     io.mem_uops := dispatch.io.mem_uops
     io.alu_uops := dispatch.io.alu_uops
@@ -84,4 +90,22 @@ class MiddleEnd(implicit p: Parameters) extends Module {
 
     freeRegIdBuffer.io.checkpointInfo := checkPointQueue.io.deq
     freeRegIdBuffer.io.writeReq := io.commit_spec_write_back
+
+    mdp.io.loadRAWHarvardInfo <> io.loadRAWHarvard
+    mdp.io.flush := flush
+    mdp.io.stall_from_backpipe := io.stall_from_backpipe
+    mdp.io.rename2_stall := io.rename2_stall
+    mdp.io.rename1_stall := io.rename1_stall
+    mdp.io.decode_pcs := VecInit(decode.io.decodeRes_o.map(_.pc))
+    mdp.io.rename1_isLoadVec := rename.io.rename1_is_load
+    mdp.io.rename1_isStoreVec := rename.io.rename1_is_store
+    mdp.io.rename1_pcs := rename.io.rename1_pcs
+    mdp.io.rename1_robIds := rename.io.rename1_robIds
+    mdp.io.decode_pcValids := VecInit(decode.io.decodeRes_o.map(_.valid))
+
+    io.rename1_stall := robFreeIdBuffer.io.canDeq
+    robFreeIdBuffer.io.flush := flush
+    robFreeIdBuffer.io.commitWriteBack := io.commit_spec_robId_write_back
+    robFreeIdBuffer.io.rename1ReadReq := rename.io.robFreeIdAllocReq
+    rename.io.robFreeIdAllocResp := robFreeIdBuffer.io.rename1ReadResp
 }

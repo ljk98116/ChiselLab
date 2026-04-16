@@ -18,12 +18,16 @@ class DispatchStage(implicit p: Parameters) extends Module {
         val flush = Input(Bool())
         val stall_from_backpipe = Input(Bool())
         val renameRes_i = Input(Vec(p(FETCH_WIDTH), new uOp))
+        val dispatch1_canSpecExec = Input(Vec(p(FETCH_WIDTH), Bool()))
         // to issue enq stage
         val mem_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
         val alu_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
     })
 
     val dispatch1_renameRes = PipeReg(io.renameRes_i, io.stall_from_backpipe, io.flush)
+    val dispatch1_renameRes_o = WireInit(VecInit(
+        Seq.fill(p(FETCH_WIDTH))(0.U.asTypeOf(new uOp))
+    ))
 
     val dispatch1_isMEMInstMask = WireInit(VecInit(
         Seq.fill(p(FETCH_WIDTH))(false.B)
@@ -47,6 +51,7 @@ class DispatchStage(implicit p: Parameters) extends Module {
             dispatch1_renameRes(i).opcode === OpcodeVal.LB
 
         dispatch1_isALUInstMask(i) := ~((dispatch1_isMEMInstMask(i))) // or else
+        
     }
 
     dispatch1_isMEMInstPrefixSums(0) := 0.U
@@ -57,9 +62,14 @@ class DispatchStage(implicit p: Parameters) extends Module {
         dispatch1_isALUInstPrefixSums(i) := dispatch1_isALUInstPrefixSums(i-1) + dispatch1_isALUInstMask(i)
     }
 
+    dispatch1_renameRes_o := dispatch1_renameRes
+    for(i <- 0 until p(FETCH_WIDTH)) {
+        dispatch1_renameRes_o(i).LDSpecExec := io.dispatch1_canSpecExec(i)
+    }
+
     val dispatch2_isMEMInstPrefixSums = PipeReg(dispatch1_isMEMInstPrefixSums, io.stall_from_backpipe, io.flush)
     val dispatch2_isALUInstPrefixSums = PipeReg(dispatch1_isALUInstPrefixSums, io.stall_from_backpipe, io.flush)
-    val dispatch2_renameRes = PipeReg(dispatch1_renameRes, io.stall_from_backpipe, io.flush)
+    val dispatch2_renameRes = PipeReg(dispatch1_renameRes_o, io.stall_from_backpipe, io.flush)
 
     for(b <- 0 until p(FETCH_WIDTH)) {
         // find the first hit

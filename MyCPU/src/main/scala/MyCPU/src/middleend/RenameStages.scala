@@ -27,12 +27,13 @@ class RenameStages(implicit p: Parameters) extends Module {
         val rd_rat_read_resp = Input(Vec(p(FETCH_WIDTH), new RATSpecReadResp))
         // rob free id buffer io <rename 1>
         val robFreeIdAllocReq = Output(Vec(p(FETCH_WIDTH), new ROBFreeIdAllocReq))
-        val robFreeIdAllocResp = Output(Vec(p(FETCH_WIDTH), new ROBFreeIdAllocResp))
+        val robFreeIdAllocResp = Input(Vec(p(FETCH_WIDTH), new ROBFreeIdAllocResp))
         // MDP IO
         // (StoreSet: access SSIT at rename1, access LFST at rename2)
         val rename1_is_store = Output(Vec(p(FETCH_WIDTH), Bool()))
         val rename1_is_load = Output(Vec(p(FETCH_WIDTH), Bool()))
         val rename1_pcs = Output(Vec(p(FETCH_WIDTH), UInt(p(ADDR_WIDTH).W)))
+        val rename1_robIds = Output(Vec(p(FETCH_WIDTH), UInt(p(ROBID_WIDTH).W)))
         // freeRegIdBuffer io
         val freeRegBufferReadReq = Output(Vec(p(FETCH_WIDTH), new FreeRegIdBufferReadReq))
         val freeRegBufferReadResp = Input(Vec(p(FETCH_WIDTH), new FreeRegIdBufferReadResp))
@@ -112,6 +113,7 @@ class RenameStages(implicit p: Parameters) extends Module {
         io.rename1_is_store(i) := (rename1_decodeRes(i).opcode === OpcodeVal.SB) && rename1_decodeRes(i).valid
         io.rename1_is_load(i) := (rename1_decodeRes(i).opcode === OpcodeVal.LB) && rename1_decodeRes(i).valid
         io.rename1_pcs(i) := rename1_decodeRes(i).pc
+        io.rename1_robIds(i) := io.robFreeIdAllocResp(i).robId
 
         io.robFreeIdAllocReq(i).valid := rename1_decodeRes(i).valid
     }

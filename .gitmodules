@@ -7,3 +7,6 @@
 [submodule "tools/chisel"]
 	path = tools/chisel
 	url = https://github.com/chipsalliance/chisel.git
+[submodule "tools/espresso"]
+	path = tools/espresso
+	url = https://github.com/chipsalliance/espresso

@@ -17,23 +17,38 @@ class LFSTAccessReq(implicit p: Parameters) extends Bundle with HasValid {
 }
 
 class StoreSet(implicit p: Parameters) extends MDP {
-    val lfstNum = p(SSIT_SIZE) * p(SLOT_NUM)
 
     val ssit = Module(new SSIT)
-
-    val lfstIdBuffer = Module(new LFSTFreeIdBuffer)
-
-    val lfstTable = Seq.fill(lfstNum)(
-        Module(new LFST)
-    )
+    val lfst = Module(new LFST)
+    val ssitFreeIdBuffer = Module(new SSITFreeIdBuffer)
 
     // rename1 read SSIT
+    ssit.io.decode_pcs := io.decode_pcs
+    ssit.io.decode_pcValids := io.decode_pcValids
+
+    // wb1 update SSIT
+    ssit.io.flush := io.flush
+    ssit.io.rename1_stall := io.rename1_stall
+    ssit.io.rename2_stall := io.rename2_stall
+    ssit.io.stall_from_backpipe := io.stall_from_backpipe
+    ssit.io.wb1_ssit_update <> io.loadRAWHarvardInfo
+
+    ssitFreeIdBuffer.io.alloc := ssit.io.wb1_ssit_freeIdAllocReq
+    ssit.io.wb1_ssit_freeIdAllocResp := ssitFreeIdBuffer.io.freeId
     ssit.io.rename1_isLoadVec := io.rename1_isLoadVec
     ssit.io.rename1_isStoreVec := io.rename1_isStoreVec
-    ssit.io.rename1_pcs := io.rename1_pcVec
 
     // rename2 gen LFST read/write req for all lfsts
-    val rename2_ssitEntries = ssit.io.rename2_LFSTEntries
 
-    
+    lfst.io.flush := io.flush
+    lfst.io.stall_from_backpipe := io.stall_from_backpipe
+    lfst.io.rename2_stall := io.rename2_stall
+
+    lfst.io.rename1_pcs := io.rename1_pcs
+    lfst.io.rename1_isLoadVec := io.rename1_isLoadVec
+    lfst.io.rename1_isStoreVec := io.rename1_isStoreVec
+    lfst.io.rename1_robIds := io.rename1_robIds
+    lfst.io.rename1_ssitEntries := ssit.io.rename1_LFSTEntries
+
+    io.dispatch1_canSpecExec := lfst.io.dispatch1_canSpecExecVec
 }

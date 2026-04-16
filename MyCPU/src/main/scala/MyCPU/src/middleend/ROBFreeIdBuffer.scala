@@ -29,7 +29,7 @@ class ROBFreeIdBuffer(implicit p: Parameters) extends Module {
     val buffers = RegInit(VecInit(
         Seq.tabulate(p(FETCH_WIDTH))(
             b => VecInit(Seq.tabulate(perBankSize)(
-                i => (b * perBankSize + i).U
+                i => (b * perBankSize + i).U(p(PREG_WIDTH).W)
             ))
         )
     ))

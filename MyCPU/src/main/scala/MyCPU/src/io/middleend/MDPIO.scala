@@ -18,9 +18,8 @@ class LFSTEntry(implicit p: Parameters) extends Bundle with HasValid {
     val robId = UInt(p(ROBID_WIDTH).W) // for debug, not used in logic
 }
 
-class SSITWriteReq(implicit p: Parameters) extends Bundle {
+class LoadRAWHarvardInfo(implicit p: Parameters) extends Bundle {
     val valid = Bool()
-    val LFSTID = UInt(log2Ceil(p(SSIT_SIZE) * p(SLOT_NUM)).W)
     val loadPC = UInt(p(ADDR_WIDTH).W)
     val storePC = UInt(p(ADDR_WIDTH).W)
 }
