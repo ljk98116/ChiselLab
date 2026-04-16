@@ -22,7 +22,7 @@ object Elaborate extends App {
         new GSharePredictorConfig ++ new L1CacheConfig ++
         new UseSv32Config ++
         new UseCustomLibraryConfig ++
-        new MDPConfig
+        new StoreSetConfig
         
     circt.stage.ChiselStage.emitSystemVerilogFile(new MiddleEnd, args, firtoolOptions)
 }

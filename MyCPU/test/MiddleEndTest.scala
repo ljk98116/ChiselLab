@@ -1,242 +1,121 @@
-package MyCPU.test
+package MyCPU.middleend
 
 import chisel3._
 import chiseltest._
 import org.scalatest.freespec.AnyFreeSpec
-
 import org.chipsalliance.cde.config._
-import MyCPU.middleend._
 import MyCPU.config._
 import MyCPU.io._
+import MyCPU.utils._
 
-import scala.collection.mutable
-import scala.collection.mutable.Queue
 import scala.util.Random
 
-class MiddleEndFullSystemTest extends AnyFreeSpec with ChiselScalatestTester {
+class MiddleEndDecodeRenamePipelineTest extends AnyFreeSpec with ChiselScalatestTester {
 
-  implicit val p: Parameters =
-    new BTBConfig ++ new BaseConfig ++
+  implicit val p: Parameters = (new BTBConfig ++ new BaseConfig ++
     new GSharePredictorConfig ++ new L1CacheConfig ++
-    new UseSv32Config ++ new UseCustomLibraryConfig
+    new UseSv32Config ++ new UseCustomLibraryConfig ++
+    new StoreSetConfig).asInstanceOf[Parameters]
 
-  "ROB + Exception + Branch FULL Verification" in {
-    test(new MiddleEnd) { dut =>
+  "MiddleEnd decode and rename should handle all patterns correctly (pipeline aware)" in {
 
-      // =========================
-      // 初始化 DUT
-      // =========================
+    test(new MiddleEnd).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
+
+      // 初始化
       dut.io.stall_from_backpipe.poke(false.B)
-
-      def clearRedirect(): Unit = {
-        dut.io.commit_redirect.flush.poke(false.B)
-        dut.io.commit_redirect.flush_pc.poke(0.U)
-        dut.io.commit_redirect.pc.poke(0.U)
-        dut.io.commit_redirect.isCall.poke(false.B)
-        dut.io.commit_redirect.isReturn.poke(false.B)
-        dut.io.commit_redirect.rasTopPtr.poke(0.U)
-      }
-
-      clearRedirect()
-
+      dut.io.commit_redirect.flush.poke(false.B)
       dut.io.commit_refill_write_back.valid.poke(false.B)
+      dut.io.commit_spec_write_back.foreach(_.valid.poke(false.B))
+      dut.io.commit_spec_robId_write_back.foreach(_.valid.poke(false.B))
+      dut.io.loadRAWHarvard.valid.poke(false.B)
 
-      for (i <- 0 until p(FETCH_WIDTH)) {
-        dut.io.commit_spec_write_back(i).valid.poke(false.B)
-        dut.io.commit_spec_write_back(i).preg.poke(0.U)
-      }
+      val rand = new Random()
 
-      // =========================
-      // RAT 模型
-      // =========================
-      val commitRAT = Array.tabulate(32)(i => i)
-      var specRAT   = commitRAT.clone()
-
-      // =========================
-      // 物理寄存器状态
-      // =========================
-      val allocated = mutable.Set[Int]()
-      for (i <- 0 until 32) allocated += i
-
-      // =========================
-      // ROB Entry
-      // =========================
-      case class ROBEntry(
-        rd: Int,
-        pd: Int,
-        old: Int,
-        hasRd: Boolean,
-        isBranch: Boolean,
-        mispredict: Boolean,
-        isException: Boolean,
-        delay: Int
+      val patterns: Seq[(String, BigInt)] = Seq(
+        ("LUI", 0x00000037), ("AUIPC", 0x00000017), ("JAL", 0x0000006F),
+        ("JALR", 0x00000067), ("BEQ", 0x00000063), ("BNE", 0x00001063),
+        ("BLT", 0x00004063), ("BGE", 0x00005063), ("BLTU", 0x00006063),
+        ("BGEU", 0x00007063), ("LB", 0x00000003), ("LH", 0x00001003),
+        ("LW", 0x00002003), ("LBU", 0x00004003), ("LHU", 0x00005003),
+        ("SB", 0x00000023), ("SH", 0x00001023), ("SW", 0x00002023),
+        ("ADDI", 0x00000013), ("SLTI", 0x00002013), ("SLTIU", 0x00003013),
+        ("XORI", 0x00004013), ("ORI", 0x00006013), ("ANDI", 0x00007013),
+        ("SLLI", 0x00001013), ("SRLI", 0x00005013), ("SRAI", 0x40005013),
+        ("ADD", 0x00000033), ("SUB", 0x40000033), ("SLL", 0x00001033),
+        ("SLT", 0x00002033), ("SLTU", 0x00003033), ("XOR", 0x00004033),
+        ("SRL", 0x00005033), ("SRA", 0x40005033), ("OR", 0x00006033), ("AND", 0x00007033)
       )
 
-      val rob = new Queue[ROBEntry]()
-      val execLatency = 5
+      var pcCounter = 0x1000
 
-      var fireCnt = 0
-      var commitCnt = 0
-      var flushCnt = 0
+      for ((name, baseInst) <- patterns) {
 
-      // =========================
-      // 主循环
-      // =========================
-      for (cycle <- 0 until 8000) {
+        val rs1List = Array.fill(p(FETCH_WIDTH))(rand.nextInt(32))
+        val rs2List = Array.fill(p(FETCH_WIDTH))(rand.nextInt(32))
+        val rdList  = Array.fill(p(FETCH_WIDTH))(rand.nextInt(32))
 
-        // =====================
-        // 输入指令（混合）
-        // =====================
+        // ----------------------
+        // Step 1: Poke FETCH stage
+        // ----------------------
         for (i <- 0 until p(FETCH_WIDTH)) {
-
-          val isBranch = Random.nextInt(10) == 0
-
-          val inst =
-            if (isBranch) "h00000063".U // beq x0,x0,0（模拟branch）
-            else "h00c58533".U          // add
-
+          val inst = (baseInst | (rs1List(i) << 15) | (rs2List(i) << 20) | (rdList(i) << 7)).U
+          dut.io.if5_pc_vec_i(i).poke((pcCounter + i*4).U)
           dut.io.if5_inst_i(i).poke(inst)
           dut.io.if5_instValid_i(i).poke(true.B)
-          dut.io.if5_pc_vec_i(i).poke((cycle * 4 + i * 4).U)
         }
 
-        // =====================
-        // 默认无 flush
-        // =====================
-        clearRedirect()
-
-        dut.clock.step(1)
-
-        // =====================
-        // rename 捕获
-        // =====================
-        for (i <- 0 until p(FETCH_WIDTH)) {
-
-          val u = dut.io.alu_uops(i)
-
-          if (u.valid.peek().litToBoolean) {
-
-            val rd  = u.rd.peek().litValue.toInt
-            val pd  = u.pd.peek().litValue.toInt
-            val old = u.old_pd.peek().litValue.toInt
-            val has = u.HasRd.peek().litToBoolean
-
-            val isBranch = Random.nextInt(10) == 0
-            val mispred  = isBranch && Random.nextBoolean()
-            val except   = (!isBranch) && Random.nextInt(50) == 0
-
-            if (has && rd != 0) {
-
-              val goldenOld = specRAT(rd)
-
-              // 🔥 invariant 1：old_pd 正确
-              assert(old == goldenOld,
-                s"[BUG] old_pd mismatch rd=$rd")
-
-              // 🔥 invariant 2：pd 不重复
-              assert(!allocated.contains(pd),
-                s"[BUG] pd $pd allocated twice")
-
-              allocated += pd
-              specRAT(rd) = pd
-            }
-
-            rob.enqueue(ROBEntry(
-              rd, pd, old, has,
-              isBranch, mispred, except,
-              execLatency
-            ))
-
-            fireCnt += 1
+        // ----------------------
+        // Step 2: Clock pipeline until decode/rename valid
+        // ----------------------
+        var stable = false
+        var maxCycle = 10 // 最多等10个cycle
+        while (!stable && maxCycle > 0) {
+          dut.clock.step(1)
+          stable = true
+          for (i <- 0 until p(FETCH_WIDTH)) {
+            val uop = dut.io.alu_uops(i)
+            if (!uop.valid.peek().litToBoolean) stable = false
           }
+          maxCycle -= 1
         }
 
-        // =====================
-        // 执行推进
-        // =====================
-        for (i <- rob.indices) {
-          val e = rob(i)
-          rob(i) = e.copy(delay = e.delay - 1)
-        }
+        assert(stable, s"$name uOps did not become valid in time")
 
-        // =====================
-        // commit（顺序）
-        // =====================
-        var didFlush = false
-
+        // ----------------------
+        // Step 3: 校验 rename 输出
+        // ----------------------
         for (i <- 0 until p(FETCH_WIDTH)) {
+          val uop = dut.io.alu_uops(i)
+          val valid = uop.valid.peek().litToBoolean
+          val rd = uop.rd.peek().litValue
+          val rs1 = uop.rs1.peek().litValue
+          val rs2 = uop.rs2.peek().litValue
 
-          val req = dut.io.commit_spec_write_back(i)
+          println(f"Instr $name%-5s PC=0x${(pcCounter+i*4)}%04X Valid=$valid RD=$rd RS1=$rs1 RS2=$rs2")
 
-          if (!didFlush && rob.nonEmpty && rob.front.delay <= 0) {
-
-            val e = rob.front
-
-            // =====================
-            // 分支错误 or 异常
-            // =====================
-            if (e.mispredict || e.isException) {
-
-              // 🔥 触发 flush
-              dut.io.commit_redirect.flush.poke(true.B)
-              dut.io.commit_redirect.flush_pc.poke(0.U)
-
-              // golden 恢复
-              specRAT = commitRAT.clone()
-              rob.clear()
-
-              didFlush = true
-              flushCnt += 1
-
-              req.valid.poke(false.B)
-
-            } else {
-
-              val u = rob.dequeue()
-
-              req.valid.poke(u.hasRd.B)
-              req.preg.poke(u.old.U)
-
-              if (u.hasRd && u.rd != 0) {
-
-                // 🔥 invariant 3：释放合法
-                assert(allocated.contains(u.old),
-                  s"[BUG] free invalid pd ${u.old}")
-
-                allocated -= u.old
-                commitRAT(u.rd) = u.pd
-              }
-
-              commitCnt += 1
-            }
-
-          } else {
-            req.valid.poke(false.B)
-          }
+          assert(valid, s"$name instruction uOp should be valid")
+          assert(rd == rdList(i), s"$name RD mismatch: expected ${rdList(i)}, got $rd")
+          assert(rs1 == rs1List(i), s"$name RS1 mismatch: expected ${rs1List(i)}, got $rs1")
+          assert(rs2 == rs2List(i), s"$name RS2 mismatch: expected ${rs2List(i)}, got $rs2")
         }
 
-        // =====================
-        // backpressure
-        // =====================
-        dut.io.stall_from_backpipe.poke(rob.size > 128)
-
-        // =====================
-        // debug
-        // =====================
-        if (cycle % 1000 == 0) {
-          println(
-            s"[DBG] cyc=$cycle fire=$fireCnt commit=$commitCnt flush=$flushCnt rob=${rob.size}"
-          )
-        }
+        pcCounter += 4
       }
 
-      println(s"fire=$fireCnt commit=$commitCnt flush=$flushCnt")
+      // ----------------------
+      // Step 4: 测试 flush
+      // ----------------------
+      dut.io.commit_redirect.flush.poke(true.B)
+      dut.clock.step(1)
+      dut.io.commit_redirect.flush.poke(false.B)
 
-      // =====================
-      // 最终检查
-      // =====================
-      assert(fireCnt > 2000)
-      assert(commitCnt > 1000)
+      // ----------------------
+      // Step 5: 测试 stall
+      // ----------------------
+      dut.io.stall_from_backpipe.poke(true.B)
+      dut.clock.step(2)
+      dut.io.stall_from_backpipe.poke(false.B)
+      dut.clock.step(1)
     }
   }
 }

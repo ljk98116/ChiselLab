@@ -28,115 +28,127 @@ class DecodeStage(implicit p: Parameters) extends Module {
     val instValids = PipeReg(io.if5_instValid_i, io.stall, io.flush)
     val br_pred_info_vec = PipeReg(io.if5_br_pred_info_vec_i, io.stall, io.flush)
 
-    val patterns: Seq[DecodePattern] = Seq(
-        
-        RVUTypeInstPattern(opcode = OpcodeVal.LUI), 
-        RVUTypeInstPattern(opcode = OpcodeVal.AUIPC),
-        RVUJTypeInstPattern(opcode = OpcodeVal.JAL),
+    val RVRTypePatterns: Seq[RVRTypeInstPattern] = Seq(
+        RVRTypeInstPattern(
+            OpcodeVal.R, Funct3Val.ADD, funct7 = Funct7Val.ADD
+        ),
+        RVRTypeInstPattern(
+            OpcodeVal.R, Funct3Val.SUB, funct7 = Funct7Val.SUB
+        ),
+        RVRTypeInstPattern(
+            OpcodeVal.R, Funct3Val.SLL, funct7 = Funct7Val.SLL
+        ),
+        RVRTypeInstPattern(
+            OpcodeVal.R, Funct3Val.SLT, funct7 = Funct7Val.SLT
+        ),
+        RVRTypeInstPattern(
+            OpcodeVal.R, Funct3Val.SLTU, funct7 = Funct7Val.SLTU
+        ),
+        RVRTypeInstPattern(
+            OpcodeVal.R, Funct3Val.XOR, funct7 = Funct7Val.XOR
+        ),
+        RVRTypeInstPattern(
+            OpcodeVal.R, Funct3Val.SRL, funct7 = Funct7Val.SRL
+        ),
+        RVRTypeInstPattern(
+            OpcodeVal.R, Funct3Val.SRA, funct7 = Funct7Val.SRA
+        ),
+        RVRTypeInstPattern(
+            OpcodeVal.R, Funct3Val.OR, funct7 = Funct7Val.OR
+        ),
+        RVRTypeInstPattern(
+            OpcodeVal.R, Funct3Val.AND, funct7 = Funct7Val.AND
+        )
+    )
+    val RVUTypePatterns: Seq[RVUTypeInstPattern] = Seq(
+        RVUTypeInstPattern(OpcodeVal.LUI), 
+        RVUTypeInstPattern(OpcodeVal.AUIPC)
+    )
+    val RVUJTypePatterns: Seq[RVUJTypeInstPattern] = Seq(
+        RVUJTypeInstPattern(OpcodeVal.JAL)
+    )
+
+    val RVITypePatterns: Seq[RVITypeInstPattern] = Seq(
         RVITypeInstPattern(
-            opcode = OpcodeVal.JALR, funct3 = Funct3Val.JALR
+            OpcodeVal.JALR, Funct3Val.JALR
+        ),
+        RVITypeInstPattern(
+            OpcodeVal.ADDI, Funct3Val.ADDI
+        ),
+        RVITypeInstPattern(
+            OpcodeVal.SLTI, Funct3Val.SLTI
+        ),
+        RVITypeInstPattern(
+            OpcodeVal.SLTIU, Funct3Val.SLTIU
+        ),
+        RVITypeInstPattern(
+            OpcodeVal.XORI, Funct3Val.XORI
+        ),
+        RVITypeInstPattern(
+            OpcodeVal.ORI, Funct3Val.ORI
+        ),
+        RVITypeInstPattern(
+            OpcodeVal.ANDI, Funct3Val.ANDI
+        ),
+        RVITypeInstPattern(
+            OpcodeVal.SLLI, Funct3Val.SLLI
+        ),
+        RVITypeInstPattern(
+            OpcodeVal.SRLI, Funct3Val.SRLI
+        ),
+        RVITypeInstPattern(
+            OpcodeVal.SRAI, Funct3Val.SRAI
+        ),
+        RVITypeInstPattern(
+            OpcodeVal.LB, Funct3Val.LB
+        ),
+        RVITypeInstPattern(
+            OpcodeVal.LH, Funct3Val.LH
+        ),
+        RVITypeInstPattern(
+            OpcodeVal.LW, Funct3Val.LW
+        ),
+        RVITypeInstPattern(
+            OpcodeVal.LBU, Funct3Val.LBU
+        ),
+        RVITypeInstPattern(
+            OpcodeVal.LHU, Funct3Val.LHU
+        ),
+    )
+    val RVSBTypePatterns: Seq[RVSBTypeInstPattern] = Seq(
+        RVSBTypeInstPattern(
+            OpcodeVal.BEQ, Funct3Val.BEQ
         ),
         RVSBTypeInstPattern(
-            opcode = OpcodeVal.BEQ, funct3 = Funct3Val.BEQ
+            OpcodeVal.BNE, Funct3Val.BNE
         ),
         RVSBTypeInstPattern(
-            opcode = OpcodeVal.BNE, funct3 = Funct3Val.BNE
+            OpcodeVal.BLT, Funct3Val.BLT
         ),
         RVSBTypeInstPattern(
-            opcode = OpcodeVal.BLT, funct3 = Funct3Val.BLT
+            OpcodeVal.BGE, Funct3Val.BGE
         ),
         RVSBTypeInstPattern(
-            opcode = OpcodeVal.BGE, funct3 = Funct3Val.BGE
+            OpcodeVal.BLTU, Funct3Val.BLTU
         ),
         RVSBTypeInstPattern(
-            opcode = OpcodeVal.BLTU, funct3 = Funct3Val.BLTU
-        ),
-        RVSBTypeInstPattern(
-            opcode = OpcodeVal.BGEU, funct3 = Funct3Val.BGEU
-        ),
-        RVITypeInstPattern(
-            opcode = OpcodeVal.LB, funct3 = Funct3Val.LB
-        ),
-        RVITypeInstPattern(
-            opcode = OpcodeVal.LH, funct3 = Funct3Val.LH
-        ),
-        RVITypeInstPattern(
-            opcode = OpcodeVal.LW, funct3 = Funct3Val.LW
-        ),
-        RVITypeInstPattern(
-            opcode = OpcodeVal.LBU, funct3 = Funct3Val.LBU
-        ),
-        RVITypeInstPattern(
-            opcode = OpcodeVal.LHU, funct3 = Funct3Val.LHU
-        ),                
-        RVSTypeInstPattern(
-            opcode = OpcodeVal.SB, funct3 = Funct3Val.SB
-        ),
-        RVSTypeInstPattern(
-            opcode = OpcodeVal.SH, funct3 = Funct3Val.SH
-        ),
-        RVSTypeInstPattern(
-            opcode = OpcodeVal.SW, funct3 = Funct3Val.SW
-        ),
-        RVITypeInstPattern(
-            opcode = OpcodeVal.ADDI, funct3 = Funct3Val.ADDI
-        ),
-        RVITypeInstPattern(
-            opcode = OpcodeVal.SLTI, funct3 = Funct3Val.SLTI
-        ),
-        RVITypeInstPattern(
-            opcode = OpcodeVal.SLTIU, funct3 = Funct3Val.SLTIU
-        ),
-        RVITypeInstPattern(
-            opcode = OpcodeVal.XORI, funct3 = Funct3Val.XORI
-        ),
-        RVITypeInstPattern(
-            opcode = OpcodeVal.ORI, funct3 = Funct3Val.ORI
-        ),
-        RVITypeInstPattern(
-            opcode = OpcodeVal.ANDI, funct3 = Funct3Val.ANDI
-        ),
-        RVITypeInstPattern(
-            opcode = OpcodeVal.SLLI, funct3 = Funct3Val.SLLI
-        ),
-        RVITypeInstPattern(
-            opcode = OpcodeVal.SRLI, funct3 = Funct3Val.SRLI
-        ),
-        RVITypeInstPattern(
-            opcode = OpcodeVal.SRAI, funct3 = Funct3Val.SRAI
-        ),        
-        RVRTypeInstPattern(
-            opcode = OpcodeVal.R, funct3 = Funct3Val.ADD, funct7 = Funct7Val.ADD
-        ),
-        RVRTypeInstPattern(
-            opcode = OpcodeVal.R, funct3 = Funct3Val.SUB, funct7 = Funct7Val.SUB
-        ),
-        RVRTypeInstPattern(
-            opcode = OpcodeVal.R, funct3 = Funct3Val.SLL, funct7 = Funct7Val.SLL
-        ),
-        RVRTypeInstPattern(
-            opcode = OpcodeVal.R, funct3 = Funct3Val.SLT, funct7 = Funct7Val.SLT
-        ),
-        RVRTypeInstPattern(
-            opcode = OpcodeVal.R, funct3 = Funct3Val.SLTU, funct7 = Funct7Val.SLTU
-        ),
-        RVRTypeInstPattern(
-            opcode = OpcodeVal.R, funct3 = Funct3Val.XOR, funct7 = Funct7Val.XOR
-        ),
-        RVRTypeInstPattern(
-            opcode = OpcodeVal.R, funct3 = Funct3Val.SRL, funct7 = Funct7Val.SRL
-        ),
-        RVRTypeInstPattern(
-            opcode = OpcodeVal.R, funct3 = Funct3Val.SRA, funct7 = Funct7Val.SRA
-        ),
-        RVRTypeInstPattern(
-            opcode = OpcodeVal.R, funct3 = Funct3Val.OR, funct7 = Funct7Val.OR
-        ),
-        RVRTypeInstPattern(
-            opcode = OpcodeVal.R, funct3 = Funct3Val.AND, funct7 = Funct7Val.AND
+            OpcodeVal.BGEU, Funct3Val.BGEU
         ),
     )
 
+    val RVSTypePatterns: Seq[RVSTypeInstPattern] = Seq(
+        RVSTypeInstPattern(
+            OpcodeVal.SB, Funct3Val.SB
+        ),
+        RVSTypeInstPattern(
+            OpcodeVal.SH, Funct3Val.SH
+        ),
+        RVSTypeInstPattern(
+            OpcodeVal.SW, Funct3Val.SW
+        )
+    )
+    
+    
     val Imm: ImmField = new ImmField
     val Rs1: Rs1Field = new Rs1Field
     val Rs2: Rs2Field = new Rs2Field
@@ -162,9 +174,13 @@ class DecodeStage(implicit p: Parameters) extends Module {
         Seq.fill(p(FETCH_WIDTH))(0.U.asTypeOf(new DecodeResultBundle))
     ))
 
+    println(Imm.genTable(patterns(0)))
+
     for(i <- 0 until p(FETCH_WIDTH)) {
         when(instValids(i)) {
             var decodeResult = decoderTable.decode(insts(i))
+            printf(p"inst: ${insts(i)}\n")
+            printf(p"decodeResult: $decodeResult \n")
             decodeRes(i).rs1 := decodeResult(Rs1)
             decodeRes(i).rs2 := decodeResult(Rs2)
             decodeRes(i).imm := decodeResult(Imm)

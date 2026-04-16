@@ -3,274 +3,206 @@ package MyCPU.config
 import chisel3._
 import chisel3.util._
 import chisel3.util.experimental.decode._
-
-import MyCPU.config._
-import MyCPU.io._
-
 import org.chipsalliance.cde.config._
 
 case class RVRTypeInstPattern (
+    val opcode: BitPat,
+    val funct3: BitPat,
     val funct7: BitPat,
     val rs2: BitPat = BitPat.dontCare(5),
     val rs1: BitPat = BitPat.dontCare(5),
-    val funct3: BitPat,
-    val rd: BitPat = BitPat.dontCare(5),
-    val opcode: BitPat
+    val rd: BitPat = BitPat.dontCare(5)
 ) extends DecodePattern {
-    def bitPat: BitPat = funct7 ## rs2 ## rs1 ## funct3 ## rd ## opcode;
+    def bitPat: BitPat = funct7 ## rs2 ## rs1 ## funct3 ## rd ## opcode
 }
 
 case class RVITypeInstPattern(
+    val opcode: BitPat,
+    val funct3: BitPat,
     val imm: BitPat = BitPat.dontCare(32),
     val rs1: BitPat = BitPat.dontCare(5),
-    val funct3: BitPat,
-    val rd: BitPat = BitPat.dontCare(5),
-    val opcode: BitPat
+    val rd: BitPat = BitPat.dontCare(5)
 ) extends DecodePattern {
-    def bitPat: BitPat = imm(11, 0) ## rs1 ## funct3 ## rd ## opcode;
+    def bitPat: BitPat = imm(11, 0) ## rs1 ## funct3 ## rd ## opcode
 }
 
 case class RVSTypeInstPattern(
+    val opcode: BitPat,
+    val funct3: BitPat,
     val imm: BitPat = BitPat.dontCare(32),
     val rs2: BitPat = BitPat.dontCare(5),
-    val rs1: BitPat = BitPat.dontCare(5),
-    val funct3: BitPat,
-    val opcode: BitPat
+    val rs1: BitPat = BitPat.dontCare(5)
 ) extends DecodePattern {
-    def bitPat: BitPat = imm(11, 5) ## rs2 ## rs1 ## funct3 ## imm(4, 0) ## opcode;
+    def bitPat: BitPat = imm(11, 5) ## rs2 ## rs1 ## funct3 ## imm(4, 0) ## opcode
 }
 
 case class RVSBTypeInstPattern(
+    val opcode: BitPat,
+    val funct3: BitPat,
     val imm: BitPat = BitPat.dontCare(32),
     val rs2: BitPat = BitPat.dontCare(5),
-    val rs1: BitPat = BitPat.dontCare(5),
-    val funct3: BitPat,
-    val opcode: BitPat
+    val rs1: BitPat = BitPat.dontCare(5)
 ) extends DecodePattern {
-    def bitPat: BitPat = imm(12) ## imm(10, 5) ## rs2 ## rs1 ## funct3 ## imm(4, 1) ## imm(11) ## opcode;
+    def bitPat: BitPat = imm(12) ## imm(10, 5) ## rs2 ## rs1 ## funct3 ## imm(4, 1) ## imm(11) ## opcode
 }
 
 case class RVUTypeInstPattern(
+    val opcode: BitPat,
     val imm: BitPat = BitPat.dontCare(32),
-    val rd: BitPat = BitPat.dontCare(5),
-    val opcode: BitPat
+    val rd: BitPat = BitPat.dontCare(5)
 ) extends DecodePattern {
-    def bitPat: BitPat = imm(31, 12) ## rd ## opcode;
+    def bitPat: BitPat = imm(31, 12) ## rd ## opcode
 }
 
 case class RVUJTypeInstPattern(
+    val opcode: BitPat,
     val imm: BitPat = BitPat.dontCare(32),
-    val rd: BitPat = BitPat.dontCare(5),
-    val opcode: BitPat
+    val rd: BitPat = BitPat.dontCare(5)
 ) extends DecodePattern {
-    def bitPat: BitPat = imm(20) ## imm(10, 1) ## imm(11) ## imm(19, 12) ## rd ## opcode;
+    def bitPat: BitPat = imm(20) ## imm(10, 1) ## imm(11) ## imm(19, 12) ## rd ## opcode
 }
 
-class ImmField(implicit p: Parameters) extends DecodeField[DecodePattern, UInt]
-{
-    def name: String = "ImmField"
-    def chiselType: UInt = UInt(p(DATA_WIDTH).W)
-    def genTable(op: DecodePattern): BitPat = {
-        if(op.isInstanceOf[RVITypeInstPattern]) {
-            return BitPat.N(20) ## op.asInstanceOf[RVITypeInstPattern].imm(11, 0)
-        }
-        if(op.isInstanceOf[RVSTypeInstPattern]) {
-            return BitPat.N(20) ## op.asInstanceOf[RVSTypeInstPattern].imm(11, 0)
-        }
-        if(op.isInstanceOf[RVSBTypeInstPattern]) {
-            return BitPat.N(19) ## op.asInstanceOf[RVSBTypeInstPattern].imm(12, 1) ## BitPat.N(1)
-        }
-        if(op.isInstanceOf[RVUTypeInstPattern]) {
-            return op.asInstanceOf[RVUTypeInstPattern].imm(31, 12) ## BitPat.N(12)
-        }
-        if(op.isInstanceOf[RVUJTypeInstPattern]) {
-            return BitPat.N(11) ## op.asInstanceOf[RVUJTypeInstPattern].imm(20, 1) ## BitPat.N(1)
-        }
-        return BitPat.N(p(DATA_WIDTH))
-    }
+// -------------------- DecodeField classes --------------------
+class RVITypeImmField(implicit p: Parameters) extends DecodeField[RVITypeInstPattern, UInt] {
+  def name: String = "RVITypeImmField"
+  def chiselType: UInt = UInt(p(DATA_WIDTH).W)
+  def genTable(op: RVITypeInstPattern): BitPat = BitPat.N(20) ## op.imm(11, 0)
 }
 
-class Rs1Field(implicit p: Parameters) extends DecodeField[DecodePattern, UInt] 
-{
-    def name: String = "Rs1Field"
-    def chiselType: UInt = UInt(p(AREG_WIDTH).W)
-    def genTable(op: DecodePattern): BitPat = {
-        if(op.isInstanceOf[RVRTypeInstPattern]) {
-            return op.asInstanceOf[RVRTypeInstPattern].rs1
-        }
-        if(op.isInstanceOf[RVITypeInstPattern]) {
-            return op.asInstanceOf[RVITypeInstPattern].rs1
-        }
-        if(op.isInstanceOf[RVSTypeInstPattern]) {
-            return op.asInstanceOf[RVSTypeInstPattern].rs1
-        }
-        if(op.isInstanceOf[RVSBTypeInstPattern]) {
-            return op.asInstanceOf[RVSBTypeInstPattern].rs1
-        }
-        return BitPat.N(p(AREG_WIDTH))
-    }
+class RVSTypeImmField(implicit p: Parameters) extends DecodeField[RVSTypeInstPattern, UInt] {
+  def name: String = "RVSTypeImmField"
+  def chiselType: UInt = UInt(p(DATA_WIDTH).W)
+  def genTable(op: RVSTypeInstPattern): BitPat = BitPat.N(20) ## op.imm(11, 0)
 }
 
-class Rs2Field(implicit p: Parameters) extends DecodeField[DecodePattern, UInt] 
-{
-    def name: String = "Rs2Field"
-    def chiselType: UInt = UInt(p(AREG_WIDTH).W)
-    def genTable(op: DecodePattern): BitPat = {
-        if(op.isInstanceOf[RVRTypeInstPattern]) {
-            return op.asInstanceOf[RVRTypeInstPattern].rs2
-        }        
-        if(op.isInstanceOf[RVSTypeInstPattern]) {
-            return op.asInstanceOf[RVSTypeInstPattern].rs2
-        }
-        if(op.isInstanceOf[RVSBTypeInstPattern]) {
-            return op.asInstanceOf[RVSBTypeInstPattern].rs2
-        }
-        return BitPat.N(p(AREG_WIDTH))
-    }
+class RVSBTypeImmField(implicit p: Parameters) extends DecodeField[RVSBTypeInstPattern, UInt] {
+  def name: String = "RVSBTypeImmField"
+  def chiselType: UInt = UInt(p(DATA_WIDTH).W)
+  def genTable(op: RVSBTypeInstPattern): BitPat = BitPat.N(19) ## op.imm(12, 1) ## BitPat.N(1)
 }
 
-class RdField(implicit p: Parameters) extends DecodeField[DecodePattern, UInt] 
-{
-    def name: String = "RdField"
-    def chiselType: UInt = UInt(p(AREG_WIDTH).W)
-    def genTable(op: DecodePattern): BitPat = {
-        if(op.isInstanceOf[RVRTypeInstPattern]) {
-            return op.asInstanceOf[RVRTypeInstPattern].rd
-        }        
-        if(op.isInstanceOf[RVITypeInstPattern]) {
-            return op.asInstanceOf[RVITypeInstPattern].rd
-        }
-        if(op.isInstanceOf[RVUTypeInstPattern]) {
-            return op.asInstanceOf[RVUTypeInstPattern].rd
-        }
-        if(op.isInstanceOf[RVUJTypeInstPattern]) {
-            return op.asInstanceOf[RVUJTypeInstPattern].rd
-        }
-        return BitPat.N(p(AREG_WIDTH))
-    }
+class RVUTypeImmField(implicit p: Parameters) extends DecodeField[RVUTypeInstPattern, UInt] {
+  def name: String = "RVUTypeImmField"
+  def chiselType: UInt = UInt(p(DATA_WIDTH).W)
+  def genTable(op: RVUTypeInstPattern): BitPat = op.imm(31, 12) ## BitPat.N(12)
+}
+
+class RVUJTypeImmField(implicit p: Parameters) extends DecodeField[RVUJTypeInstPattern, UInt] {
+  def name: String = "RVUJTypeImmField"
+  def chiselType: UInt = UInt(p(DATA_WIDTH).W)
+  def genTable(op: RVUJTypeInstPattern): BitPat = BitPat.N(11) ## op.imm(20, 1) ## BitPat.N(1)
+}
+
+
+class Rs1Field(implicit p: Parameters) extends DecodeField[DecodePattern, UInt] {
+  def name: String = "Rs1Field"
+  def chiselType: UInt = UInt(p(AREG_WIDTH).W)
+  def genTable(op: DecodePattern): BitPat = op match {
+    case rvr: RVRTypeInstPattern => rvr.rs1
+    case rvi: RVITypeInstPattern => rvi.rs1
+    case rvs: RVSTypeInstPattern => rvs.rs1
+    case rvb: RVSBTypeInstPattern => rvb.rs1
+    case _ => BitPat.N(p(AREG_WIDTH))
+  }
+}
+
+class Rs2Field(implicit p: Parameters) extends DecodeField[DecodePattern, UInt] {
+  def name: String = "Rs2Field"
+  def chiselType: UInt = UInt(p(AREG_WIDTH).W)
+  def genTable(op: DecodePattern): BitPat = op match {
+    case rvr: RVRTypeInstPattern => rvr.rs2
+    case rvs: RVSTypeInstPattern => rvs.rs2
+    case rvb: RVSBTypeInstPattern => rvb.rs2
+    case _ => BitPat.N(p(AREG_WIDTH))
+  }
+}
+
+class RdField(implicit p: Parameters) extends DecodeField[DecodePattern, UInt] {
+  def name: String = "RdField"
+  def chiselType: UInt = UInt(p(AREG_WIDTH).W)
+  def genTable(op: DecodePattern): BitPat = op match {
+    case rvr: RVRTypeInstPattern => rvr.rd
+    case rvi: RVITypeInstPattern => rvi.rd
+    case rvu: RVUTypeInstPattern => rvu.rd
+    case rvj: RVUJTypeInstPattern => rvj.rd
+    case _ => BitPat.N(p(AREG_WIDTH))
+  }
 }
 
 class OpcodeField(implicit p: Parameters) extends DecodeField[DecodePattern, UInt] {
-    def name: String = "OpcodeField"
-    def chiselType: UInt = UInt(7.W)
-    def genTable(op: DecodePattern): BitPat = {
-        if(op.isInstanceOf[RVRTypeInstPattern]) {
-            return op.asInstanceOf[RVRTypeInstPattern].opcode
-        }        
-        if(op.isInstanceOf[RVITypeInstPattern]) {
-            return op.asInstanceOf[RVITypeInstPattern].opcode
-        }
-        if(op.isInstanceOf[RVUTypeInstPattern]) {
-            return op.asInstanceOf[RVUTypeInstPattern].opcode
-        }
-        if(op.isInstanceOf[RVUJTypeInstPattern]) {
-            return op.asInstanceOf[RVUJTypeInstPattern].opcode
-        }
-        if(op.isInstanceOf[RVSTypeInstPattern]) {
-            return op.asInstanceOf[RVSTypeInstPattern].opcode
-        }
-        if(op.isInstanceOf[RVSBTypeInstPattern]) {
-            return op.asInstanceOf[RVSBTypeInstPattern].opcode
-        }
-        return BitPat.N(7)
-    }
+  def name: String = "OpcodeField"
+  def chiselType: UInt = UInt(7.W)
+  def genTable(op: DecodePattern): BitPat = op match {
+    case r: RVRTypeInstPattern => r.opcode
+    case i: RVITypeInstPattern => i.opcode
+    case u: RVUTypeInstPattern => u.opcode
+    case j: RVUJTypeInstPattern => j.opcode
+    case s: RVSTypeInstPattern => s.opcode
+    case b: RVSBTypeInstPattern => b.opcode
+    case _ => BitPat.N(7)
+  }
 }
 
 class Funct3Field(implicit p: Parameters) extends DecodeField[DecodePattern, UInt] {
-    def name: String = "Funct3Field"
-    def chiselType: UInt = UInt(3.W)
-    def genTable(op: DecodePattern): BitPat = {
-        if(op.isInstanceOf[RVRTypeInstPattern]) {
-            return op.asInstanceOf[RVRTypeInstPattern].funct3
-        }        
-        if(op.isInstanceOf[RVITypeInstPattern]) {
-            return op.asInstanceOf[RVITypeInstPattern].funct3
-        }
-        if(op.isInstanceOf[RVSTypeInstPattern]) {
-            return op.asInstanceOf[RVSTypeInstPattern].funct3
-        }
-        if(op.isInstanceOf[RVSBTypeInstPattern]) {
-            return op.asInstanceOf[RVSBTypeInstPattern].funct3
-        }
-        return BitPat.N(3)
-    }
+  def name: String = "Funct3Field"
+  def chiselType: UInt = UInt(3.W)
+  def genTable(op: DecodePattern): BitPat = op match {
+    case r: RVRTypeInstPattern => r.funct3
+    case i: RVITypeInstPattern => i.funct3
+    case s: RVSTypeInstPattern => s.funct3
+    case b: RVSBTypeInstPattern => b.funct3
+    case _ => BitPat.N(3)
+  }
 }
 
 class Funct7Field(implicit p: Parameters) extends DecodeField[DecodePattern, UInt] {
-    def name: String = "Funct7Field"
-    def chiselType: UInt = UInt(7.W)
-    def genTable(op: DecodePattern): BitPat = {
-        if(op.isInstanceOf[RVRTypeInstPattern]) {
-            return op.asInstanceOf[RVRTypeInstPattern].funct7
-        }        
-        return BitPat.N(7)
-    }
+  def name: String = "Funct7Field"
+  def chiselType: UInt = UInt(7.W)
+  def genTable(op: DecodePattern): BitPat = op match {
+    case r: RVRTypeInstPattern => r.funct7
+    case _ => BitPat.N(7)
+  }
 }
 
 class LatField(implicit p: Parameters) extends DecodeField[DecodePattern, UInt] {
-    def name: String = "LatField"
-    def chiselType: UInt = UInt(3.W)
-    def genTable(op: DecodePattern): BitPat = {
-        // to do
-        return  BitPat.N(3)
-    }
+  def name: String = "LatField"
+  def chiselType: UInt = UInt(3.W)
+  def genTable(op: DecodePattern): BitPat = BitPat.N(3) // 可后续改为按指令类型设置
 }
 
 class HasRs1Field(implicit p: Parameters) extends DecodeField[DecodePattern, Bool] {
-    def name: String = "HasRs1Field"
-    def chiselType: Bool = Bool()
-    def genTable(op: DecodePattern): BitPat = {
-        if(op.isInstanceOf[RVRTypeInstPattern]) {
-            return BitPat("b1")
-        }        
-        if(op.isInstanceOf[RVITypeInstPattern]) {
-            return BitPat("b1")
-        }
-        if(op.isInstanceOf[RVSTypeInstPattern]) {
-            return BitPat("b1")
-        }
-        if(op.isInstanceOf[RVSBTypeInstPattern]) {
-            return BitPat("b1")
-        }
-        return BitPat("b0")
-    }
+  def name: String = "HasRs1Field"
+  def chiselType: Bool = Bool()
+  def genTable(op: DecodePattern): BitPat = op match {
+    case _: RVRTypeInstPattern => BitPat("b1")
+    case _: RVITypeInstPattern => BitPat("b1")
+    case _: RVSTypeInstPattern => BitPat("b1")
+    case _: RVSBTypeInstPattern => BitPat("b1")
+    case _ => BitPat("b0")
+  }
 }
 
 class HasRs2Field(implicit p: Parameters) extends DecodeField[DecodePattern, Bool] {
-    def name: String = "HasRs2Field"
-    def chiselType: Bool = Bool()
-    def genTable(op: DecodePattern): BitPat = {
-        if(op.isInstanceOf[RVRTypeInstPattern]) {
-            return BitPat("b1")
-        }        
-        if(op.isInstanceOf[RVSTypeInstPattern]) {
-            return BitPat("b1")
-        }
-        if(op.isInstanceOf[RVSBTypeInstPattern]) {
-            return BitPat("b1")
-        }
-        return BitPat("b0")
-    }
+  def name: String = "HasRs2Field"
+  def chiselType: Bool = Bool()
+  def genTable(op: DecodePattern): BitPat = op match {
+    case _: RVRTypeInstPattern => BitPat("b1")
+    case _: RVSTypeInstPattern => BitPat("b1")
+    case _: RVSBTypeInstPattern => BitPat("b1")
+    case _ => BitPat("b0")
+  }
 }
 
 class HasRdField(implicit p: Parameters) extends DecodeField[DecodePattern, Bool] {
-    def name: String = "HasRdField"
-    def chiselType: Bool = Bool()
-    def genTable(op: DecodePattern): BitPat = {
-        if(op.isInstanceOf[RVRTypeInstPattern]) {
-            return BitPat("b1")
-        }        
-        if(op.isInstanceOf[RVITypeInstPattern]) {
-            return BitPat("b1")
-        }
-        if(op.isInstanceOf[RVUTypeInstPattern]) {
-            return BitPat("b1")
-        }
-        if(op.isInstanceOf[RVUJTypeInstPattern]) {
-            return BitPat("b1")
-        }
-        return BitPat("b0")
-    }
+  def name: String = "HasRdField"
+  def chiselType: Bool = Bool()
+  def genTable(op: DecodePattern): BitPat = op match {
+    case _: RVRTypeInstPattern => BitPat("b1")
+    case _: RVITypeInstPattern => BitPat("b1")
+    case _: RVUTypeInstPattern => BitPat("b1")
+    case _: RVUJTypeInstPattern => BitPat("b1")
+    case _ => BitPat("b0")
+  }
 }
 
 object OpcodeVal {
