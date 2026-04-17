@@ -45,7 +45,7 @@ class MiddleEnd(implicit p: Parameters) extends Module {
     val flush = io.commit_redirect.flush
 
     decode.io.flush := flush
-    decode.io.stall := io.stall_from_backpipe || io.rename2_stall
+    decode.io.stall := io.stall_from_backpipe || io.rename2_stall || io.rename1_stall
     decode.io.if5_pc_vec_i := io.if5_pc_vec_i
     decode.io.if5_inst_i := io.if5_inst_i
     decode.io.if5_instValid_i := io.if5_instValid_i

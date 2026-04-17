@@ -22,6 +22,7 @@ class DispatchStage(implicit p: Parameters) extends Module {
         // to issue enq stage
         val mem_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
         val alu_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
+        // val sys_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
     })
 
     val dispatch1_renameRes = PipeReg(io.renameRes_i, io.stall_from_backpipe, io.flush)

@@ -31,7 +31,7 @@ class SmallBank[T <: Data](depth: Int, gen: T) extends BaseBank(depth, gen) {
 
 class LargeBank[T <: Data](depth: Int, gen: T) extends BaseBank(depth, gen) {
 
-    val mem = SyncReadMem(depth, gen)
+    val mem = Mem(depth, gen)
 
     when(io.wen) {
         mem.write(io.waddr, io.wdata)
