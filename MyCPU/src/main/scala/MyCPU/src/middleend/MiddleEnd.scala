@@ -103,7 +103,7 @@ class MiddleEnd(implicit p: Parameters) extends Module {
     mdp.io.rename1_robIds := rename.io.rename1_robIds
     mdp.io.decode_pcValids := VecInit(decode.io.decodeRes_o.map(_.valid))
 
-    io.rename1_stall := robFreeIdBuffer.io.canDeq
+    io.rename1_stall := !robFreeIdBuffer.io.canDeq
     robFreeIdBuffer.io.flush := flush
     robFreeIdBuffer.io.commitWriteBack := io.commit_spec_robId_write_back
     robFreeIdBuffer.io.rename1ReadReq := rename.io.robFreeIdAllocReq

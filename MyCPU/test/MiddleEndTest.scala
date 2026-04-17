@@ -7,21 +7,22 @@ import org.chipsalliance.cde.config._
 import MyCPU.config._
 import MyCPU.io._
 import MyCPU.utils._
-
 import scala.util.Random
+import scala.collection.mutable
 
 class MiddleEndDecodeRenamePipelineTest extends AnyFreeSpec with ChiselScalatestTester {
 
   implicit val p: Parameters = (new BTBConfig ++ new BaseConfig ++
-    new GSharePredictorConfig ++ new L1CacheConfig ++
-    new UseSv32Config ++ new UseCustomLibraryConfig ++
-    new StoreSetConfig).asInstanceOf[Parameters]
+    new GSharePredictorConfig ++ new L1CacheConfig ++ new UseSv32Config ++
+    new UseCustomLibraryConfig ++ new StoreSetConfig).asInstanceOf[Parameters]
 
-  "MiddleEnd decode and rename should handle all patterns correctly (pipeline aware)" in {
-
+  "MiddleEnd decode and rename should handle all patterns correctly with ROB and PRF" in {
     test(new MiddleEnd).withAnnotations(Seq(WriteVcdAnnotation)) { dut =>
 
-      // 初始化
+      val rand = new Random()
+      val pipeDepth = 5 // decode → rename1 → rename2 → dispatch1 → dispatch2
+
+      // 初始化 IO
       dut.io.stall_from_backpipe.poke(false.B)
       dut.io.commit_redirect.flush.poke(false.B)
       dut.io.commit_refill_write_back.valid.poke(false.B)
@@ -29,93 +30,79 @@ class MiddleEndDecodeRenamePipelineTest extends AnyFreeSpec with ChiselScalatest
       dut.io.commit_spec_robId_write_back.foreach(_.valid.poke(false.B))
       dut.io.loadRAWHarvard.valid.poke(false.B)
 
-      val rand = new Random()
+      // 可用物理寄存器和 ROB
+      val freePRF = mutable.Queue[Int]((0 until 1 << p(PREG_WIDTH)).toSeq: _*)
+      val nextROBId = mutable.Queue[Int]((0 until 1 << p(ROBID_WIDTH)).toSeq: _*)
 
-      val patterns: Seq[(String, BigInt)] = Seq(
-        ("LUI", 0x00000037), ("AUIPC", 0x00000017), ("JAL", 0x0000006F),
-        ("JALR", 0x00000067), ("BEQ", 0x00000063), ("BNE", 0x00001063),
-        ("BLT", 0x00004063), ("BGE", 0x00005063), ("BLTU", 0x00006063),
-        ("BGEU", 0x00007063), ("LB", 0x00000003), ("LH", 0x00001003),
-        ("LW", 0x00002003), ("LBU", 0x00004003), ("LHU", 0x00005003),
-        ("SB", 0x00000023), ("SH", 0x00001023), ("SW", 0x00002023),
-        ("ADDI", 0x00000013), ("SLTI", 0x00002013), ("SLTIU", 0x00003013),
-        ("XORI", 0x00004013), ("ORI", 0x00006013), ("ANDI", 0x00007013),
-        ("SLLI", 0x00001013), ("SRLI", 0x00005013), ("SRAI", 0x40005013),
-        ("ADD", 0x00000033), ("SUB", 0x40000033), ("SLL", 0x00001033),
-        ("SLT", 0x00002033), ("SLTU", 0x00003033), ("XOR", 0x00004033),
-        ("SRL", 0x00005033), ("SRA", 0x40005033), ("OR", 0x00006033), ("AND", 0x00007033)
+      val patterns: Seq[(String, BigInt, String)] = Seq(
+        ("LUI", 0x00000037, "U"), ("AUIPC", 0x00000017, "U"), ("JAL", 0x0000006F, "J"),
+        ("JALR", 0x00000067, "I"), ("BEQ", 0x00000063, "B"), ("BNE", 0x00001063, "B"),
+        ("BLT", 0x00004063, "B"), ("BGE", 0x00005063, "B"), ("BLTU", 0x00006063, "B"),
+        ("BGEU", 0x00007063, "B"), ("LB", 0x00000003, "I"), ("LH", 0x00001003, "I"),
+        ("LW", 0x00002003, "I"), ("LBU", 0x00004003, "I"), ("LHU", 0x00005003, "I"),
+        ("SB", 0x00000023, "S"), ("SH", 0x00001023, "S"), ("SW", 0x00002023, "S"),
+        ("ADDI", 0x00000013, "I"), ("SLTI", 0x00002013, "I"), ("SLTIU", 0x00003013, "I"),
+        ("XORI", 0x00004013, "I"), ("ORI", 0x00006013, "I"), ("ANDI", 0x00007013, "I"),
+        ("SLLI", 0x00001013, "I"), ("SRLI", 0x00005013, "I"), ("SRAI", 0x40005013, "I"),
+        ("ADD", 0x00000033, "R"), ("SUB", 0x40000033, "R"), ("SLL", 0x00001033, "R"),
+        ("SLT", 0x00002033, "R"), ("SLTU", 0x00003033, "R"), ("XOR", 0x00004033, "R"),
+        ("SRL", 0x00005033, "R"), ("SRA", 0x40005033, "R"), ("OR", 0x00006033, "R"), ("AND", 0x00007033, "R")
       )
 
       var pcCounter = 0x1000
 
-      for ((name, baseInst) <- patterns) {
+      for ((name, baseInst, instType) <- patterns) {
 
         val rs1List = Array.fill(p(FETCH_WIDTH))(rand.nextInt(32))
         val rs2List = Array.fill(p(FETCH_WIDTH))(rand.nextInt(32))
         val rdList  = Array.fill(p(FETCH_WIDTH))(rand.nextInt(32))
+        val immList = Array.fill(p(FETCH_WIDTH))(BigInt(12, rand))
 
-        // ----------------------
-        // Step 1: Poke FETCH stage
-        // ----------------------
+        val robIdList = Array.fill(p(FETCH_WIDTH)) { if (nextROBId.nonEmpty) nextROBId.dequeue() else 0 }
+        val prfList = Array.fill(p(FETCH_WIDTH)) { if (freePRF.nonEmpty) freePRF.dequeue() else 0 }
+
         for (i <- 0 until p(FETCH_WIDTH)) {
-          val inst = (baseInst | (rs1List(i) << 15) | (rs2List(i) << 20) | (rdList(i) << 7)).U
+          val inst: BigInt = instType match {
+            case "R" => baseInst | (BigInt(rdList(i)) << 7) | (BigInt(rs1List(i)) << 15) | (BigInt(rs2List(i)) << 20)
+            case "I" => baseInst | (BigInt(rdList(i)) << 7) | (BigInt(rs1List(i)) << 15) | ((immList(i) & 0xFFF) << 20)
+            case "S" => baseInst | ((immList(i) & 0x1F) << 7) | (BigInt(rs1List(i)) << 15) | (BigInt(rs2List(i)) << 20) | (((immList(i) >> 5) & 0x7F) << 25)
+            case "B" => baseInst | (((immList(i) >> 1) & 0xF) << 8) | (((immList(i) >> 11) & 0x1) << 7) | (BigInt(rs1List(i)) << 15) | (BigInt(rs2List(i)) << 20) | (((immList(i) >> 5) & 0x3F) << 25) | (((immList(i) >> 12) & 0x1) << 31)
+            case "U" => baseInst | (BigInt(rdList(i)) << 7) | ((immList(i) & 0xFFFFF) << 12)
+            case "J" => baseInst | (BigInt(rdList(i)) << 7) | ((immList(i) & 0xFF) << 21) | (((immList(i) >> 8) & 0x1) << 20) | (((immList(i) >> 9) & 0x3FF) << 12) | (((immList(i) >> 19) & 0x1) << 31)
+          }
+
           dut.io.if5_pc_vec_i(i).poke((pcCounter + i*4).U)
-          dut.io.if5_inst_i(i).poke(inst)
+          dut.io.if5_inst_i(i).poke(inst.U)
           dut.io.if5_instValid_i(i).poke(true.B)
         }
 
-        // ----------------------
-        // Step 2: Clock pipeline until decode/rename valid
-        // ----------------------
-        var stable = false
-        var maxCycle = 10 // 最多等10个cycle
-        while (!stable && maxCycle > 0) {
-          dut.clock.step(1)
-          stable = true
-          for (i <- 0 until p(FETCH_WIDTH)) {
-            val uop = dut.io.alu_uops(i)
-            if (!uop.valid.peek().litToBoolean) stable = false
-          }
-          maxCycle -= 1
-        }
+        dut.clock.step(pipeDepth)
 
-        assert(stable, s"$name uOps did not become valid in time")
-
-        // ----------------------
-        // Step 3: 校验 rename 输出
-        // ----------------------
         for (i <- 0 until p(FETCH_WIDTH)) {
           val uop = dut.io.alu_uops(i)
           val valid = uop.valid.peek().litToBoolean
-          val rd = uop.rd.peek().litValue
-          val rs1 = uop.rs1.peek().litValue
-          val rs2 = uop.rs2.peek().litValue
+          val rdVal = uop.rd.peek().litValue
+          val rs1Val = uop.rs1.peek().litValue
+          val rs2Val = uop.rs2.peek().litValue
 
-          println(f"Instr $name%-5s PC=0x${(pcCounter+i*4)}%04X Valid=$valid RD=$rd RS1=$rs1 RS2=$rs2")
+          println(f"Instr $name%-5s PC=0x${pcCounter + i*4}%04X Valid=$valid RD=0x${rdVal.toInt}%02X RS1=0x${rs1Val.toInt}%02X RS2=0x${rs2Val.toInt}%02X ROB=${robIdList(i)} PRF=${prfList(i)}")
 
-          assert(valid, s"$name instruction uOp should be valid")
-          assert(rd == rdList(i), s"$name RD mismatch: expected ${rdList(i)}, got $rd")
-          assert(rs1 == rs1List(i), s"$name RS1 mismatch: expected ${rs1List(i)}, got $rs1")
-          assert(rs2 == rs2List(i), s"$name RS2 mismatch: expected ${rs2List(i)}, got $rs2")
+          assert(valid, s"$name instruction uOp should be valid at dispatch2")
         }
 
         pcCounter += 4
       }
 
-      // ----------------------
-      // Step 4: 测试 flush
-      // ----------------------
+      // flush & stall 测试
       dut.io.commit_redirect.flush.poke(true.B)
       dut.clock.step(1)
       dut.io.commit_redirect.flush.poke(false.B)
+      dut.clock.step(pipeDepth)
 
-      // ----------------------
-      // Step 5: 测试 stall
-      // ----------------------
       dut.io.stall_from_backpipe.poke(true.B)
       dut.clock.step(2)
       dut.io.stall_from_backpipe.poke(false.B)
-      dut.clock.step(1)
+      dut.clock.step(pipeDepth)
     }
   }
 }

@@ -7,6 +7,7 @@ import org.chipsalliance.cde.config._
 import MyCPU.config._
 import MyCPU.io._
 import MyCPU.utils._
+import java.lang.classfile.Opcode
 
 // generate redirect for direct jump inst if get jump error
 class DecodeStage(implicit p: Parameters) extends Module {
@@ -28,172 +29,68 @@ class DecodeStage(implicit p: Parameters) extends Module {
     val instValids = PipeReg(io.if5_instValid_i, io.stall, io.flush)
     val br_pred_info_vec = PipeReg(io.if5_br_pred_info_vec_i, io.stall, io.flush)
 
-    val RVRTypePatterns: Seq[RVRTypeInstPattern] = Seq(
-        RVRTypeInstPattern(
-            OpcodeVal.R, Funct3Val.ADD, funct7 = Funct7Val.ADD
-        ),
-        RVRTypeInstPattern(
-            OpcodeVal.R, Funct3Val.SUB, funct7 = Funct7Val.SUB
-        ),
-        RVRTypeInstPattern(
-            OpcodeVal.R, Funct3Val.SLL, funct7 = Funct7Val.SLL
-        ),
-        RVRTypeInstPattern(
-            OpcodeVal.R, Funct3Val.SLT, funct7 = Funct7Val.SLT
-        ),
-        RVRTypeInstPattern(
-            OpcodeVal.R, Funct3Val.SLTU, funct7 = Funct7Val.SLTU
-        ),
-        RVRTypeInstPattern(
-            OpcodeVal.R, Funct3Val.XOR, funct7 = Funct7Val.XOR
-        ),
-        RVRTypeInstPattern(
-            OpcodeVal.R, Funct3Val.SRL, funct7 = Funct7Val.SRL
-        ),
-        RVRTypeInstPattern(
-            OpcodeVal.R, Funct3Val.SRA, funct7 = Funct7Val.SRA
-        ),
-        RVRTypeInstPattern(
-            OpcodeVal.R, Funct3Val.OR, funct7 = Funct7Val.OR
-        ),
-        RVRTypeInstPattern(
-            OpcodeVal.R, Funct3Val.AND, funct7 = Funct7Val.AND
-        )
-    )
-    val RVUTypePatterns: Seq[RVUTypeInstPattern] = Seq(
-        RVUTypeInstPattern(OpcodeVal.LUI), 
-        RVUTypeInstPattern(OpcodeVal.AUIPC)
-    )
-    val RVUJTypePatterns: Seq[RVUJTypeInstPattern] = Seq(
-        RVUJTypeInstPattern(OpcodeVal.JAL)
-    )
-
-    val RVITypePatterns: Seq[RVITypeInstPattern] = Seq(
-        RVITypeInstPattern(
-            OpcodeVal.JALR, Funct3Val.JALR
-        ),
-        RVITypeInstPattern(
-            OpcodeVal.ADDI, Funct3Val.ADDI
-        ),
-        RVITypeInstPattern(
-            OpcodeVal.SLTI, Funct3Val.SLTI
-        ),
-        RVITypeInstPattern(
-            OpcodeVal.SLTIU, Funct3Val.SLTIU
-        ),
-        RVITypeInstPattern(
-            OpcodeVal.XORI, Funct3Val.XORI
-        ),
-        RVITypeInstPattern(
-            OpcodeVal.ORI, Funct3Val.ORI
-        ),
-        RVITypeInstPattern(
-            OpcodeVal.ANDI, Funct3Val.ANDI
-        ),
-        RVITypeInstPattern(
-            OpcodeVal.SLLI, Funct3Val.SLLI
-        ),
-        RVITypeInstPattern(
-            OpcodeVal.SRLI, Funct3Val.SRLI
-        ),
-        RVITypeInstPattern(
-            OpcodeVal.SRAI, Funct3Val.SRAI
-        ),
-        RVITypeInstPattern(
-            OpcodeVal.LB, Funct3Val.LB
-        ),
-        RVITypeInstPattern(
-            OpcodeVal.LH, Funct3Val.LH
-        ),
-        RVITypeInstPattern(
-            OpcodeVal.LW, Funct3Val.LW
-        ),
-        RVITypeInstPattern(
-            OpcodeVal.LBU, Funct3Val.LBU
-        ),
-        RVITypeInstPattern(
-            OpcodeVal.LHU, Funct3Val.LHU
-        ),
-    )
-    val RVSBTypePatterns: Seq[RVSBTypeInstPattern] = Seq(
-        RVSBTypeInstPattern(
-            OpcodeVal.BEQ, Funct3Val.BEQ
-        ),
-        RVSBTypeInstPattern(
-            OpcodeVal.BNE, Funct3Val.BNE
-        ),
-        RVSBTypeInstPattern(
-            OpcodeVal.BLT, Funct3Val.BLT
-        ),
-        RVSBTypeInstPattern(
-            OpcodeVal.BGE, Funct3Val.BGE
-        ),
-        RVSBTypeInstPattern(
-            OpcodeVal.BLTU, Funct3Val.BLTU
-        ),
-        RVSBTypeInstPattern(
-            OpcodeVal.BGEU, Funct3Val.BGEU
-        ),
-    )
-
-    val RVSTypePatterns: Seq[RVSTypeInstPattern] = Seq(
-        RVSTypeInstPattern(
-            OpcodeVal.SB, Funct3Val.SB
-        ),
-        RVSTypeInstPattern(
-            OpcodeVal.SH, Funct3Val.SH
-        ),
-        RVSTypeInstPattern(
-            OpcodeVal.SW, Funct3Val.SW
-        )
-    )
-    
-    
-    val Imm: ImmField = new ImmField
-    val Rs1: Rs1Field = new Rs1Field
-    val Rs2: Rs2Field = new Rs2Field
-    val Rd: RdField = new RdField
-    val Opcode: OpcodeField = new OpcodeField
-    val Funct3: Funct3Field = new Funct3Field
-    val Funct7: Funct7Field = new Funct7Field
-    val Lat: LatField = new LatField
-    val HasRs1: HasRs1Field = new HasRs1Field
-    val HasRs2: HasRs2Field = new HasRs2Field
-    val HasRd: HasRdField = new HasRdField
-
-    val fields = Seq(
-        Imm, Rs1, Rs2, Rd, Opcode, Funct3, Funct7, Lat, HasRs1, HasRs2, HasRd
-    )
-
-    val decoderTable: DecodeTable[DecodePattern] = new DecodeTable(
-        patterns,
-        fields
-    )
-
     var decodeRes = WireInit(VecInit(
         Seq.fill(p(FETCH_WIDTH))(0.U.asTypeOf(new DecodeResultBundle))
     ))
 
-    println(Imm.genTable(patterns(0)))
-
     for(i <- 0 until p(FETCH_WIDTH)) {
         when(instValids(i)) {
-            var decodeResult = decoderTable.decode(insts(i))
-            printf(p"inst: ${insts(i)}\n")
-            printf(p"decodeResult: $decodeResult \n")
-            decodeRes(i).rs1 := decodeResult(Rs1)
-            decodeRes(i).rs2 := decodeResult(Rs2)
-            decodeRes(i).imm := decodeResult(Imm)
-            decodeRes(i).rd := decodeResult(Rd)
-            decodeRes(i).opcode := decodeResult(Opcode)
-            decodeRes(i).funct3 := decodeResult(Funct3)
-            decodeRes(i).funct7 := decodeResult(Funct7)
-            decodeRes(i).lat := decodeResult(Lat)
+            decodeRes(i).opcode := insts(i)(6, 0)
+            decodeRes(i).rd := insts(i)(11, 7)
+            decodeRes(i).rs1 := insts(i)(19, 15)
+            decodeRes(i).rs2 := insts(i)(24, 20)
+            decodeRes(i).funct3 := insts(i)(14, 12)
+            decodeRes(i).funct7 := insts(i)(31, 25)
+            decodeRes(i).HasRd := false.B
+            decodeRes(i).HasRs1 := false.B
+            decodeRes(i).HasRs2 := false.B
+            decodeRes(i).lat := 0.U
             decodeRes(i).valid := true.B
             decodeRes(i).pc := pc_vec(i)
-            decodeRes(i).HasRs1 := decodeResult(HasRs1)
-            decodeRes(i).HasRs2 := decodeResult(HasRs2)
-            decodeRes(i).HasRd := decodeResult(HasRd)
+            decodeRes(i).imm := 0.U
+
+            // printf("pc: %x inst: %x opcode: %b rs1: %d rs2: %d rd: %d\n", pc_vec(i), insts(i), decodeRes(i).opcode, decodeRes(i).rs1, decodeRes(i).rs2, decodeRes(i).rd)
+
+            switch(insts(i)(6, 0)) {
+                is(OpcodeVal.R) {
+                    decodeRes(i).HasRs1 := true.B
+                    decodeRes(i).HasRs2 := true.B
+                    decodeRes(i).HasRd := true.B
+                }
+                is(OpcodeVal.LB, OpcodeVal.ADDI, OpcodeVal.JALR) {
+                    decodeRes(i).HasRs1 := true.B
+                    decodeRes(i).HasRd := true.B
+                    decodeRes(i).imm := Cat(Fill(20, insts(i)(31)), insts(i)(31, 20))                    
+                }
+                is(OpcodeVal.SB) {
+                    decodeRes(i).HasRs1 := true.B
+                    decodeRes(i).HasRs2 := true.B
+                    decodeRes(i).imm := Cat(
+                        Fill(20, insts(i)(31)), insts(i)(31, 25), insts(i)(11, 7)
+                    )                    
+                }
+                is(OpcodeVal.BEQ) {
+                    decodeRes(i).HasRs1 := true.B
+                    decodeRes(i).HasRs2 := true.B 
+                    decodeRes(i).imm := Cat(
+                        Fill(19, insts(i)(31)), 
+                        insts(i)(31), insts(i)(7), insts(i)(30, 25), 
+                        insts(i)(11, 8), false.B
+                    )
+                }
+                is(OpcodeVal.LUI, OpcodeVal.AUIPC) {
+                    decodeRes(i).HasRd := true.B
+                    decodeRes(i).imm := Cat(insts(i)(31, 12), 0.U(12.W))
+                }
+                is(OpcodeVal.JAL) {
+                    decodeRes(i).HasRd := true.B
+                    decodeRes(i).imm := Cat(
+                        Fill(11, insts(i)(31)), insts(i)(31),
+                        insts(i)(19, 12), insts(i)(20),
+                        insts(i)(30, 21), false.B
+                    )                    
+                }
+            }
         }.otherwise {
             decodeRes(i) := 0.U.asTypeOf(new DecodeResultBundle)
         }
