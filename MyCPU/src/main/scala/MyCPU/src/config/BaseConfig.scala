@@ -18,11 +18,13 @@ case object FETCH_OFFSET extends WidthConfig
 case object SIM_FLAG extends FlagConfig
 
 case object ALU_NUM extends WidthConfig
-case object AGU_NUM extends WidthConfig
+case object LDU_NUM extends WidthConfig
+case object STU_NUM extends WidthConfig
 case object SYS_ALU_NUM extends WidthConfig
 
 case object ALUIQ_SIZE extends WidthConfig
-case object AGUIQ_SIZE extends WidthConfig
+case object LDUIQ_SIZE extends WidthConfig
+case object STUIQ_SIZE extends WidthConfig
 
 class BaseConfig extends Config(
     (site, here, up) => {
@@ -34,10 +36,12 @@ class BaseConfig extends Config(
         case ROBID_WIDTH => here(AREG_WIDTH) + 2
         case FETCH_OFFSET => log2Ceil(here(DATA_WIDTH) / 8)
         case ALU_NUM => here(FETCH_WIDTH)
-        case AGU_NUM => 2
+        case LDU_NUM => 2
+        case STU_NUM => 2
         case SYS_ALU_NUM => 1
         case ALUIQ_SIZE => 16
-        case AGUIQ_SIZE => 
+        case LDUIQ_SIZE => 16
+        case STUIQ_SIZE => 16
         case SIM_FLAG => false
     }
 )

@@ -20,7 +20,8 @@ class DispatchStage(implicit p: Parameters) extends Module {
         val renameRes_i = Input(Vec(p(FETCH_WIDTH), new uOp))
         val dispatch1_canSpecExec = Input(Vec(p(FETCH_WIDTH), Bool()))
         // to issue enq stage
-        val mem_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
+        val load_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
+        val store_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
         val alu_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
         // val sys_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
     })
@@ -30,7 +31,11 @@ class DispatchStage(implicit p: Parameters) extends Module {
         Seq.fill(p(FETCH_WIDTH))(0.U.asTypeOf(new uOp))
     ))
 
-    val dispatch1_isMEMInstMask = WireInit(VecInit(
+    val dispatch1_isLoadInstMask = WireInit(VecInit(
+        Seq.fill(p(FETCH_WIDTH))(false.B)
+    ))
+
+    val dispatch1_isStoreInstMask = WireInit(VecInit(
         Seq.fill(p(FETCH_WIDTH))(false.B)
     ))
 
@@ -38,7 +43,11 @@ class DispatchStage(implicit p: Parameters) extends Module {
         Seq.fill(p(FETCH_WIDTH))(false.B)
     ))
 
-    val dispatch1_isMEMInstPrefixSums = WireInit(VecInit(
+    val dispatch1_isLoadInstPrefixSums = WireInit(VecInit(
+        Seq.fill(p(FETCH_WIDTH))(0.U(log2Ceil(p(FETCH_WIDTH)).W))
+    ))
+
+    val dispatch1_isStoreInstPrefixSums = WireInit(VecInit(
         Seq.fill(p(FETCH_WIDTH))(0.U(log2Ceil(p(FETCH_WIDTH)).W))
     ))
 
@@ -47,19 +56,21 @@ class DispatchStage(implicit p: Parameters) extends Module {
     ))
 
     for(i <- 0 until p(FETCH_WIDTH)) {
-        dispatch1_isMEMInstMask(i) := 
-            dispatch1_renameRes(i).opcode === OpcodeVal.SB ||
+        dispatch1_isLoadInstMask(i) := 
             dispatch1_renameRes(i).opcode === OpcodeVal.LB
-
-        dispatch1_isALUInstMask(i) := ~((dispatch1_isMEMInstMask(i))) // or else
+        dispatch1_isStoreInstMask(i) := 
+            dispatch1_renameRes(i).opcode === OpcodeVal.SB
+        dispatch1_isALUInstMask(i) := ~((dispatch1_isLoadInstMask(i) || dispatch1_isStoreInstMask(i))) // or else
         
     }
 
-    dispatch1_isMEMInstPrefixSums(0) := 0.U
+    dispatch1_isLoadInstPrefixSums(0) := 0.U
+    dispatch1_isStoreInstPrefixSums(0) := 0.U
     dispatch1_isALUInstPrefixSums(0) := 0.U
 
     for(i <- 1 until p(FETCH_WIDTH)) {
-        dispatch1_isMEMInstPrefixSums(i) := dispatch1_isMEMInstPrefixSums(i-1) + dispatch1_isMEMInstMask(i)
+        dispatch1_isLoadInstPrefixSums(i) := dispatch1_isLoadInstPrefixSums(i-1) + dispatch1_isLoadInstMask(i)
+        dispatch1_isStoreInstPrefixSums(i) := dispatch1_isStoreInstPrefixSums(i-1) + dispatch1_isStoreInstMask(i)
         dispatch1_isALUInstPrefixSums(i) := dispatch1_isALUInstPrefixSums(i-1) + dispatch1_isALUInstMask(i)
     }
 
@@ -68,7 +79,8 @@ class DispatchStage(implicit p: Parameters) extends Module {
         dispatch1_renameRes_o(i).LDSpecExec := io.dispatch1_canSpecExec(i)
     }
 
-    val dispatch2_isMEMInstPrefixSums = PipeReg(dispatch1_isMEMInstPrefixSums, io.stall_from_backpipe, io.flush)
+    val dispatch2_isLoadInstPrefixSums = PipeReg(dispatch1_isLoadInstPrefixSums, io.stall_from_backpipe, io.flush)
+    val dispatch2_isStoreInstPrefixSums = PipeReg(dispatch1_isStoreInstPrefixSums, io.stall_from_backpipe, io.flush)
     val dispatch2_isALUInstPrefixSums = PipeReg(dispatch1_isALUInstPrefixSums, io.stall_from_backpipe, io.flush)
     val dispatch2_renameRes = PipeReg(dispatch1_renameRes_o, io.stall_from_backpipe, io.flush)
 
@@ -79,16 +91,24 @@ class DispatchStage(implicit p: Parameters) extends Module {
             (b.U === dispatch2_isALUInstPrefixSums(i)) && ~(isMem)
         }))
 
-        val mem_hit_mask = VecInit((0 until p(FETCH_WIDTH)).map(i => {
-            val isMem = dispatch2_renameRes(i).opcode === OpcodeVal.SB || dispatch2_renameRes(i).opcode === OpcodeVal.LB
-            (b.U === dispatch2_isALUInstPrefixSums(i)) && isMem
+        val load_hit_mask = VecInit((0 until p(FETCH_WIDTH)).map(i => {
+            val isLoad = dispatch2_renameRes(i).opcode === OpcodeVal.LB
+            (b.U === dispatch2_isLoadInstPrefixSums(i)) && isLoad
+        }))
+
+        val store_hit_mask = VecInit((0 until p(FETCH_WIDTH)).map(i => {
+            val isStore = dispatch2_renameRes(i).opcode === OpcodeVal.SB
+            (b.U === dispatch2_isStoreInstPrefixSums(i)) && isStore
         }))
 
         val alu_idx = PriorityEncoder(alu_hit_mask)
         val alu_hit = alu_hit_mask.asUInt.orR
 
-        val mem_idx = PriorityEncoder(mem_hit_mask)
-        val mem_hit = mem_hit_mask.asUInt.orR
+        val load_idx = PriorityEncoder(load_hit_mask)
+        val load_hit = load_hit_mask.asUInt.orR
+
+        val store_idx = PriorityEncoder(store_hit_mask)
+        val store_hit = store_hit_mask.asUInt.orR
 
         when(alu_hit) {
             io.alu_uops(b) := dispatch2_renameRes(alu_idx)
@@ -96,10 +116,16 @@ class DispatchStage(implicit p: Parameters) extends Module {
             io.alu_uops(b) := 0.U.asTypeOf(new uOp)
         }
 
-        when(mem_hit) {
-            io.mem_uops(b) := dispatch2_renameRes(mem_idx)
+        when(load_hit) {
+            io.load_uops(b) := dispatch2_renameRes(load_idx)
         }.otherwise {
-            io.mem_uops(b) := 0.U.asTypeOf(new uOp)
+            io.load_uops(b) := 0.U.asTypeOf(new uOp)
+        }
+
+        when(store_hit) {
+            io.store_uops(b) := dispatch2_renameRes(store_idx)
+        }.otherwise {
+            io.store_uops(b) := 0.U.asTypeOf(new uOp)
         }
     }
 }

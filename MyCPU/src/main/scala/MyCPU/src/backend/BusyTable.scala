@@ -14,7 +14,7 @@ class BusyTable(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
         val freeRegIdBufferResp = Input(Vec(p(FETCH_WIDTH), new FreeRegIdBufferReadResp))
         val aluResultResp = Input(Vec(p(ALU_NUM), new ALUResult))
-        val memResultResp = Input(Vec(p(AGU_NUM), new MemResult))
+        val lduResultResp = Input(Vec(p(LDU_NUM), new LDUResult))
         val sysResultResp = Input(new SysResult)
     })
 
@@ -35,10 +35,10 @@ class BusyTable(implicit p: Parameters) extends Module {
 
     busyTableAfterExecVec(p(ALU_NUM)) := busyTable | (io.sysResultResp.HasRd << io.sysResultResp.pd)
 
-    val busyTableAfterMemOpVec = Seq.fill(p(AGU_NUM))(0.U((1 << p(PREG_WIDTH)).W))
+    val busyTableAfterMemOpVec = Seq.fill(p(LDU_NUM))(0.U((1 << p(PREG_WIDTH)).W))
 
-    for(i <- 0 until p(AGU_NUM)) {
-        busyTableAfterMemOpVec(i) := busyTable | (io.memResultResp(i).HasRd << io.memResultResp(i).pd)
+    for(i <- 0 until p(LDU_NUM)) {
+        busyTableAfterMemOpVec(i) := busyTable | (io.lduResultResp(i).HasRd << io.lduResultResp(i).pd)
     }
 
     busyTable := 

@@ -8,10 +8,12 @@ import MyCPU.config._
 import MyCPU.io._
 import MyCPU.utils._
 
-// p(ALU_NUM) banks, 
+// p(ALU_NUM) banks, area too large, need opt
 // enq prepare stage alloc issue item id and calculate prefixsum
-// enq Stage use prefixSum and choose from current enq Item and uOp skidBuffers, improve IPC, payload avg
-// select stage: use last tick's age matrix and rdy state 
+// enq  + select stage 
+// enq use prefixSum and choose from current enq Item and uOp skidBuffers, improve IPC, payload avg
+// select use current age matrix and rdy state 
+// enq stage update iq entries use busy table and wakeup queue deq items(now directly use select res)
 // recycle stage(regread stage): write back issued item id to ALUIQfreeIdBuffer
 class ALUIQ(implicit p: Parameters) extends Module {
     val totalSize = p(ALUIQ_SIZE)
@@ -29,14 +31,8 @@ class ALUIQ(implicit p: Parameters) extends Module {
         val issue0_stall = Output(Bool())
         // from busytable
         val busytableVec = Input(UInt((1 << p(PREG_WIDTH)).W))
-        // from LUs
-        val aluResult = Input(Vec(p(ALU_NUM), new ALUResult))
-        val memResult = Input(Vec(p(AGU_NUM), new MemResult))
-        val sysResult = Input(new SysResult)
         // to regRead
         val aluiq_o = Output(Vec(p(ALU_NUM), new ALUIQEntry))
-        // from LSQ select
-        val aguQueueSelectRes = Input(Vec(p(AGU_NUM), new AGUIQEntry))
     })
 
     /// issue stage1: enq prepare
@@ -46,8 +42,6 @@ class ALUIQ(implicit p: Parameters) extends Module {
     freeIdBuffer.io.allocReq := allocReqs
     freeIdBuffer.io.flush := io.flush
     freeIdBuffer.io.stall_from_backpipe := io.stall_from_backpipe
-    
-    io.issue0_stall := freeIdBuffer.io.deqReady
 
     class BufferItem(implicit p: Parameters) extends Bundle with HasValid {
         val uOp = new uOp
@@ -93,7 +87,7 @@ class ALUIQ(implicit p: Parameters) extends Module {
         ))
 
         val bankPrefixSum = WireInit(VecInit(
-            Seq.fill(p(ALU_NUM))(0.U(bankBits.W))
+            Seq.fill(p(FETCH_WIDTH))(0.U(bankBits.W))
         ))
 
         val bankHitIndex = PriorityEncoder(bankHits)
@@ -105,7 +99,7 @@ class ALUIQ(implicit p: Parameters) extends Module {
         useCurrent := hasBankHit && !skidBuffers(b).io.deqReady
 
         bankPrefixSum(0) := 0.U
-        for(i <- 1 until p(ALU_NUM)) {
+        for(i <- 1 until p(FETCH_WIDTH)) {
             bankPrefixSum(i) := bankPrefixSum(i-1) + (bankHits(i-1) && !(useCurrent && (i-1).U === bankHitIndex))
         }
 
@@ -115,16 +109,33 @@ class ALUIQ(implicit p: Parameters) extends Module {
         val issue1_skidBufferDeqReady = PipeReg(skidBuffers(b).io.deqReady, io.stall_from_backpipe, io.flush)
         val issue1_bankHitIndex = PipeReg(bankHitIndex, io.stall_from_backpipe, io.flush)
 
-        // cover the old one
-        for(i <- 0 until p(FETCH_WIDTH)) {
-            val bufferItem = new BufferItem
-            bufferItem.uOp := issue1_alu_uops(i)
-            bufferItem.loc := issue1_allocResps(i)
-            bufferItem.valid := issue1_alu_uops(i).valid
-
-            skidBuffers(b).io.enq(issue1_bankPrefixSum(i)) := bufferItem
-            skidBuffers(b).io.enqValid(issue1_bankPrefixSum(i)) := issue1_alu_uops(i).valid
+        // init
+        for(i <- 0 until p(FETCH_WIDTH) / p(ALU_NUM)) {
+            skidBuffers(b).io.enq(i) := 0.U.asTypeOf(new BufferItem)
+            skidBuffers(b).io.enqValid(i) := false.B
         }
+
+        // cover the old one
+        for(i <- 0 until p(FETCH_WIDTH) / p(ALU_NUM)) {
+            val bufferItem = WireInit(0.U.asTypeOf(new BufferItem))
+
+            val hitMask = VecInit((0 until p(FETCH_WIDTH)).map(
+                j => (issue1_bankPrefixSum(j) === i.U) && issue1_alu_uops(j).valid
+            ))
+            
+            val hitIndex = PriorityEncoder(hitMask)
+            val hasHit = hitMask.asUInt.orR
+
+            bufferItem.uOp := issue1_alu_uops(hitIndex)
+            bufferItem.loc := issue1_allocResps(hitIndex)
+            bufferItem.valid := hasHit
+
+            skidBuffers(b).io.enq(i) := bufferItem
+            skidBuffers(b).io.enqValid(i) := bufferItem.valid
+        }
+
+        skidBuffers(b).io.deqValid := true.B
+        skidBuffers(b).io.flush := io.flush
 
         enqUops(b) := Mux(
             useCurrent, 
@@ -139,19 +150,23 @@ class ALUIQ(implicit p: Parameters) extends Module {
         )
     }
 
+    // skidBuffer can not be full 
+    io.issue0_stall := !freeIdBuffer.io.deqReady 
+
     // issue1 update entries
     for(b <- 0 until p(ALU_NUM)) {
         // iq entry update
         for(i <- 0 until perBankSize) {
+            val aluWakeUp1 = VecInit((0 until p(LDU_NUM)).map(j =>
+                io.aluiq_o(j).HasRd && enqUops(b).HasRs1 && io.aluiq_o(j).pd === enqUops(b).ps1
+            )).asUInt.orR
+            val aluWakeUp2 = VecInit((0 until p(LDU_NUM)).map(j =>
+                io.aluiq_o(j).HasRd && enqUops(b).HasRs2 && io.aluiq_o(j).pd === enqUops(b).ps2
+            )).asUInt.orR
             when(i.U === enqLocs(b)(ptrWidth - 1, bankBits) && enqUops(b).valid) {
-                val aluWakeUp1 = VecInit((0 until p(AGU_NUM)).map(j =>
-                    io.aluiq_o(j).HasRd && enqUops(b).HasRs1 && io.aluiq_o(j).pd === enqUops(b).ps1
-                )).asUInt.orR
-                val aluWakeUp2 = VecInit((0 until p(AGU_NUM)).map(j =>
-                    io.aluiq_o(j).HasRd && enqUops(b).HasRs2 && io.aluiq_o(j).pd === enqUops(b).ps2
-                )).asUInt.orR
 
-                val iq_entry = new ALUIQEntry
+                val iq_entry = WireInit(0.U.asTypeOf(new ALUIQEntry))
+
                 iq_entry.HasRd := enqUops(b).HasRd
                 iq_entry.branchPredInfo := enqUops(b).branchPredInfo
                 iq_entry.funct3 := enqUops(b).funct3
@@ -173,18 +188,9 @@ class ALUIQ(implicit p: Parameters) extends Module {
                 iq_entry.rs1 := enqUops(b).rs1
                 iq_entry.rs2 := enqUops(b).rs2
                 iq_entry.valid := enqUops(b).valid
+
                 entryRam(b)(enqLocs(b)(ptrWidth - 1, bankBits)) := iq_entry
-                // update age matrix
-                for(j <- 0 until perBankSize) {
-                    ageMats(b)(i)(j) := false.B
-                }
             }.otherwise {
-                val aluWakeUp1 = VecInit((0 until p(AGU_NUM)).map(j =>
-                    io.aluiq_o(j).HasRd && entryRam(b)(i).HasRs1 && io.aluiq_o(j).pd === entryRam(b)(i).ps1
-                )).asUInt.orR
-                val aluWakeUp2 = VecInit((0 until p(AGU_NUM)).map(j =>
-                    io.aluiq_o(j).HasRd && entryRam(b)(i).HasRs2 && io.aluiq_o(j).pd === entryRam(b)(i).ps2
-                )).asUInt.orR
 
                 entryRam(b)(i).rdy1 := entryRam(b)(i).rdy1 || aluWakeUp1 || io.busytableVec(entryRam(b)(i).ps1)
                 entryRam(b)(i).rdy2 := entryRam(b)(i).rdy2 || aluWakeUp2 || io.busytableVec(entryRam(b)(i).ps2)
@@ -226,14 +232,32 @@ class ALUIQ(implicit p: Parameters) extends Module {
 
         val issueIdx = PriorityEncoder(selectCanIssueVec(b))
         val issueEnable = WireInit(false.B)
+
         issueEnable := selectCanIssueVec(b).asUInt.orR
 
         io.aluiq_o(b).valid := issueEnable
         io.aluiq_o(b) := entryRam(b)(issueIdx)
 
+        // recycle stage wb
         freeIdBuffer.io.writeReq(b).valid := PipeReg(issueEnable, io.stall_from_backpipe, io.flush)
         freeIdBuffer.io.writeReq(b).id := PipeReg(issueIdx, io.stall_from_backpipe, io.flush)
-    }
 
-    /// age mat update
+        // update age mat
+        for(i <- 0 until perBankSize) {
+            val needUpdateAgeMatrix = WireInit(false.B)
+            needUpdateAgeMatrix := 
+                ((i.U === enqLocs(b)(ptrWidth - 1, bankBits)) && enqUops(b).valid) || // enq need update
+                selectCanIssueVec(b)(i) // deq need update
+            
+            // enq item update
+            when(needUpdateAgeMatrix) {
+                for(j <- 0 until perBankSize) {
+                    if(i != j) {
+                        ageMats(b)(i)(j) := false.B
+                        ageMats(b)(j)(i) := entryRam(b)(j).valid
+                    }
+                }
+            }
+        }
+    }
 }

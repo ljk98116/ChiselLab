@@ -14,7 +14,7 @@ class ALUResult(implicit p: Parameters) extends Bundle with HasValid {
     val pd = UInt(p(PREG_WIDTH).W)
 }
 
-class MemResult(implicit p: Parameters) extends Bundle with HasValid {
+class LDUResult(implicit p: Parameters) extends Bundle with HasValid {
     val valid = Bool()
     val HasRd = Bool()
     val result = UInt(p(DATA_WIDTH).W)

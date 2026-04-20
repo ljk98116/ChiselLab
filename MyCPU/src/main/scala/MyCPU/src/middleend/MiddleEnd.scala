@@ -29,7 +29,8 @@ class MiddleEnd(implicit p: Parameters) extends Module {
         val rename1_stall = Output(Bool())
         val rename2_stall = Output(Bool())
         // to issue enq stage
-        val mem_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
+        val load_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
+        val store_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
         val alu_uops = Output(Vec(p(FETCH_WIDTH), new uOp)) 
     })
 
@@ -82,7 +83,8 @@ class MiddleEnd(implicit p: Parameters) extends Module {
     dispatch.io.stall_from_backpipe := io.stall_from_backpipe
     dispatch.io.dispatch1_canSpecExec := mdp.io.dispatch1_canSpecExec
 
-    io.mem_uops := dispatch.io.mem_uops
+    io.load_uops := dispatch.io.load_uops
+    io.store_uops := dispatch.io.store_uops
     io.alu_uops := dispatch.io.alu_uops
 
     checkPointQueue.io.flush := flush

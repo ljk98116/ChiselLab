@@ -2,6 +2,8 @@ import MyCPU.utils._
 import MyCPU._
 import MyCPU.frontend._
 import MyCPU.middleend._
+import MyCPU.backend._
+
 import chisel3._
 import org.chipsalliance.cde.config._
 import MyCPU.config._
@@ -24,5 +26,5 @@ object Elaborate extends App {
         new UseCustomLibraryConfig ++
         new StoreSetConfig
         
-    circt.stage.ChiselStage.emitSystemVerilogFile(new MiddleEnd, args, firtoolOptions)
+    circt.stage.ChiselStage.emitSystemVerilogFile(new IssueStages, args, firtoolOptions)
 }
