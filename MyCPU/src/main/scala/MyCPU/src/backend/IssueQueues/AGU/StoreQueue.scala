@@ -8,97 +8,118 @@ import MyCPU.config._
 import MyCPU.io._
 import MyCPU.utils._
 
-// FIFO Impl, banked Impl
 class StoreQueue(implicit p: Parameters) extends Module {
 
-    val bankBits = log2Ceil(p(STU_NUM))
-    val perBankSize = p(STUIQ_SIZE) / p(STU_NUM)
-    val ptrWidth = log2Ceil(p(STUIQ_SIZE))
-    val perBankPtrWidth = log2Ceil(perBankSize)
+  val bankBits = log2Ceil(p(STU_NUM))
+  val perBankSize = p(STUIQ_SIZE) / p(STU_NUM)
+  val ptrWidth = log2Ceil(p(STUIQ_SIZE))
+  val perBankPtrWidth = log2Ceil(perBankSize)
 
-    val io = IO(new Bundle {
-        val flush = Input(Bool())
-        val stall_from_backpipe = Input(Bool())
-        val store_uops = Input(Vec(p(FETCH_WIDTH), new uOp))
-        val busyTableVec = Input(UInt((1 << p(PREG_WIDTH)).W))
-        val aluSelectRes = Input(Vec(p(ALU_NUM), new ALUIQEntry))
-        val robEnable = Input(Vec(p(FETCH_WIDTH), new StoreQueueEnable))
-        val issueItems = Output(Vec(p(STU_NUM), new STUIQEntry))
-        val issue0_stall = Output(Bool())
-    })
+  val io = IO(new Bundle {
+    val flush = Input(Bool())
+    val stall_from_backpipe = Input(Bool())
+    val store_uops = Input(Vec(p(FETCH_WIDTH), new uOp))
+    val busyTableVec = Input(UInt((1 << p(PREG_WIDTH)).W))
+    val aluSelectRes = Input(Vec(p(ALU_NUM), new ALUIQEntry))
+    val robEnable = Input(Vec(p(FETCH_WIDTH), new StoreQueueEnable))
+    val issueItems = Output(Vec(p(STU_NUM), new STUIQEntry))
+    val issue0_stall = Output(Bool())
+  })
 
-    val banks = Seq.fill(p(STU_NUM))(
-        RegInit(VecInit(
-            Seq.fill(perBankSize)(0.U.asTypeOf(new STUIQEntry))
-        ))
+  // banks: STU_NUM x perBankSize
+  val banks = RegInit(VecInit(
+    Seq.fill(p(STU_NUM))(
+        VecInit(Seq.fill(perBankSize)(0.U.asTypeOf(new STUIQEntry)))
     )
+  ))
 
-    val head = RegInit(0.U(ptrWidth.W))
-    val tail = RegInit(0.U(ptrWidth.W))
+  val head = RegInit(0.U(ptrWidth.W))
+  val tail = RegInit(0.U(ptrWidth.W))
 
-    io.issue0_stall := (tail + 1.U) === head
+  // head/tail stall
+  io.issue0_stall := (tail + 1.U) === head
 
-    head := Mux(io.flush, 0.U, head + io.issueItems.map(_.valid.asUInt).reduce(_ + _))
-    tail := Mux(io.flush, 0.U, Mux(io.issue0_stall, tail, tail + PopCount(io.store_uops.map(_.valid))))
+  // --- Issue logic ---
+  for (b <- 0 until p(STU_NUM)) {
+    val rd_idx = head + b.U
+    val headBankId = rd_idx(bankBits - 1, 0)
+    val headBankRow = rd_idx(ptrWidth - 1, bankBits)
 
-    for(b <- 0 until p(STU_NUM)) {
-        val rd_idx = head + b.U
-        val headBankId = rd_idx(bankBits - 1, 0)
-        val headBankRow = rd_idx(ptrWidth - 1, bankBits)
+    val entry = banks(b)(headBankRow)
 
-        io.issueItems(b) := banks(b)(headBankRow)
-        io.issueItems(b).valid := 
-            banks(b)(headBankRow).valid && 
-            (b.U === headBankId) && 
-            banks(b)(headBankRow).rdy1 &&
-            banks(b)(headBankRow).rdy2 &&
-            banks(b)(headBankRow).atRobHead
-        
-        for(i <- 0 until perBankSize) {
-            val enqId = (i.U - tail)(log2Ceil(p(FETCH_WIDTH)) - 1, 0)
-            val enqValid = enqId < p(FETCH_WIDTH).U
-            val atRobHead = WireInit(false.B)
+    io.issueItems(b) := entry
+    io.issueItems(b).valid := entry.valid && (b.U === headBankId) && entry.rdy1 && entry.rdy2 && entry.atRobHead
+  }
 
-            atRobHead := VecInit((0 until p(FETCH_WIDTH)).map(
-                j => banks(b)(i).valid && (banks(b)(i).rob_id === io.robEnable(j).robId) && io.robEnable(j).valid
-            )).asUInt.orR
+  val numIssue = PopCount(io.issueItems.map(_.valid))
+  val numEnqueue = PopCount(io.store_uops.map(_.valid))
 
-            val aluWakeUp1 = VecInit((0 until p(ALU_NUM)).map(
-                j => io.aluSelectRes(j).HasRd && (io.aluSelectRes(j).pd === banks(b)(i).ps1)
-            )).asUInt.orR
+  head := Mux(io.flush, 0.U, head + numIssue)
+  tail := Mux(io.flush, 0.U, Mux(io.issue0_stall, tail, tail + numEnqueue))
 
-            val aluWakeUp2 = VecInit((0 until p(ALU_NUM)).map(
-                j => io.aluSelectRes(j).HasRd && (io.aluSelectRes(j).pd === banks(b)(i).ps2)
-            )).asUInt.orR
+  // --- ALU Wakeup precompute ---
+  val aluWakeup_ps1 = Wire(Vec(p(STUIQ_SIZE), Bool()))
+  val aluWakeup_ps2 = Wire(Vec(p(STUIQ_SIZE), Bool()))
 
-            when(enqValid && io.store_uops(enqId).valid) {
-                banks(b)(i).HasRd := io.store_uops(enqId).HasRd
-                banks(b)(i).HasRs1 := io.store_uops(enqId).HasRs1
-                banks(b)(i).HasRs2 := io.store_uops(enqId).HasRs2
-                banks(b)(i).LDSpecExec := io.store_uops(enqId).LDSpecExec
-                banks(b)(i).branchPredInfo := io.store_uops(enqId).branchPredInfo
-                banks(b)(i).funct3 := io.store_uops(enqId).funct3
-                banks(b)(i).funct7 := io.store_uops(enqId).funct7
-                banks(b)(i).imm := io.store_uops(enqId).imm
-                banks(b)(i).old_pd := io.store_uops(enqId).old_pd
-                banks(b)(i).opcode := io.store_uops(enqId).opcode
-                banks(b)(i).pc := io.store_uops(enqId).pc
-                banks(b)(i).pd := io.store_uops(enqId).pd
-                banks(b)(i).ps1 := io.store_uops(enqId).ps1
-                banks(b)(i).ps2 := io.store_uops(enqId).ps2
-                banks(b)(i).rd := io.store_uops(enqId).rd
-                banks(b)(i).rdy1 := io.busyTableVec(io.store_uops(enqId).ps1) || aluWakeUp1
-                banks(b)(i).rdy2 := io.busyTableVec(io.store_uops(enqId).ps2) || aluWakeUp2
-                banks(b)(i).rob_id := io.store_uops(enqId).rob_id
-                banks(b)(i).rs1 := io.store_uops(enqId).rs1
-                banks(b)(i).rs2 := io.store_uops(enqId).rs2
-                banks(b)(i).atRobHead := atRobHead
-            }.otherwise {
+  for (i <- 0 until p(STUIQ_SIZE)) {
+    aluWakeup_ps1(i) := io.aluSelectRes.map(a => a.HasRd && (a.pd === banks(i % p(STU_NUM))(i / p(STU_NUM)).ps1)).reduce(_ || _)
+    aluWakeup_ps2(i) := io.aluSelectRes.map(a => a.HasRd && (a.pd === banks(i % p(STU_NUM))(i / p(STU_NUM)).ps2)).reduce(_ || _)
+  }
 
-                banks(b)(i).rdy1 := banks(b)(i).rdy1 || io.busyTableVec(banks(b)(i).ps1) || aluWakeUp1 
-                banks(b)(i).rdy2 := banks(b)(i).rdy2 || io.busyTableVec(banks(b)(i).ps2) || aluWakeUp2
-                banks(b)(i).atRobHead := banks(b)(i).atRobHead || atRobHead
-            }
-        }
+  // --- Enqueue logic ---
+  for (w <- 0 until p(FETCH_WIDTH)) {
+    when(io.store_uops(w).valid) {
+      val idx = tail + w.U
+      val b = idx(bankBits - 1, 0)
+      val row = idx(ptrWidth - 1, bankBits)
+
+      val entry = WireInit(0.U.asTypeOf(new STUIQEntry))
+      entry := banks(b)(row)
+
+      // update fields
+      entry.HasRd := io.store_uops(w).HasRd
+      entry.HasRs1 := io.store_uops(w).HasRs1
+      entry.HasRs2 := io.store_uops(w).HasRs2
+      entry.LDSpecExec := io.store_uops(w).LDSpecExec
+      entry.branchPredInfo := io.store_uops(w).branchPredInfo
+      entry.funct3 := io.store_uops(w).funct3
+      entry.funct7 := io.store_uops(w).funct7
+      entry.imm := io.store_uops(w).imm
+      entry.old_pd := io.store_uops(w).old_pd
+      entry.opcode := io.store_uops(w).opcode
+      entry.pc := io.store_uops(w).pc
+      entry.pd := io.store_uops(w).pd
+      entry.ps1 := io.store_uops(w).ps1
+      entry.ps2 := io.store_uops(w).ps2
+      entry.rd := io.store_uops(w).rd
+      entry.rob_id := io.store_uops(w).rob_id
+      entry.rs1 := io.store_uops(w).rs1
+      entry.rs2 := io.store_uops(w).rs2
+
+      // ready signals
+      entry.rdy1 := !io.busyTableVec(io.store_uops(w).ps1) || aluWakeup_ps1(idx)
+      entry.rdy2 := !io.busyTableVec(io.store_uops(w).ps2) || aluWakeup_ps2(idx)
+
+      // at ROB head
+      val atRobHead = Wire(Bool())
+      atRobHead := VecInit(io.robEnable.map(r => r.valid && r.robId === entry.rob_id)).reduce(_ || _)
+      entry.atRobHead := atRobHead
+
+      entry.valid := true.B
     }
+  }
+
+  // --- Update existing entries ---
+  for (b <- 0 until p(STU_NUM)) {
+    for (i <- 0 until perBankSize) {
+      val entry = banks(b)(i)
+      // Skip newly enqueued entries
+      when(!entry.valid || entry.rdy1 && entry.rdy2) {
+        entry.rdy1 := entry.rdy1 || !io.busyTableVec(entry.ps1) || aluWakeup_ps1((i * p(STU_NUM) + b).U)
+        entry.rdy2 := entry.rdy2 || !io.busyTableVec(entry.ps2) || aluWakeup_ps2((i * p(STU_NUM) + b).U)
+        val atRobHead = io.robEnable.map(r => r.valid && r.robId === entry.rob_id).reduce(_ || _)
+        entry.atRobHead := entry.atRobHead || atRobHead
+      }
+    }
+  }
 }

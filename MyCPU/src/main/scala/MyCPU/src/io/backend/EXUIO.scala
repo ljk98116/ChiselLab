@@ -29,3 +29,23 @@ class SysResult(implicit p: Parameters) extends Bundle with HasValid {
     val rd = UInt(p(AREG_WIDTH).W)
     val pd = UInt(p(PREG_WIDTH).W)
 }
+
+class ALUInputInfo(implicit p: Parameters) extends Bundle with HasValid {
+    val valid = Bool()
+    val uop = new ALUIQEntry
+    val ps1_data = UInt(p(DATA_WIDTH).W)
+    val ps2_data = UInt(p(DATA_WIDTH).W)
+}
+
+class LDUInputInfo(implicit p: Parameters) extends Bundle with HasValid {
+    val valid = Bool()
+    val uop = new LDUIQEntry
+    val ps1_data = UInt(p(DATA_WIDTH).W)  
+}
+
+class STUInputInfo(implicit p: Parameters) extends Bundle with HasValid {
+    val valid = Bool()
+    val uop = new STUIQEntry
+    val ps1_data = UInt(p(DATA_WIDTH).W)  
+    val ps2_data = UInt(p(DATA_WIDTH).W)
+}

@@ -9,6 +9,9 @@ import MyCPU.io._
 import MyCPU.utils._
 
 // enq -> select(use last newest issue queue state)
+// 178987
+// 155098
+// 147267
 class IssueStages(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
         val flush = Input(Bool())

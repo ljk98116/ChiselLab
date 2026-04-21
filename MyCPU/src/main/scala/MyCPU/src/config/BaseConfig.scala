@@ -35,11 +35,12 @@ class BaseConfig extends Config(
         case PREG_WIDTH => here(AREG_WIDTH) + 2
         case ROBID_WIDTH => here(AREG_WIDTH) + 2
         case FETCH_OFFSET => log2Ceil(here(DATA_WIDTH) / 8)
-        case ALU_NUM => here(FETCH_WIDTH)
+        // 8 ports for Integer PRF
+        case ALU_NUM => 3
         case LDU_NUM => 2
         case STU_NUM => 2
         case SYS_ALU_NUM => 1
-        case ALUIQ_SIZE => 16
+        case ALUIQ_SIZE => 24
         case LDUIQ_SIZE => 16
         case STUIQ_SIZE => 16
         case SIM_FLAG => false

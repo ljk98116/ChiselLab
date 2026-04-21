@@ -15,7 +15,6 @@ class BusyTable(implicit p: Parameters) extends Module {
         val freeRegIdBufferResp = Input(Vec(p(FETCH_WIDTH), new FreeRegIdBufferReadResp))
         val aluResultResp = Input(Vec(p(ALU_NUM), new ALUResult))
         val lduResultResp = Input(Vec(p(LDU_NUM), new LDUResult))
-        val sysResultResp = Input(new SysResult)
     })
 
     val busyTable = RegInit(0.U((1 << p(PREG_WIDTH)).W))
@@ -28,17 +27,15 @@ class BusyTable(implicit p: Parameters) extends Module {
         busyTableAfterRenameVec(i) := busyTable | (io.freeRegIdBufferResp(i).valid << io.freeRegIdBufferResp(i).preg)
     }
 
-    val busyTableAfterExecVec = Seq.fill(p(ALU_NUM) + p(SYS_ALU_NUM))(0.U((1 << p(PREG_WIDTH)).W))
+    val busyTableAfterExecVec = Seq.fill(p(ALU_NUM))(0.U((1 << p(PREG_WIDTH)).W))
     for(i <- 0 until p(ALU_NUM)) {
-        busyTableAfterExecVec(i) := busyTable | (io.aluResultResp(i).HasRd << io.aluResultResp(i).pd)
+        busyTableAfterExecVec(i) := busyTable ^ (io.aluResultResp(i).HasRd << io.aluResultResp(i).pd)
     }
-
-    busyTableAfterExecVec(p(ALU_NUM)) := busyTable | (io.sysResultResp.HasRd << io.sysResultResp.pd)
 
     val busyTableAfterMemOpVec = Seq.fill(p(LDU_NUM))(0.U((1 << p(PREG_WIDTH)).W))
 
     for(i <- 0 until p(LDU_NUM)) {
-        busyTableAfterMemOpVec(i) := busyTable | (io.lduResultResp(i).HasRd << io.lduResultResp(i).pd)
+        busyTableAfterMemOpVec(i) := busyTable ^ (io.lduResultResp(i).HasRd << io.lduResultResp(i).pd)
     }
 
     busyTable := 
