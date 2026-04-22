@@ -25,6 +25,8 @@ class FreeRegIdBuffer(implicit p: Parameters) extends Module {
         val deqReady = Output(Bool())
         // from commit stage
         val writeReq = Input(Vec(p(FETCH_WIDTH), new FreeRegIdBufferWriteReq))
+        // from prf
+        val busyTables = Input(Vec(p(FETCH_WIDTH), UInt(totalSize.W)))
         // from checkPointQueue
         val checkpointInfo = Input(new CheckPointInfo)
         // to checkpointQueue
@@ -61,6 +63,7 @@ class FreeRegIdBuffer(implicit p: Parameters) extends Module {
 
         io.readResp(i).valid := canDeq(i) && io.readReq(i).valid
         io.readResp(i).preg := readDatas(i)
+        io.readResp(i).is_checkPoint := io.readReq(i).is_checkPoint
 
         val currentHeads = WireInit(VecInit(
             Seq.fill(p(FETCH_WIDTH))(0.U(ptrWidth.W))
@@ -77,6 +80,7 @@ class FreeRegIdBuffer(implicit p: Parameters) extends Module {
 
         io.currentHeads(i).valid := io.readReq(i).is_checkPoint
         io.currentHeads(i).freeRegIdBufferHeads := currentHeads
+        io.currentHeads(i).busyTable := io.busyTables(i)
 
         heads(i) := Mux(
             io.checkpointInfo.valid, 

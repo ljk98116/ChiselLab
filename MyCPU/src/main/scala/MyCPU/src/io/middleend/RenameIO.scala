@@ -35,4 +35,5 @@ class CheckPointInfo(implicit p: Parameters) extends Bundle with HasValid {
     val ptrWidth = log2Ceil(perBankSize)
     val valid = Bool()
     val freeRegIdBufferHeads = Vec(p(FETCH_WIDTH), UInt(ptrWidth.W))
+    val busyTable = UInt(totalSize.W)
 }
