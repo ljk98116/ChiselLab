@@ -57,3 +57,10 @@ class STUInputInfo(implicit p: Parameters) extends Bundle with HasValid {
     val ps1_data = UInt(p(DATA_WIDTH).W)  
     val ps2_data = UInt(p(DATA_WIDTH).W)
 }
+
+class SYSEXUInputInfo(implicit p: Parameters) extends Bundle with HasValid {
+    val valid = Bool()
+    val uop = new STUIQEntry
+    val ps1_data = UInt(p(DATA_WIDTH).W)  
+    val ps2_data = UInt(p(DATA_WIDTH).W)
+}

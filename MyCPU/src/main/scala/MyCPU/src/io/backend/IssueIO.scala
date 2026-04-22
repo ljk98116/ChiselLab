@@ -30,6 +30,8 @@ class ALUIQEntry(implicit p: Parameters) extends Bundle with HasValid {
     val rdy2 = Bool()
 }
 
+class SYSIQEntry(implicit p: Parameters) extends ALUIQEntry
+
 class LDUIQEntry(implicit p: Parameters) extends Bundle with HasValid {
     val valid = Bool()
     val pc = UInt(p(ADDR_WIDTH).W)

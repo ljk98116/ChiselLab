@@ -25,6 +25,7 @@ case object SYS_ALU_NUM extends WidthConfig
 case object ALUIQ_SIZE extends WidthConfig
 case object LDUIQ_SIZE extends WidthConfig
 case object STUIQ_SIZE extends WidthConfig
+case object SYSIQ_SIZE extends WidthConfig
 
 class BaseConfig extends Config(
     (site, here, up) => {
@@ -43,6 +44,7 @@ class BaseConfig extends Config(
         case ALUIQ_SIZE => 24
         case LDUIQ_SIZE => 16
         case STUIQ_SIZE => 16
+        case SYSIQ_SIZE => 8
         case SIM_FLAG => false
     }
 )
