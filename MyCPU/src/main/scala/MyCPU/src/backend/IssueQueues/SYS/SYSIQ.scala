@@ -20,7 +20,7 @@ class SYSIQ(implicit p: Parameters) extends Module {
         val sys_uops = Input(Vec(p(FETCH_WIDTH), new uOp))
         val aluSelectRes = Input(Vec(p(ALU_NUM), new ALUIQEntry))
         val issue0_stall = Output(Bool())
-        val busytableVec = Input(UInt((1 << p(PREG_WIDTH)).W))
+        val busyTableVec = Input(UInt((1 << p(PREG_WIDTH)).W))
         val sysiq_o = Output(Vec(p(SYS_ALU_NUM), new SYSIQEntry))        
     })
 
@@ -51,6 +51,63 @@ class SYSIQ(implicit p: Parameters) extends Module {
 
     val numIssue = PopCount(io.sysiq_o.map(_.valid))
     val numEnqueue = PopCount(io.sys_uops.map(_.valid))
-    
-        
+
+    // --- ALU Wakeup precompute ---
+    val aluWakeup_ps1 = Wire(Vec(p(STUIQ_SIZE), Bool()))
+    val aluWakeup_ps2 = Wire(Vec(p(STUIQ_SIZE), Bool()))
+
+    for (i <- 0 until p(STUIQ_SIZE)) {
+        aluWakeup_ps1(i) := io.aluSelectRes.map(a => a.HasRd && (a.pd === banks(i % p(SYS_ALU_NUM))(i / p(SYS_ALU_NUM)).ps1)).reduce(_ || _)
+        aluWakeup_ps2(i) := io.aluSelectRes.map(a => a.HasRd && (a.pd === banks(i % p(SYS_ALU_NUM))(i / p(SYS_ALU_NUM)).ps2)).reduce(_ || _)
+    }    
+
+    // --- Enqueue logic ---
+    for (w <- 0 until p(FETCH_WIDTH)) {
+        when(io.sys_uops(w).valid) {
+            val idx = tail + w.U
+            val b = idx(bankBits - 1, 0)
+            val row = idx(ptrWidth - 1, bankBits)
+
+            val entry = WireInit(0.U.asTypeOf(new STUIQEntry))
+            entry := banks(b)(row)
+
+            // update fields
+            entry.HasRd := io.sys_uops(w).HasRd
+            entry.HasRs1 := io.sys_uops(w).HasRs1
+            entry.HasRs2 := io.sys_uops(w).HasRs2
+            entry.LDSpecExec := io.sys_uops(w).LDSpecExec
+            entry.branchPredInfo := io.sys_uops(w).branchPredInfo
+            entry.funct3 := io.sys_uops(w).funct3
+            entry.funct7 := io.sys_uops(w).funct7
+            entry.imm := io.sys_uops(w).imm
+            entry.old_pd := io.sys_uops(w).old_pd
+            entry.opcode := io.sys_uops(w).opcode
+            entry.pc := io.sys_uops(w).pc
+            entry.pd := io.sys_uops(w).pd
+            entry.ps1 := io.sys_uops(w).ps1
+            entry.ps2 := io.sys_uops(w).ps2
+            entry.rd := io.sys_uops(w).rd
+            entry.rob_id := io.sys_uops(w).rob_id
+            entry.rs1 := io.sys_uops(w).rs1
+            entry.rs2 := io.sys_uops(w).rs2
+
+            // ready signals
+            entry.rdy1 := !io.busyTableVec(io.sys_uops(w).ps1) || aluWakeup_ps1(idx)
+            entry.rdy2 := !io.busyTableVec(io.sys_uops(w).ps2) || aluWakeup_ps2(idx)
+
+            entry.valid := true.B
+        }
+    }
+
+    // --- Update existing entries ---
+    for (b <- 0 until p(STU_NUM)) {
+        for (i <- 0 until perBankSize) {
+            val entry = banks(b)(i)
+            // Skip newly enqueued entries
+            when(!entry.valid || entry.rdy1 && entry.rdy2) {
+                entry.rdy1 := entry.rdy1 || !io.busyTableVec(entry.ps1) || aluWakeup_ps1((i * p(STU_NUM) + b).U)
+                entry.rdy2 := entry.rdy2 || !io.busyTableVec(entry.ps2) || aluWakeup_ps2((i * p(STU_NUM) + b).U)
+            }
+        }
+    }    
 }

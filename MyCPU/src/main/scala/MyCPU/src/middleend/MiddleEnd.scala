@@ -25,13 +25,18 @@ class MiddleEnd(implicit p: Parameters) extends Module {
         val commit_spec_write_back = Input(Vec(p(FETCH_WIDTH), new FreeRegIdBufferWriteReq))
         val commit_spec_robId_write_back = Input(Vec(p(FETCH_WIDTH), new ROBFreeIdWriteReq))
         val loadRAWHarvard = Flipped(DecoupledIO(new LoadRAWHarvardInfo))
+        // to prf or others
+        val checkPointInfo = Output(new CheckPointInfo)
+        // prf io
+        val busyTables = Input(Vec(p(FETCH_WIDTH), UInt((1 << p(PREG_WIDTH)).W)))
         // to front end
         val rename1_stall = Output(Bool())
         val rename2_stall = Output(Bool())
         // to issue enq stage
         val load_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
         val store_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
-        val alu_uops = Output(Vec(p(FETCH_WIDTH), new uOp)) 
+        val alu_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
+        val sys_uops = Output(Vec(p(FETCH_WIDTH), new uOp)) 
     })
 
     val decode = Module(new DecodeStage)
@@ -86,12 +91,14 @@ class MiddleEnd(implicit p: Parameters) extends Module {
     io.load_uops := dispatch.io.load_uops
     io.store_uops := dispatch.io.store_uops
     io.alu_uops := dispatch.io.alu_uops
+    io.sys_uops := dispatch.io.sys_uops
 
     checkPointQueue.io.flush := flush
     checkPointQueue.io.enq := freeRegIdBuffer.io.currentHeads
 
     freeRegIdBuffer.io.checkpointInfo := checkPointQueue.io.deq
     freeRegIdBuffer.io.writeReq := io.commit_spec_write_back
+    freeRegIdBuffer.io.busyTables := io.busyTables
 
     mdp.io.loadRAWHarvardInfo <> io.loadRAWHarvard
     mdp.io.flush := flush
@@ -110,4 +117,6 @@ class MiddleEnd(implicit p: Parameters) extends Module {
     robFreeIdBuffer.io.commitWriteBack := io.commit_spec_robId_write_back
     robFreeIdBuffer.io.rename1ReadReq := rename.io.robFreeIdAllocReq
     rename.io.robFreeIdAllocResp := robFreeIdBuffer.io.rename1ReadResp
+
+    io.checkPointInfo := checkPointQueue.io.deq
 }

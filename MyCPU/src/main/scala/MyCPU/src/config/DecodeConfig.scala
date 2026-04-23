@@ -42,6 +42,9 @@ object OpcodeVal {
 
     val R = "b0110011".U
 
+    val CSR = "b1110011".U
+
+    val FENCEI = "b0001111".U
 }
 
 object Funct3Val {
@@ -85,6 +88,25 @@ object Funct3Val {
     val SRA = SRL
     val OR = "b110".U
     val AND = "b111".U
+
+    val FENCEI = "b001".U
+
+    val CSRRW = "b001".U
+    val CSRRS = "b010".U
+    val CSRRC = "b011".U
+    val CSRRWI = "b101".U
+    val CSRRSI = "b110".U
+    val CSRRCI = "b111".U
+
+    val MUL = "b000".U
+    val MULH = "b001".U
+    val MULHSU = "b010".U
+    val MULHU = "b011".U
+
+    val DIV = "b100".U
+    val DIVU = "b101".U
+    val REM = "b110".U
+    val REMU = "b111".U
 }
 
 object Funct7Val {
@@ -98,4 +120,14 @@ object Funct7Val {
     val SRA = SUB
     val OR = ADD
     val AND = ADD
+
+    val MUL = "b0000001".U
+    val MULH = MUL
+    val MULHSU = MUL
+    val MULHU = MUL
+
+    val DIV = MUL
+    val DIVU = MUL
+    val REM = MUL
+    val REMU = MUL
 }

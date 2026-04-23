@@ -57,7 +57,7 @@ class DecodeStage(implicit p: Parameters) extends Module {
                     decodeRes(i).HasRs2 := true.B
                     decodeRes(i).HasRd := true.B
                 }
-                is(OpcodeVal.LB, OpcodeVal.ADDI, OpcodeVal.JALR) {
+                is(OpcodeVal.LB, OpcodeVal.ADDI, OpcodeVal.JALR, OpcodeVal.FENCEI) {
                     decodeRes(i).HasRs1 := true.B
                     decodeRes(i).HasRd := true.B
                     decodeRes(i).imm := Cat(Fill(20, insts(i)(31)), insts(i)(31, 20))                    
@@ -89,6 +89,10 @@ class DecodeStage(implicit p: Parameters) extends Module {
                         insts(i)(19, 12), insts(i)(20),
                         insts(i)(30, 21), false.B
                     )                    
+                }
+                is(OpcodeVal.CSR) {
+                    decodeRes(i).HasRd := true.B
+                    decodeRes(i).imm := Cat(Fill(20, false.B), insts(i)(31, 20))
                 }
             }
         }.otherwise {
