@@ -7,7 +7,6 @@ import org.chipsalliance.cde.config._
 import MyCPU.config._
 import MyCPU.io._
 import MyCPU.utils._
-import java.lang.classfile.Opcode
 
 // generate redirect for direct jump inst if get jump error
 class DecodeStage(implicit p: Parameters) extends Module {

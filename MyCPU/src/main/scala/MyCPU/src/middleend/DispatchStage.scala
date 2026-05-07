@@ -8,7 +8,6 @@ import org.chipsalliance.cde.config._
 import MyCPU.config._
 import MyCPU.io._
 import MyCPU.utils._
-import java.lang.classfile.Opcode
 
 // 2 stages dispatch
 // to do, judge spec exec load and non spec exec load

@@ -11,7 +11,7 @@ import MyCPU.utils._
 class SYSIQ(implicit p: Parameters) extends Module {
     val bankBits = log2Ceil(p(SYS_ALU_NUM))
     val perBankSize = p(SYSIQ_SIZE) / p(SYS_ALU_NUM)
-    val ptrWidth = log2Ceil(p(STUIQ_SIZE))
+    val ptrWidth = log2Ceil(p(SYSIQ_SIZE))
     val perBankPtrWidth = log2Ceil(perBankSize)
 
     val io = IO(new Bundle {
@@ -27,7 +27,7 @@ class SYSIQ(implicit p: Parameters) extends Module {
     // banks: SYS_ALU_NUM x perBankSize
     val banks = RegInit(VecInit(
         Seq.fill(p(SYS_ALU_NUM))(
-            VecInit(Seq.fill(perBankSize)(0.U.asTypeOf(new STUIQEntry)))
+            VecInit(Seq.fill(perBankSize)(0.U.asTypeOf(new SYSIQEntry)))
         )
     ))
 
@@ -38,7 +38,7 @@ class SYSIQ(implicit p: Parameters) extends Module {
     io.issue0_stall := (tail + 1.U) === head 
 
     // --- Issue logic ---
-    for (b <- 0 until p(STU_NUM)) {
+    for (b <- 0 until p(SYS_ALU_NUM)) {
         val rd_idx = head + b.U
         val headBankId = rd_idx(bankBits - 1, 0)
         val headBankRow = rd_idx(ptrWidth - 1, bankBits)
@@ -46,17 +46,17 @@ class SYSIQ(implicit p: Parameters) extends Module {
         val entry = banks(b)(headBankRow)
 
         io.sysiq_o(b) := entry
-        io.sysiq_o(b).valid := entry.valid && (b.U === headBankId) && entry.rdy1 && entry.rdy2 && entry.atRobHead
+        io.sysiq_o(b).valid := entry.valid && (b.U === headBankId) && entry.rdy1 && entry.rdy2
     }       
 
     val numIssue = PopCount(io.sysiq_o.map(_.valid))
     val numEnqueue = PopCount(io.sys_uops.map(_.valid))
 
     // --- ALU Wakeup precompute ---
-    val aluWakeup_ps1 = Wire(Vec(p(STUIQ_SIZE), Bool()))
-    val aluWakeup_ps2 = Wire(Vec(p(STUIQ_SIZE), Bool()))
+    val aluWakeup_ps1 = Wire(Vec(p(SYSIQ_SIZE), Bool()))
+    val aluWakeup_ps2 = Wire(Vec(p(SYSIQ_SIZE), Bool()))
 
-    for (i <- 0 until p(STUIQ_SIZE)) {
+    for (i <- 0 until p(SYSIQ_SIZE)) {
         aluWakeup_ps1(i) := io.aluSelectRes.map(a => a.HasRd && (a.pd === banks(i % p(SYS_ALU_NUM))(i / p(SYS_ALU_NUM)).ps1)).reduce(_ || _)
         aluWakeup_ps2(i) := io.aluSelectRes.map(a => a.HasRd && (a.pd === banks(i % p(SYS_ALU_NUM))(i / p(SYS_ALU_NUM)).ps2)).reduce(_ || _)
     }    
@@ -68,14 +68,14 @@ class SYSIQ(implicit p: Parameters) extends Module {
             val b = idx(bankBits - 1, 0)
             val row = idx(ptrWidth - 1, bankBits)
 
-            val entry = WireInit(0.U.asTypeOf(new STUIQEntry))
+            val entry = WireInit(0.U.asTypeOf(new SYSIQEntry))
             entry := banks(b)(row)
 
             // update fields
             entry.HasRd := io.sys_uops(w).HasRd
             entry.HasRs1 := io.sys_uops(w).HasRs1
             entry.HasRs2 := io.sys_uops(w).HasRs2
-            entry.LDSpecExec := io.sys_uops(w).LDSpecExec
+            
             entry.branchPredInfo := io.sys_uops(w).branchPredInfo
             entry.funct3 := io.sys_uops(w).funct3
             entry.funct7 := io.sys_uops(w).funct7
@@ -100,13 +100,13 @@ class SYSIQ(implicit p: Parameters) extends Module {
     }
 
     // --- Update existing entries ---
-    for (b <- 0 until p(STU_NUM)) {
+    for (b <- 0 until p(SYS_ALU_NUM)) {
         for (i <- 0 until perBankSize) {
             val entry = banks(b)(i)
             // Skip newly enqueued entries
             when(!entry.valid || entry.rdy1 && entry.rdy2) {
-                entry.rdy1 := entry.rdy1 || !io.busyTableVec(entry.ps1) || aluWakeup_ps1((i * p(STU_NUM) + b).U)
-                entry.rdy2 := entry.rdy2 || !io.busyTableVec(entry.ps2) || aluWakeup_ps2((i * p(STU_NUM) + b).U)
+                entry.rdy1 := entry.rdy1 || !io.busyTableVec(entry.ps1) || aluWakeup_ps1((i * p(SYS_ALU_NUM) + b).U)
+                entry.rdy2 := entry.rdy2 || !io.busyTableVec(entry.ps2) || aluWakeup_ps2((i * p(SYS_ALU_NUM) + b).U)
             }
         }
     }    
