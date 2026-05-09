@@ -22,6 +22,7 @@ class ALU(implicit p: Parameters) extends Module {
 
     val integerUnit = Module(new IntegerUnit)
     val multUnit = Module(new MultUnit)
+    val divUnit = Module(new DivUnit)
 
     val result = WireInit(0.U(p(DATA_WIDTH).W))
     val brTarget = WireInit(0.U(p(ADDR_WIDTH).W))
@@ -73,6 +74,17 @@ class ALU(implicit p: Parameters) extends Module {
     integerUnit.io.funct3 := io.alu_item.uop.funct3
     integerUnit.io.funct7 := io.alu_item.uop.funct7
 
+    multUnit.io.valid := isMult
+    multUnit.io.data1 := io.alu_item.ps1_data
+    multUnit.io.data2 := io.alu_item.ps2_data
+    multUnit.io.flush := io.flush
+    multUnit.io.funct3 := io.alu_item.uop.funct3
+    multUnit.io.stall_from_backpipe := io.stall_from_backpipe
+
+    io.ex_stall := 
+        (isMult & !multUnit.io.resValid) ||
+        ((isDiv || isRem) & !divUnit.io.resValid)
+    
     switch(io.alu_item.uop.funct3) {
         is(Funct3Val.BEQ) {
             brJump := io.alu_item.ps1_data === io.alu_item.ps2_data
@@ -118,7 +130,7 @@ class ALU(implicit p: Parameters) extends Module {
             io.result.result := integerUnit.io.result
         }
         is("b1000".U) {
-
+            io.result.result := Mux(multUnit.io.resValid, multUnit.io.result, 0.U)
         }
         is("b0100".U) {
 

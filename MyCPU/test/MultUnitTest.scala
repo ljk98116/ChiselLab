@@ -40,6 +40,7 @@ class MultUnitFreeSpecTest extends AnyFreeSpec with ChiselScalatestTester {
         (1L, 1L),
         (5L, 7L),
         (12345L, 6789L),
+        (0xFFFFFFF4L, 89L),
         (0xFFFFFFFFL, 2L),
         (0x7FFFFFFFL, 0x7FFFFFFFL)
       )

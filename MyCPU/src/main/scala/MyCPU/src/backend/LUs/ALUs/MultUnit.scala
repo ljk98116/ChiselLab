@@ -150,7 +150,6 @@ class MultUnit(implicit p: Parameters) extends Module {
     // 8 + 1 / 4 = 2 CSA4 adders, 1 data left, 2
     // 4 + 1 / 4 = 1 CSA4 adders, 1 data left, 3
     // 3 datas -> CSA adder and a full adder, 4
-    // if input valid and cycleCounter == 3 => cycleCounter = 0
     def csa3(a: UInt, b: UInt, c: UInt): (UInt, UInt) = {
         var sum = a ^ b ^ c
         var carry = (a & b) | (a & c) | (b & c)
