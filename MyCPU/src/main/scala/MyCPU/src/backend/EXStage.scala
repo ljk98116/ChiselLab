@@ -18,13 +18,23 @@ class EXStage(implicit p: Parameters) extends Module {
         val stu_items = Input(Vec(p(STU_NUM), new STUInputInfo))
         val sys_items = Input(Vec(p(SYS_ALU_NUM), new SYSEXUInputInfo))
 
+        val aluResult = Output(Vec(p(ALU_NUM), new ALUResult))
+        val lduResult = Output(Vec(p(LDU_NUM), new AGUResult))
+        val stuResult = Output(Vec(p(STU_NUM), new AGUResult))
+        val sysResult = Output(Vec(p(SYS_ALU_NUM), new SysResult))
+        
         val ex_stall = Output(Bool())
     })
+
+    val alu = Module(new ALU)
+    val ldu = Module(new LDU)
+    val stu = Module(new STU)
+    val sys_exu = Module(new SYSEXU)
+
 
     val alu_items = PipeReg(io.alu_items, io.stall_from_backpipe || io.ex_stall, io.flush)
     val ldu_items = PipeReg(io.ldu_items, io.stall_from_backpipe || io.ex_stall, io.flush)
     val stu_items = PipeReg(io.stu_items, io.stall_from_backpipe || io.ex_stall, io.flush)
     val sys_items = PipeReg(io.sys_items, io.stall_from_backpipe || io.ex_stall, io.flush)
 
-    
 }

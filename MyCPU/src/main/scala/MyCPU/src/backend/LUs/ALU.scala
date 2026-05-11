@@ -81,6 +81,13 @@ class ALU(implicit p: Parameters) extends Module {
     multUnit.io.funct3 := io.alu_item.uop.funct3
     multUnit.io.stall_from_backpipe := io.stall_from_backpipe
 
+    divUnit.io.valid := isDiv || isRem
+    divUnit.io.data1 := io.alu_item.ps1_data
+    divUnit.io.data2 := io.alu_item.ps2_data
+    divUnit.io.funct3 := io.alu_item.uop.funct3
+    divUnit.io.stall_from_backpipe := io.stall_from_backpipe
+    divUnit.io.flush := io.flush
+
     io.ex_stall := 
         (isMult & !multUnit.io.resValid) ||
         ((isDiv || isRem) & !divUnit.io.resValid)
@@ -133,10 +140,10 @@ class ALU(implicit p: Parameters) extends Module {
             io.result.result := Mux(multUnit.io.resValid, multUnit.io.result, 0.U)
         }
         is("b0100".U) {
-
+            io.result.result := Mux(divUnit.io.resValid, divUnit.io.divResult, 0.U)
         }
         is("b0010".U) {
-
+            io.result.result := Mux(divUnit.io.resValid, divUnit.io.remResult, 0.U)
         }
         // JAL store pc + 4 to rd
         is("b0001".U) {

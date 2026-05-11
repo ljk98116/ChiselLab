@@ -22,6 +22,17 @@ class ALUResult(implicit p: Parameters) extends Bundle with HasValid {
     val pd = UInt(p(PREG_WIDTH).W)
 }
 
+class AGUResult(implicit p: Parameters) extends Bundle with HasValid {
+    val valid = Bool()
+    val HasRd = Bool()
+    val addr = UInt(p(DATA_WIDTH).W)
+    val wdata = UInt(p(DATA_WIDTH).W)
+    val mask = UInt(p(DATA_WIDTH).W)
+    val is_sign_ext = Bool()
+    val rd = UInt(p(AREG_WIDTH).W)
+    val pd = UInt(p(PREG_WIDTH).W)
+}
+
 class LDUResult(implicit p: Parameters) extends Bundle with HasValid {
     val valid = Bool()
     val HasRd = Bool()
