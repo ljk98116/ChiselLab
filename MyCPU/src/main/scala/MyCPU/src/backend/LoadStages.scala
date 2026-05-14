@@ -19,7 +19,6 @@ import MyCPU.utils._
 // stage1: get storeBuffer data, catch dTLB exception
 // stage2: judge dcache hit and use dcache/storebuffer
 // stage3: stage result, send to CDB
-
 class LoadStages(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
 

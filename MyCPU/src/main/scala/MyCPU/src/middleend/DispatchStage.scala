@@ -19,6 +19,9 @@ class DispatchStage(implicit p: Parameters) extends Module {
         val stall_from_backpipe = Input(Bool())
         val renameRes_i = Input(Vec(p(FETCH_WIDTH), new uOp))
         val dispatch1_canSpecExec = Input(Vec(p(FETCH_WIDTH), Bool()))
+        // to rob, use dispatch1 reg
+        val inorder_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
+        val inorder_locs = Input(Vec(p(FETCH_WIDTH), UInt(p(ROBID_WIDTH).W)))
         // to issue enq stage
         val load_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
         val store_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
@@ -92,6 +95,7 @@ class DispatchStage(implicit p: Parameters) extends Module {
     dispatch1_renameRes_o := dispatch1_renameRes
     for(i <- 0 until p(FETCH_WIDTH)) {
         dispatch1_renameRes_o(i).LDSpecExec := io.dispatch1_canSpecExec(i)
+        dispatch1_renameRes_o(i).rob_loc := io.inorder_locs(i)
     }
 
     val dispatch2_isLoadInstPrefixSums = PipeReg(dispatch1_isLoadInstPrefixSums, io.stall_from_backpipe, io.flush)

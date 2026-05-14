@@ -25,6 +25,7 @@ class uOp(implicit p: Parameters) extends Bundle with HasValid {
     val pd = UInt(p(PREG_WIDTH).W)
     val old_pd = UInt(p(PREG_WIDTH).W)
     val rob_id = UInt(p(ROBID_WIDTH).W)
+    val rob_loc = UInt(p(ROBID_WIDTH).W)
     val LDSpecExec = Bool()
     val branchPredInfo = new BranchPredInfo
 }

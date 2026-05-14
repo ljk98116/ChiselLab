@@ -20,6 +20,7 @@ class ALUResult(implicit p: Parameters) extends Bundle with HasValid {
     val result = UInt(p(DATA_WIDTH).W)
     val rd = UInt(p(AREG_WIDTH).W)
     val pd = UInt(p(PREG_WIDTH).W)
+    val robLoc = UInt(p(ROBID_WIDTH).W)
 }
 
 class AGUResult(implicit p: Parameters) extends Bundle with HasValid {
@@ -31,6 +32,7 @@ class AGUResult(implicit p: Parameters) extends Bundle with HasValid {
     val is_sign_ext = Bool()
     val rd = UInt(p(AREG_WIDTH).W)
     val pd = UInt(p(PREG_WIDTH).W)
+    val robLoc = UInt(p(ROBID_WIDTH).W)
 }
 
 class LDUResult(implicit p: Parameters) extends Bundle with HasValid {
@@ -39,6 +41,7 @@ class LDUResult(implicit p: Parameters) extends Bundle with HasValid {
     val result = UInt(p(DATA_WIDTH).W)
     val rd = UInt(p(AREG_WIDTH).W)
     val pd = UInt(p(PREG_WIDTH).W)
+    val robLoc = UInt(p(ROBID_WIDTH).W)
 }
 
 class SysResult(implicit p: Parameters) extends Bundle with HasValid {
@@ -47,6 +50,7 @@ class SysResult(implicit p: Parameters) extends Bundle with HasValid {
     val result = UInt(p(DATA_WIDTH).W)
     val rd = UInt(p(AREG_WIDTH).W)
     val pd = UInt(p(PREG_WIDTH).W)
+    val robLoc = UInt(p(ROBID_WIDTH).W)
 }
 
 class ALUInputInfo(implicit p: Parameters) extends Bundle with HasValid {

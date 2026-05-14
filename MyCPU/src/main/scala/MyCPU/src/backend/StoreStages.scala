@@ -8,7 +8,7 @@ import MyCPU.config._
 import MyCPU.io._
 import MyCPU.utils._
 
-// stage 0: send stu aguRes to storeBuffer / access dTLB / access dcache tagV
+// stage 0: send stu aguRes to storeBuffer / access dTLB / access dcache tagV / send aguRes to InorderLoadQueue judge load harvard
 // stage 1: dcache get tagV
 // stage 2: dcache judge hit and write data
 class StoreStages(implicit p: Parameters) extends Module {

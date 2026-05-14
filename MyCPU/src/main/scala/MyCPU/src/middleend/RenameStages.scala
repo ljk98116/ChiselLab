@@ -192,6 +192,7 @@ class RenameStages(implicit p: Parameters) extends Module {
         io.renameRes(i).branchPredInfo := rename2_br_pred_info_vec(i)
         io.renameRes(i).LDSpecExec := false.B
         io.renameRes(i).rob_id := rename2_rob_ids(i).robId
+        io.renameRes(i).rob_loc := 0.U // not inited yet
     }
 
     // hasRd should be equal to freeregIdResp Valid <=> freeRegIdBuffer can not provide enough preg for rename
