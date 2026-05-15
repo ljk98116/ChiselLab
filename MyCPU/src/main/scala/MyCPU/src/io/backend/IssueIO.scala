@@ -28,6 +28,7 @@ class ALUIQEntry(implicit p: Parameters) extends Bundle with HasValid {
     val branchPredInfo = new BranchPredInfo
     val rdy1 = Bool()
     val rdy2 = Bool()
+    val robLoc = UInt(p(ROBID_WIDTH).W)
 }
 
 class SYSIQEntry(implicit p: Parameters) extends ALUIQEntry
@@ -53,7 +54,8 @@ class LDUIQEntry(implicit p: Parameters) extends Bundle with HasValid {
     val LDSpecExec = Bool()
     val branchPredInfo = new BranchPredInfo
     val rdy1 = Bool()
-    val rdy2 = Bool()    
+    val rdy2 = Bool()
+    val robLoc = UInt(p(ROBID_WIDTH).W)    
 }
 
 class ALUIQFreeIdBufferWriteReq(implicit p: Parameters) extends Bundle with HasValid {
@@ -105,4 +107,5 @@ class STUIQEntry(implicit p: Parameters) extends Bundle with HasValid {
     val rdy1 = Bool()
     val rdy2 = Bool()    
     val atRobHead = Bool()
+    val robLoc = UInt(p(ROBID_WIDTH).W)
 }

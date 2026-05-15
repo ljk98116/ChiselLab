@@ -15,7 +15,8 @@ import MyCPU.utils._
 // when dcache write ready, deq, drop head
 class StoreBuffer(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
-
+        val stuAguResult = Input(Vec(p(STU_NUM), new AGUResult))
+        
     })
 
     

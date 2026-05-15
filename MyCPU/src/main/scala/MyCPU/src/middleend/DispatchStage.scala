@@ -13,6 +13,7 @@ import MyCPU.utils._
 // to do, judge spec exec load and non spec exec load
 // spec exec load may be replayed due to MDP Error, may set spec state for issue items
 // no spec exec load is safe, though mdp has pred error
+// if backpipe stalls, not write into ROB
 class DispatchStage(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
         val flush = Input(Bool())
@@ -96,6 +97,7 @@ class DispatchStage(implicit p: Parameters) extends Module {
     for(i <- 0 until p(FETCH_WIDTH)) {
         dispatch1_renameRes_o(i).LDSpecExec := io.dispatch1_canSpecExec(i)
         dispatch1_renameRes_o(i).rob_loc := io.inorder_locs(i)
+        io.inorder_uops(i) := Mux(io.stall_from_backpipe, 0.U.asTypeOf(new uOp), dispatch1_renameRes_o(i))
     }
 
     val dispatch2_isLoadInstPrefixSums = PipeReg(dispatch1_isLoadInstPrefixSums, io.stall_from_backpipe, io.flush)

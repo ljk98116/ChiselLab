@@ -7,6 +7,7 @@ import MyCPU.config._
 import MyCPU.io._
 import MyCPU.utils._
 
+// to do, when store write done, need to wakeup related load
 class LoadQueue(implicit p: Parameters) extends Module {
   val totalSize = p(LDUIQ_SIZE)
   val perBankSize = totalSize / p(LDU_NUM)

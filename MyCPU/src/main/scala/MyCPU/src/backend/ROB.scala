@@ -166,6 +166,13 @@ class ROB(implicit p: Parameters) extends Module {
 
     io.commit_uops := robHeadUops
     io.commit_valid := canCommit
+
+    io.robHeadPtr := robHeadPtr
+    io.robTailPtr := robTailPtr
+
+    for(b <- 0 until bankNum) {
+        io.inorder_locs(b) := robTailPtr + b.U
+    }
 }
 
 

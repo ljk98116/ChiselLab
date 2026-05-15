@@ -27,16 +27,17 @@ class LDU(implicit p: Parameters) extends Module {
     result.is_sign_ext := !io.ldu_item.uop.funct3(2) // except LBU/LHU
     result.mask := 0.U
     result.wdata := 0.U
+    result.robLoc := io.ldu_item.uop.robLoc
     
     switch(io.ldu_item.uop.funct3) {
         is("b000".U, "b100".U) {
-            result.mask := "h0000 00FF".U
+            result.mask := "h000000FF".U
         }
         is("b001".U, "b101".U) {
-            result.mask := "h0000 FFFF".U
+            result.mask := "h0000FFFF".U
         }
         is("b010".U) {
-            result.mask := "hFFFF FFFF".U
+            result.mask := "hFFFFFFFF".U
         }
     }
 

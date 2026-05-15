@@ -124,6 +124,7 @@ class ALU(implicit p: Parameters) extends Module {
     io.result.rd := io.alu_item.uop.rd
     io.result.valid := io.alu_item.uop.valid
     io.result.result := 0.U
+    io.result.robLoc := io.alu_item.uop.robLoc
 
     io.uop := io.alu_item.uop
     io.uop.branchPredInfo.target := Mux(

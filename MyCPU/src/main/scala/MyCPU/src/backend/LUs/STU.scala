@@ -27,16 +27,17 @@ class STU(implicit p: Parameters) extends Module {
     result.wdata := io.stu_item.ps2_data
     result.is_sign_ext := false.B
     result.mask := 0.U
+    result.robLoc := io.stu_item.uop.robLoc
     
     switch(io.stu_item.uop.funct3) {
         is("b000".U) {
-            result.mask := "h0000 00FF".U // SB
+            result.mask := "h000000FF".U // SB
         }
         is("b001".U) {
-            result.mask := "h0000 FFFF".U // SH
+            result.mask := "h0000FFFF".U // SH
         }
         is("b010".U) {
-            result.mask := "hFFFF FFFF".U // SW
+            result.mask := "hFFFFFFFF".U // SW
         }
     }
 

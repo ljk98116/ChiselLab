@@ -30,6 +30,7 @@ class LFST(implicit p: Parameters) extends Module {
         val rename1_isStoreVec = Input(Vec(p(FETCH_WIDTH), Bool()))
         val rename1_isLoadVec = Input(Vec(p(FETCH_WIDTH), Bool()))
         val dispatch1_canSpecExecVec = Output(Vec(p(FETCH_WIDTH), Bool()))
+        val dispatch1_blockStIds = Output(Vec(p(FETCH_WIDTH), UInt(p(ROBID_WIDTH).W)))
     })
 
     val bankNum = p(FETCH_WIDTH)
@@ -40,12 +41,24 @@ class LFST(implicit p: Parameters) extends Module {
         SyncReadMem(perBankSize, new LFSTEntry)
     )
 
+    val lfstLRU = RegInit(VecInit(
+        Seq.fill(perBankSize)(false.B)
+    ))
+
     val rename2_slot0_canSpecExec = WireInit(VecInit(
         Seq.fill(p(FETCH_WIDTH))(false.B)
     ))
 
+    val rename2_slot0_blockStIds = WireInit(VecInit(
+        Seq.fill(p(FETCH_WIDTH))(0.U(p(ROBID_WIDTH).W))
+    ))
+
     val dispatch1_slot1_canSpecExec = WireInit(VecInit(
         Seq.fill(p(FETCH_WIDTH))(false.B)
+    ))
+
+    val dispatch1_slot1_blockStIds = WireInit(VecInit(
+        Seq.fill(p(FETCH_WIDTH))(0.U(p(ROBID_WIDTH).W))
     ))
 
     val rename2_ssitentries = PipeReg(io.rename1_ssitEntries, io.rename2_stall || io.stall_from_backpipe, io.flush)
@@ -56,6 +69,7 @@ class LFST(implicit p: Parameters) extends Module {
 
     val dispatch1_isLoadVec = PipeReg(rename2_isLoadVec, io.stall_from_backpipe, io.flush)
     val dispatch1_slot0_canSpecExec = PipeReg(rename2_slot0_canSpecExec, io.stall_from_backpipe, io.flush)
+    val dispatch1_slot0_blockStIds = PipeReg(rename2_slot0_blockStIds, io.stall_from_backpipe, io.flush)
 
     // rename1 write slot0
     // rename2 write slot1
@@ -77,6 +91,12 @@ class LFST(implicit p: Parameters) extends Module {
             true.B
         )
 
+        rename2_slot0_blockStIds(i) := Mux(
+            rename2_isLoadVec(i), 
+            !lfst(i).read(io.rename1_ssitEntries(i).LFSTIDs(0)).robId, 
+            0.U           
+        )
+
         when(rename2_ssitentries(i).valid && rename2_ssitentries(i).LFSTValids(1) && rename2_isStoreVec(i)) {
             val wdata = WireInit(0.U.asTypeOf(new LFSTEntry))
             wdata.pc := rename2_pcs(i)
@@ -91,6 +111,13 @@ class LFST(implicit p: Parameters) extends Module {
             true.B
         )
 
+        dispatch1_slot1_blockStIds(i) := Mux(
+            dispatch1_isLoadVec(i),
+            !lfst(i + p(FETCH_WIDTH)).read(rename2_ssitentries(i).LFSTIDs(1)).robId,
+            0.U
+        )
+
         io.dispatch1_canSpecExecVec(i) := dispatch1_slot0_canSpecExec(i) && dispatch1_slot1_canSpecExec(i)
+
     }
 }
