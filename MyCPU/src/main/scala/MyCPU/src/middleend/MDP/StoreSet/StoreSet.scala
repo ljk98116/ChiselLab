@@ -51,4 +51,5 @@ class StoreSet(implicit p: Parameters) extends MDP {
     lfst.io.rename1_ssitEntries := ssit.io.rename1_LFSTEntries
 
     io.dispatch1_canSpecExec := lfst.io.dispatch1_canSpecExecVec
+    io.dispatch1_blockStIds := lfst.io.dispatch1_blockStIds
 }

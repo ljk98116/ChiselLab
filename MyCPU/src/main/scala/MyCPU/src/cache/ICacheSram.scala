@@ -54,7 +54,7 @@ class ICacheSram(implicit p: Parameters) extends Module {
             if(p(UseNangate45)) Module(
                 new Nangate45Bank(1 << p(L1CacheLineLength), UInt(34.W), s"ICacheBranchMetaInfoRam_${index}")
             )
-            else Module(new LargeBank(1 << p(L1CacheWayNum), Vec(p(L1CacheLineLength), new ICacheBranchMetaInfo)))
+            else Module(new LargeSyncBank(1 << p(L1CacheWayNum), Vec(p(L1CacheLineLength), new ICacheBranchMetaInfo)))
         }
     )
 
@@ -63,7 +63,7 @@ class ICacheSram(implicit p: Parameters) extends Module {
         index => {
             // 256x34
             if(p(UseNangate45)) Module(new Nangate45Bank((1 << p(ICacheIndexBits)), UInt(tagWidth.W), s"ICacheTagVRam0_${index}"))
-            else Module(new LargeBank((1 << p(ICacheIndexBits)), UInt((p(ICacheTagBits) + 1).W)))
+            else Module(new LargeSyncBank((1 << p(ICacheIndexBits)), UInt((p(ICacheTagBits) + 1).W)))
         }
     )
 
@@ -72,14 +72,14 @@ class ICacheSram(implicit p: Parameters) extends Module {
         index => {
             // 256x4x4B => 256x96
             if(p(UseNangate45)) Module(new Nangate45Bank((1 << p(ICacheIndexBits)), UInt(96.W), s"ICacheDataRam0_${index}"))
-            else Module(new LargeBank((1 << p(ICacheIndexBits)), UInt((cacheLineWidth / 2).W)))
+            else Module(new LargeSyncBank((1 << p(ICacheIndexBits)), UInt((cacheLineWidth / 2).W)))
         }        
     )
     val dataMem1 = Seq.tabulate(p(L1CacheWayNum))(
         index => {
             // 256x4x4B => 256x96
             if(p(UseNangate45)) Module(new Nangate45Bank((1 << p(ICacheIndexBits)), UInt(96.W), s"ICacheDataRam1_${index}"))
-            else Module(new LargeBank((1 << p(ICacheIndexBits)), UInt((cacheLineWidth / 2).W)))
+            else Module(new LargeSyncBank((1 << p(ICacheIndexBits)), UInt((cacheLineWidth / 2).W)))
         }        
     )
     // if1 icache hit, return hit and data

@@ -16,6 +16,7 @@ import MyCPU.utils._
 // load: just read both LFST to judge if can spec exec
 //    slot0 wr slot1 wr
 //             slot0 and slot1 read, use slot1 on write value
+// when commit mark the valid to invalid
 class LFST(implicit p: Parameters) extends Module {
 
     require(p(SLOT_NUM) == 2, "LFST only support 2 slots now")
@@ -29,8 +30,8 @@ class LFST(implicit p: Parameters) extends Module {
         val rename1_robIds = Input(Vec(p(FETCH_WIDTH), UInt(p(ROBID_WIDTH).W)))
         val rename1_isStoreVec = Input(Vec(p(FETCH_WIDTH), Bool()))
         val rename1_isLoadVec = Input(Vec(p(FETCH_WIDTH), Bool()))
-        val dispatch1_canSpecExecVec = Output(Vec(p(FETCH_WIDTH), Bool()))
-        val dispatch1_blockStIds = Output(Vec(p(FETCH_WIDTH), UInt(p(ROBID_WIDTH).W)))
+        val dispatch1_canSpecExecVec = Output(Vec(p(FETCH_WIDTH), Vec(p(SLOT_NUM), Bool())))
+        val dispatch1_blockStIds = Output(Vec(p(FETCH_WIDTH), Vec(p(SLOT_NUM), UInt(p(ROBID_WIDTH).W))))
     })
 
     val bankNum = p(FETCH_WIDTH)
@@ -117,7 +118,10 @@ class LFST(implicit p: Parameters) extends Module {
             0.U
         )
 
-        io.dispatch1_canSpecExecVec(i) := dispatch1_slot0_canSpecExec(i) && dispatch1_slot1_canSpecExec(i)
+        io.dispatch1_canSpecExecVec(i)(0) := dispatch1_slot0_canSpecExec(i)
+        io.dispatch1_canSpecExecVec(i)(1) := dispatch1_slot1_canSpecExec(i)
 
+        io.dispatch1_blockStIds(i)(0) := Mux(dispatch1_slot0_canSpecExec(i), 0.U, dispatch1_slot0_blockStIds(i))
+        io.dispatch1_blockStIds(i)(1) := Mux(dispatch1_slot1_canSpecExec(i), 0.U, dispatch1_slot1_blockStIds(i))
     }
 }

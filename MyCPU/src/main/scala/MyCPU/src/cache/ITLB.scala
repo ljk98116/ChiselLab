@@ -9,16 +9,18 @@ import MyCPU.utils._
 
 import org.chipsalliance.cde.config._
 
-// fully associate
+// fully associate，icache access must not occur 1 fetch 2 pages
 // if0 recv req
 // if1 get hit/miss, send refill req to PageWalker/ L2 TLB(reserved)
 // L2 tlb / 2 pagewalker access DCache
 class ITLB(size: Int)(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
+        val flush = Input(Bool())
+        val stall_from_backpipe = Input(Bool())
         val req = Input(Vec(p(FETCH_WIDTH), new ITLBReqInfo))
         val update = Input(new ITLBUpdateInfo)
         val resp = Output(Vec(p(FETCH_WIDTH), new ITLBRespInfo))
-        val refill_req = Output(Vec(p(FETCH_WIDTH), new ITLBRefillReq))
+        val refill_req = Output(new ITLBRefillReq)
     })
 
     val mem = RegInit(VecInit(
@@ -27,6 +29,7 @@ class ITLB(size: Int)(implicit p: Parameters) extends Module {
 
     // fifo refill
     val refill_loc = RegInit(0.U(log2Ceil(size).W))
+    val if1_req = PipeReg(io.req, io.stall_from_backpipe, io.flush)
 
     for(i <- 0 until p(FETCH_WIDTH)) {
         val if0_req_va = io.req(i).addr.asTypeOf(new VirtualAddress)
@@ -41,22 +44,23 @@ class ITLB(size: Int)(implicit p: Parameters) extends Module {
         val if0_hitIndex = OHToUInt(if0_hitMask)
         val if0_hit = if0_hitMask.asUInt.orR
         
-        val if1_req = RegNext(io.req(i))
-        val if1_hit = RegNext(if0_hit)
+        val if1_hit = PipeReg(if0_hit, io.stall_from_backpipe, io.flush)
 
-        val if1_hitIndex = RegNext(if0_hitIndex)
+        val if1_hitIndex = PipeReg(if0_hitIndex, io.stall_from_backpipe, io.flush)
         val if1_hitEntry = mem(if1_hitIndex)
 
         io.resp(i).hit := if1_hit
-        io.resp(i).valid := if1_req.valid
-        io.resp(i).paddr := Cat(if1_hitEntry.ppn, if1_req.addr(11, 0)).asTypeOf(new PhysicalAddress)
+        io.resp(i).valid := if1_req(i).valid
+        io.resp(i).paddr := Cat(if1_hitEntry.ppn, if1_req(i).addr(11, 0)).asTypeOf(new PhysicalAddress)
 
-        io.refill_req(i).va := if1_req.addr.asTypeOf(new VirtualAddress)
-        io.refill_req(i).valid := !if1_hit && if1_req.valid
+        // io.refill_req(i).va := if1_req.addr.asTypeOf(new VirtualAddress)
+        // io.refill_req(i).valid := !if1_hit && if1_req.valid
 
         // to do, fetch inst exception mark
-        
     }
+
+    io.refill_req.va := if1_req(0).addr.asTypeOf(new VirtualAddress)
+    io.refill_req.valid := !VecInit(io.resp.map(_.valid)).asUInt.orR && VecInit(if1_req.map(_.valid)).asUInt.orR
 
     refill_loc := refill_loc + io.update.valid
 

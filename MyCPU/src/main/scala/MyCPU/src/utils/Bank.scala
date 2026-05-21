@@ -40,6 +40,16 @@ class LargeBank[T <: Data](depth: Int, gen: T) extends BaseBank(depth, gen) {
     io.rdata := mem.read(io.raddr)
 }
 
+class LargeSyncBank[T <: Data](depth: Int, gen: T) extends BaseBank(depth, gen) {
+
+    val mem = SyncReadMem(depth, gen)
+
+    when(io.wen) {
+        mem.write(io.waddr, io.wdata)
+    }
+
+    io.rdata := mem.read(io.raddr)
+}
 
 // only single RW, read write must split
 class Nangate45Bank[T <: Data](depth: Int, gen: T, name: String = "")(implicit p: Parameters) extends BaseBank(depth, gen) 

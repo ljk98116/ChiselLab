@@ -13,6 +13,7 @@ import MyCPU.utils._
 // stage 2: dcache judge hit and write data
 class StoreStages(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
-
+        val stuAguResult = Input(Vec(p(STU_NUM), new AGUResult))
+        
     })
 }

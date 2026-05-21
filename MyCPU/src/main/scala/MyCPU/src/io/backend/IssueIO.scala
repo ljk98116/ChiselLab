@@ -56,6 +56,8 @@ class LDUIQEntry(implicit p: Parameters) extends Bundle with HasValid {
     val rdy1 = Bool()
     val rdy2 = Bool()
     val robLoc = UInt(p(ROBID_WIDTH).W)    
+    val canSpecExec = Vec(p(SLOT_NUM), Bool())
+    val blockStIds = Vec(p(SLOT_NUM), UInt(p(ROBID_WIDTH).W))
 }
 
 class ALUIQFreeIdBufferWriteReq(implicit p: Parameters) extends Bundle with HasValid {

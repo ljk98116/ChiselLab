@@ -26,4 +26,5 @@ class CheckPointQueue(size: Int)(implicit p: Parameters) extends Module {
 
     io.deq.freeRegIdBufferHeads := queue.io.deq.freeRegIdBufferHeads
     io.deq.valid := queue.io.deqReady && io.flush
+    io.deq.busyTable := queue.io.deq.busyTable
 }

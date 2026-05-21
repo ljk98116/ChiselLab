@@ -37,6 +37,9 @@ class MiddleEnd(implicit p: Parameters) extends Module {
         val store_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
         val alu_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
         val sys_uops = Output(Vec(p(FETCH_WIDTH), new uOp)) 
+        // to rob[dispatch1]
+        val inorder_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
+        val inorder_locs = Input(Vec(p(FETCH_WIDTH), UInt(p(ROBID_WIDTH).W)))
     })
 
     val decode = Module(new DecodeStage)
@@ -87,11 +90,15 @@ class MiddleEnd(implicit p: Parameters) extends Module {
     dispatch.io.flush := flush
     dispatch.io.stall_from_backpipe := io.stall_from_backpipe
     dispatch.io.dispatch1_canSpecExec := mdp.io.dispatch1_canSpecExec
+    dispatch.io.dispatch1_blockStIds := mdp.io.dispatch1_blockStIds
 
     io.load_uops := dispatch.io.load_uops
     io.store_uops := dispatch.io.store_uops
     io.alu_uops := dispatch.io.alu_uops
     io.sys_uops := dispatch.io.sys_uops
+    io.inorder_uops := dispatch.io.inorder_uops
+    
+    dispatch.io.inorder_locs := io.inorder_locs
 
     checkPointQueue.io.flush := flush
     checkPointQueue.io.enq := freeRegIdBuffer.io.currentHeads

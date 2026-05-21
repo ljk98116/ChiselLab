@@ -19,7 +19,8 @@ class DispatchStage(implicit p: Parameters) extends Module {
         val flush = Input(Bool())
         val stall_from_backpipe = Input(Bool())
         val renameRes_i = Input(Vec(p(FETCH_WIDTH), new uOp))
-        val dispatch1_canSpecExec = Input(Vec(p(FETCH_WIDTH), Bool()))
+        val dispatch1_canSpecExec = Input(Vec(p(FETCH_WIDTH), Vec(p(SLOT_NUM), Bool())))
+        val dispatch1_blockStIds = Input(Vec(p(FETCH_WIDTH), Vec(p(SLOT_NUM), UInt(p(ROBID_WIDTH).W))))
         // to rob, use dispatch1 reg
         val inorder_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
         val inorder_locs = Input(Vec(p(FETCH_WIDTH), UInt(p(ROBID_WIDTH).W)))
@@ -97,6 +98,7 @@ class DispatchStage(implicit p: Parameters) extends Module {
     for(i <- 0 until p(FETCH_WIDTH)) {
         dispatch1_renameRes_o(i).LDSpecExec := io.dispatch1_canSpecExec(i)
         dispatch1_renameRes_o(i).rob_loc := io.inorder_locs(i)
+        dispatch1_renameRes_o(i).blockStIds := io.dispatch1_blockStIds(i)
         io.inorder_uops(i) := Mux(io.stall_from_backpipe, 0.U.asTypeOf(new uOp), dispatch1_renameRes_o(i))
     }
 

@@ -22,6 +22,7 @@ class IssueStages(implicit p: Parameters) extends Module {
         val sys_uops = Input(Vec(p(FETCH_WIDTH), new uOp))
 
         val issue0_stall = Output(Bool())
+        // load / store reached rob top
         val loadQueueRobEnable = Input(Vec(p(FETCH_WIDTH), new LoadQueueEnable))
         val storeQueueRobEnable = Input(Vec(p(FETCH_WIDTH), new StoreQueueEnable))
         val busyTableVec = Input(UInt((1 << p(PREG_WIDTH)).W))
@@ -47,7 +48,8 @@ class IssueStages(implicit p: Parameters) extends Module {
     ldu_iq.io.busytableVec := io.busyTableVec
     ldu_iq.io.ldu_uops := PipeReg(io.ldu_uops, io.stall_from_backpipe || io.issue0_stall, io.flush)
     ldu_iq.io.aluSelectRes := alu_iq.io.aluiq_o
-    ldu_iq.io.robEnable := io.loadQueueRobEnable
+    ldu_iq.io.ldRobEnable := io.loadQueueRobEnable
+    ldu_iq.io.stRobEnable := io.storeQueueRobEnable
 
     stu_iq.io.flush := io.flush
     stu_iq.io.stall_from_backpipe := io.stall_from_backpipe

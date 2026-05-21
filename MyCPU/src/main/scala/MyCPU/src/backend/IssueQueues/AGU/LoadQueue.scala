@@ -23,7 +23,8 @@ class LoadQueue(implicit p: Parameters) extends Module {
     val issue0_stall = Output(Bool())
     val busytableVec = Input(UInt((1 << p(PREG_WIDTH)).W))
     val aluSelectRes = Input(Vec(p(ALU_NUM), new ALUIQEntry))
-    val robEnable = Input(Vec(p(FETCH_WIDTH), new LoadQueueEnable))
+    val ldRobEnable = Input(Vec(p(FETCH_WIDTH), new LoadQueueEnable))
+    val stRobEnable = Input(Vec(p(FETCH_WIDTH), new StoreQueueEnable))
     val lduiq_o = Output(Vec(p(LDU_NUM), new LDUIQEntry))
   })
 
@@ -103,9 +104,16 @@ class LoadQueue(implicit p: Parameters) extends Module {
   // -------------------------
   for (b <- 0 until p(LDU_NUM)) {
     for (i <- 0 until perBankSize) {
-      val canSpecExec = VecInit((0 until p(FETCH_WIDTH)).map(j =>
-        io.robEnable(j).valid && (io.robEnable(j).robId === entryRam(b)(i).rob_id) && entryRam(b)(i).valid
+      // load reached rob top 
+      val canExec = VecInit((0 until p(FETCH_WIDTH)).map(j =>
+        io.ldRobEnable(j).valid && (io.ldRobEnable(j).robId === entryRam(b)(i).rob_id) && entryRam(b)(i).valid
       )).asUInt.orR
+
+      val canSpecExec = VecInit((0 until p(SLOT_NUM)).map(j => 
+        VecInit((0 until p(FETCH_WIDTH)).map(k => 
+          io.stRobEnable(k).valid && (io.stRobEnable(k).robId === entryRam(b)(i).blockStIds(j)) && entryRam(b)(i).canSpecExec(j)
+        )).asUInt.orR
+      ))
 
       val aluWakeUp1 = VecInit((0 until p(ALU_NUM)).map(j =>
         io.aluSelectRes(j).HasRd && enqUops(b).HasRs1 && io.aluSelectRes(j).pd === enqUops(b).ps1
@@ -120,12 +128,14 @@ class LoadQueue(implicit p: Parameters) extends Module {
         iq_entry := enqUops(b).asTypeOf(new LDUIQEntry)  // 直接类型转换减少重复赋值
         iq_entry.rdy1 := !io.busytableVec(enqUops(b).ps1) || aluWakeUp1
         iq_entry.rdy2 := !io.busytableVec(enqUops(b).ps2) || aluWakeUp2
-        iq_entry.LDSpecExec := enqUops(b).LDSpecExec || canSpecExec
+        iq_entry.LDSpecExec(0) := enqUops(b).LDSpecExec(0) || canSpecExec(0) || canExec
+        iq_entry.LDSpecExec(1) := enqUops(b).LDSpecExec(1) || canSpecExec(1) || canExec
         entryRam(b)(enqLocs(b)(ptrWidth-1, bankBits)) := iq_entry
       }.otherwise {
         entryRam(b)(i).rdy1 := entryRam(b)(i).rdy1 || aluWakeUp1 || !io.busytableVec(entryRam(b)(i).ps1)
         entryRam(b)(i).rdy2 := entryRam(b)(i).rdy2 || aluWakeUp2 || !io.busytableVec(entryRam(b)(i).ps2)
-        entryRam(b)(i).LDSpecExec := entryRam(b)(i).LDSpecExec || canSpecExec
+        entryRam(b)(i).LDSpecExec(0) := entryRam(b)(i).LDSpecExec(0) || canSpecExec(0) || canExec
+        entryRam(b)(i).LDSpecExec(1) := entryRam(b)(i).LDSpecExec(1) || canSpecExec(1) || canExec
       }
     }
 
@@ -137,7 +147,7 @@ class LoadQueue(implicit p: Parameters) extends Module {
       val ready = entryRam(b)(i).valid && 
                   !(entryRam(b)(i).HasRs1 && !entryRam(b)(i).rdy1 || 
                     entryRam(b)(i).HasRs2 && !entryRam(b)(i).rdy2) && 
-                  entryRam(b)(i).LDSpecExec
+                  entryRam(b)(i).LDSpecExec.asUInt.andR
       val olderReady = (ageMats(b)(i) & VecInit(entryRam(b).map(_.valid)).asUInt).orR
       canIssueVec(i) := ready && !olderReady
     }
