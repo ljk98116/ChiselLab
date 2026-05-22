@@ -70,14 +70,14 @@ class ICacheSram(implicit p: Parameters) extends Module {
     val cacheLineWidth = p(L1CacheLineLength) * p(DATA_WIDTH)
     val dataMem0 = Seq.tabulate(p(L1CacheWayNum))(
         index => {
-            // 256x4x4B => 256x96
+            // 256x2x4B => 256x96
             if(p(UseNangate45)) Module(new Nangate45Bank((1 << p(ICacheIndexBits)), UInt(96.W), s"ICacheDataRam0_${index}"))
             else Module(new LargeSyncBank((1 << p(ICacheIndexBits)), UInt((cacheLineWidth / 2).W)))
         }        
     )
     val dataMem1 = Seq.tabulate(p(L1CacheWayNum))(
         index => {
-            // 256x4x4B => 256x96
+            // 256x2x4B => 256x96
             if(p(UseNangate45)) Module(new Nangate45Bank((1 << p(ICacheIndexBits)), UInt(96.W), s"ICacheDataRam1_${index}"))
             else Module(new LargeSyncBank((1 << p(ICacheIndexBits)), UInt((cacheLineWidth / 2).W)))
         }        
@@ -170,7 +170,7 @@ class ICacheSram(implicit p: Parameters) extends Module {
     val if2_icache_req = PipeReg(if1_icache_req, io.if2_stall, io.if2_flush | io.commit_flush)
 
     val if2_hitArray = if2_tagV_rdata.map(
-        tagV => tagV(p(ICacheTagBits)) && tagV(p(ICacheTagBits) - 1, 0) === if2_itlb_resp(0).paddr.GetPPN
+        tagV => tagV(p(ICacheTagBits) - 1) && tagV(p(ICacheTagBits) - 2, 0) === if2_itlb_resp(0).paddr.GetPPN
     )
 
     val if2_icache_access_valid = PipeReg(if1_icache_access_valid, io.if2_stall, io.if2_flush | io.commit_flush)

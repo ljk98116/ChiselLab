@@ -18,6 +18,7 @@ class DCacheReq(implicit p: Parameters) extends Bundle with HasValid {
     val wen = Bool()
     val mask = UInt(p(DATA_WIDTH).W)
     val data = UInt(p(DATA_WIDTH).W)
+    val pipeId = UInt(log2Ceil(math.max(p(LDU_NUM), p(STU_NUM))).W)
 }
 
 class DCacheReadReq(implicit p: Parameters) extends Bundle with HasValid {

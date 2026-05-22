@@ -67,6 +67,9 @@ class L1CacheBaseConfig extends Config(
         case ICacheTagBits => 
             34 - here(L1CacheOffsetBits) - 
             here(ICacheIndexBits) - site(FETCH_OFFSET) // 34 - 12 = 22
+        case DCacheTagBits =>
+            34 - here(L1CacheOffsetBits) - 
+            here(DCacheIndexBits) - site(FETCH_OFFSET) // 34 - 12 = 22            
         case L1CacheLineLength => (1 << here(L1CacheOffsetBits))
         case ICacheMSHRNum => 8
         case DCacheMSHRNum => 8
