@@ -9,11 +9,15 @@ import MyCPU.utils._
 
 import org.chipsalliance.cde.config._
 
-// multi port access, may have multiple refill reqs
+// multi port access, may have multiple refill reqs and multiple refill resps
 class DTLB(size: Int)(implicit p: Parameters) extends Module {
+    // sigle way sram ports
+    val readPortNum = p(LDU_NUM)
+    val writePortNum = p(STU_NUM)
+    val bankNum = writePortNum + readPortNum
+
     val io = IO(new Bundle {
-        val ldReqs = Input(Vec(p(LDU_NUM), new DTLBReqInfo))
-        val stReqs = Input(Vec(p(STU_NUM), new DTLBReqInfo))
+        val reqs = Input(Vec(bankNum, new DTLBReqInfo))
     })    
 }
 
