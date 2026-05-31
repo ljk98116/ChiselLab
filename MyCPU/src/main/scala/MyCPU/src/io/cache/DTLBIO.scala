@@ -17,6 +17,7 @@ class DTLBEntry(implicit p: Parameters) extends Bundle with HasValid {
 
 class DTLBReqInfo(implicit p: Parameters) extends Bundle with HasValid {
     val addr = UInt(p(ADDR_WIDTH).W)
+    val wen = Bool()
     val valid = Bool()
 }
 
@@ -28,5 +29,11 @@ class DTLBRespInfo(implicit p: Parameters) extends Bundle with HasValid {
 
 class DTLBUpdateInfo(implicit p: Parameters) extends Bundle with HasValid {
     val pte = new PTE
+    val valid = Bool()
+}
+
+class DTLBRefillReq(implicit p: Parameters) extends Bundle with HasValid {
+    val va = new VirtualAddress
+    val wen = Bool()
     val valid = Bool()
 }
