@@ -18,6 +18,7 @@ class DCacheWaitQueue(size: Int)(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
         val flush = Input(Bool())
         val mem3_dcache_wb_req = Input(Vec(bankNum, new DCacheWriteBackReq))
+        val mem3_dcache_wb_buffer_enqReady = Output(Bool())
         
     })
 

@@ -54,7 +54,7 @@ class DTLB(size: Int)(implicit p: Parameters) extends Module {
         io.mem2_resps(b).hit := mem2_hit
         io.mem2_resps(b).valid := mem2_valid
 
-        io.refill_reqs(b).va := paddr
+        io.refill_reqs(b).va := va
         io.refill_reqs(b).wen := req.wen
         io.refill_reqs(b).valid := !hit && req.valid
     }
