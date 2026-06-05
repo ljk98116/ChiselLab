@@ -9,7 +9,7 @@ import MyCPU.io._
 import MyCPU.utils._
 
 // mshr queue
-class MSHRQueue(size: Int)(implicit p: Parameters) extends Module {
+class ICacheMSHRQueue(size: Int)(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
         val enq = Input(new CacheRefillReq)
         val enqReady = Output(Bool())

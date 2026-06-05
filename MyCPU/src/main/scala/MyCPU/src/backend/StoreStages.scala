@@ -8,9 +8,7 @@ import MyCPU.config._
 import MyCPU.io._
 import MyCPU.utils._
 
-// stage 0: send stu aguRes to storeBuffer / access dTLB / access dcache tagV / send aguRes to InorderLoadQueue judge load harvard
-// stage 1: dcache get tagV
-// stage 2: dcache judge hit and write data
+// mem0: send stu aguRes to storeBuffer / access dcache / send aguRes to InorderLoadQueue judge load harvard, write to 
 class StoreStages(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
         val stuAguResult = Input(Vec(p(STU_NUM), new AGUResult))

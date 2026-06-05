@@ -8,6 +8,7 @@ import MyCPU.config._
 import MyCPU.io._
 import MyCPU.utils._
 import MyCPU.cache._
+import MyCPU.cache
 
 class DCacheBankAccessBuffer(id: Int)(implicit p: Parameters) extends Module {
     // sigle way sram ports
@@ -93,6 +94,10 @@ class DCacheSram(implicit p: Parameters) extends Module {
     // use writePortNum as bankNum
     // copy readPortNum within a bank
     val bankBits = log2Ceil(bankNum)
+    val tagWidth = (new PhysicalAddress).getWidth
+    val cacheLineWidth = p(L1CacheLineLength) * p(DATA_WIDTH)
+    val depth = 1 << p(DCacheIndexBits)
+    val perBankSize = depth / bankNum
     // read/write not hit, make refill read req
     // when write hit, put the written line to write buffer and write to L2 cache or dram
     // make a write req bank buffer to store the write req to dcache
@@ -102,14 +107,15 @@ class DCacheSram(implicit p: Parameters) extends Module {
         // mem0 stage, pre read cacheline and tagV(both need read cacheline)
         val mem0_readReqs = Input(Vec(p(LDU_NUM), new DCacheReq))
         val mem0_writeReqs = Input(Vec(p(STU_NUM), new DCacheReq))
-        // mem2 stage, dtlb resps
+        // mem2 stage, dtlb resps, all insts update their pas
+        // mem3 all insts enq for the 
         val mem2_dtlb_resps = Input(Vec(bankNum, new DTLBRespInfo))
+        // mem2 stage send hit info, mem4 all insts get hit message
+        val mem2_dcache_hit_infos = Output(Vec(bankNum, new DCacheHitInfo))
         // mem3 stage, stage data, tagV at mem1, judge dcache hit, send refill req 
         // dcache mshr io
         val mem3_refill_reqs = Output(Vec(bankNum, new DCacheRefillReq))
         val mem3_dcache_mshr_enqReady = Input(Bool())
-        // send write infos to write buffer, use the changed the cacheline 
-        val mem2_write_reqs = Output(Vec(p(STU_NUM), new DCacheWriteInfo))
         // refill resp, broadcast to load waiting queue to get data
         val dcacheRefillResp = Input(new DCacheRefillResp)
         // to replace policy module req
@@ -127,23 +133,17 @@ class DCacheSram(implicit p: Parameters) extends Module {
         val mem2_dtlb_miss_stall = Output(Bool())
         // stall when mshr queue can not enq
         val mem3_mshr_stall = Output(Bool())
-        // write back to dram
-        val mem3_dcache_wb_buffer_enqReady = Input(Bool()) // may generate stall
-        val mem3_dcache_wb_req = Output(Vec(bankNum, new DCacheWriteBackReq))
-        val mem3_dcache_wb_stall = Output(Bool())
         // mem4 change banked data to pipelines
         val mem4_dcache_ld_valid = Output(Vec(p(LDU_NUM), Bool()))
         val mem4_dcache_ld_data = Output(Vec(p(LDU_NUM), UInt(p(DATA_WIDTH).W)))
+        // return store cacheline when hit
+        val mem4_dcache_st_valid = Output(Vec(p(STU_NUM), Bool()))
+        val mem4_dcache_st_data = Output(Vec(p(STU_NUM), UInt(cacheLineWidth.W)))
     })
 
     val bankAccessBuffers = Seq.tabulate(bankNum)(
         i => Module(new DCacheBankAccessBuffer(i))
     )
-
-    val tagWidth = (new PhysicalAddress).getWidth
-    val cacheLineWidth = p(L1CacheLineLength) * p(DATA_WIDTH)
-    val depth = 1 << p(DCacheIndexBits)
-    val perBankSize = depth / bankNum
 
     val tagVBanks = Seq.fill(p(L1CacheWayNum))(
         Seq.fill(bankNum)(
@@ -190,62 +190,62 @@ class DCacheSram(implicit p: Parameters) extends Module {
     val mem2_tagVs = PipeReg(
         mem1_tagVs, 
         io.stall_from_backpipe || io.mem3_mshr_stall || 
-        io.mem2_dtlb_miss_stall || !io.mem3_dcache_wb_buffer_enqReady, 
+        io.mem2_dtlb_miss_stall, 
         io.flush
     )
     val mem2_datas = PipeReg(
         mem1_datas, 
         io.stall_from_backpipe || io.mem3_mshr_stall || 
-        io.mem2_dtlb_miss_stall || !io.mem3_dcache_wb_buffer_enqReady,  
+        io.mem2_dtlb_miss_stall,  
         io.flush
     )
 
     val mem2_bank_reqs = PipeReg(
         mem1_bank_reqs, 
         io.stall_from_backpipe || io.mem3_mshr_stall || 
-        io.mem2_dtlb_miss_stall || !io.mem3_dcache_wb_buffer_enqReady,  
+        io.mem2_dtlb_miss_stall,  
         io.flush
     )
     val mem2_dtlb_reqs = PipeReg(
         io.mem1_dtlb_reqs,
         io.stall_from_backpipe || io.mem3_mshr_stall || 
-        io.mem2_dtlb_miss_stall || !io.mem3_dcache_wb_buffer_enqReady,  
+        io.mem2_dtlb_miss_stall,  
         io.flush        
     )
     val mem3_datas = PipeReg(
         mem2_datas, 
-        io.stall_from_backpipe || !io.mem3_dcache_wb_buffer_enqReady ||
+        io.stall_from_backpipe ||
         io.mem3_mshr_stall, 
         io.flush
     )
     val mem3_bankHits = PipeReg(
         mem2_bankHits, 
-        io.stall_from_backpipe || !io.mem3_dcache_wb_buffer_enqReady ||
+        io.stall_from_backpipe ||
         io.mem3_mshr_stall, 
         io.flush
     )
     val mem3_bankHitWays = PipeReg(
         mem2_bankHitWays, 
-        io.stall_from_backpipe || !io.mem3_dcache_wb_buffer_enqReady ||
+        io.stall_from_backpipe ||
         io.mem3_mshr_stall, 
         io.flush
     )
     val mem3_bank_reqs = PipeReg(
         mem2_bank_reqs, 
-        io.stall_from_backpipe || !io.mem3_dcache_wb_buffer_enqReady ||
+        io.stall_from_backpipe ||
         io.mem3_mshr_stall, 
         io.flush
     ) // used for judge ld/st
     val mem3_bank_pas = VecInit(io.mem3_refill_reqs.map(_.pa))
     val mem3_dtlb_resps = PipeReg(
         io.mem2_dtlb_resps, 
-        io.stall_from_backpipe || !io.mem3_dcache_wb_buffer_enqReady ||
+        io.stall_from_backpipe ||
         io.mem3_mshr_stall, 
         io.flush
     )
     val mem3_dtlb_reqs = PipeReg(
         mem2_dtlb_reqs, 
-        io.stall_from_backpipe || !io.mem3_dcache_wb_buffer_enqReady ||
+        io.stall_from_backpipe ||
         io.mem3_mshr_stall, 
         io.flush        
     )
@@ -262,16 +262,21 @@ class DCacheSram(implicit p: Parameters) extends Module {
         Seq.fill(bankNum)(0.U(p(DATA_WIDTH).W))
     ))
 
+    val mem3_cacheLines = WireInit(VecInit(
+        Seq.fill(bankNum)(0.U(cacheLineWidth.W))
+    ))
+
     val mem4_bankReadData = PipeReg(mem3_bankReadData, io.stall_from_backpipe, io.flush)
     val mem4_bankReadValid = PipeReg(mem3_bankReadValid, io.stall_from_backpipe, io.flush)
     val mem4_bankReadMask = PipeReg(mem3_bankReadMask, io.stall_from_backpipe, io.flush)
     val mem4_bank_reqs = PipeReg(mem3_bank_reqs, io.stall_from_backpipe, io.flush)
+    val mem4_cacheLines = PipeReg(mem3_cacheLines, io.stall_from_backpipe, io.flush)
 
     for(i <- 0 until bankNum) {
         bankAccessBuffers(i).io.flush := io.flush
         bankAccessBuffers(i).io.stall_from_backpipe := 
             io.stall_from_backpipe || io.mem3_mshr_stall || 
-            io.mem2_dtlb_miss_stall || !io.mem3_dcache_wb_buffer_enqReady
+            io.mem2_dtlb_miss_stall
         bankAccessBuffers(i).io.mem0_readReqs := io.mem0_readReqs
         bankAccessBuffers(i).io.mem0_writeReqs := io.mem0_writeReqs
         mem0_bank_reqs(i) := bankAccessBuffers(i).io.deqItem
@@ -306,7 +311,6 @@ class DCacheSram(implicit p: Parameters) extends Module {
     // mem2 judge dcache hit, get data to write
     // mem3 write cachelines, select bank output
     // when mshr can not enq, stall all pipelines
-
     for(b <- 0 until bankNum) {
         val hitMask = WireInit(VecInit(
             Seq.fill(p(L1CacheWayNum))(false.B)
@@ -343,7 +347,10 @@ class DCacheSram(implicit p: Parameters) extends Module {
 
     for(b <- 0 until bankNum) {
         io.mem4_dcache_ld_valid(b) := false.B
+        io.mem4_dcache_st_valid(b) := false.B
+
         io.mem4_dcache_ld_data(b) := 0.U
+        io.mem4_dcache_st_data(b) := 0.U
     }
 
     for(b <- 0 until bankNum) {
@@ -356,78 +363,7 @@ class DCacheSram(implicit p: Parameters) extends Module {
 
         val mem3_isLoad = WireInit(false.B)
         mem3_isLoad := mem3_bank_reqs(b).valid && !mem3_bank_reqs(b).wen
-
-        val mem3_lineIdx = mem3_bank_reqs(b).addr(p(L1CacheOffsetBits) + p(FETCH_OFFSET) - 1, p(FETCH_OFFSET))
-
-        // select hit way data
-        val cacheLine = WireInit(0.U.asTypeOf(new DCacheLine))
-        cacheLine := Mux(mem3_bankHit, mem3_ways(mem3_bankHitWay).asTypeOf(new DCacheLine), 0.U.asTypeOf(new DCacheLine))
-    
-        // select line data
-        when(mem3_isLoad) {
-            mem3_bankReadData(b) := cacheLine.datas(mem3_lineIdx) & mem3_bank_reqs(b).mask
-            mem3_bankReadValid(b) := mem3_bankHit
-            mem3_bankReadMask(b) := mem3_bank_reqs(b).mask
-        }.otherwise {
-            mem3_bankReadData(b) := 0.U
-            mem3_bankReadValid(b) := false.B
-            mem3_bankReadMask(b) := 0.U
-        }
-
-        // mem4 return to pipeline
-        val pipeId = WireInit(0.U(bankBits.W))
-        val pipeIsStore = WireInit(false.B)
-        val pipeIsLoad = WireInit(false.B)
-        val signExtData = WireInit(0.U(p(DATA_WIDTH).W))
-
-        signExtData := mem4_bankReadData(b)
-        switch(mem4_bankReadMask(b)) {
-            is("h000000FF".U) {
-                signExtData := Cat(Fill(24, mem4_bankReadData(b)(7)), mem4_bankReadData(b))
-            }
-            is("h0000FFFF".U) {
-                signExtData := Cat(Fill(16, mem4_bankReadData(b)(15)), mem4_bankReadData(b))
-            }
-        }
-
-        pipeId := mem4_bank_reqs(b).pipeId
-        pipeIsStore := mem4_bank_reqs(b).wen && mem4_bank_reqs(b).valid
-        pipeIsLoad := !mem4_bank_reqs(b).wen && mem4_bank_reqs(b).valid
-
-        when(pipeIsLoad) {
-            io.mem4_dcache_ld_valid(pipeId) := mem4_bankReadValid(b)
-            io.mem4_dcache_ld_data(pipeId) := Mux(
-                mem4_bank_reqs(b).isSignExt,
-                signExtData,
-                mem4_bankReadData(b)
-            )
-        }
-
-        // select line data to write
-        val cacheLineResult = WireInit(0.U.asTypeOf(new DCacheLine))
-        cacheLineResult := cacheLine
-        cacheLineResult.datas(mem3_lineIdx) := (cacheLine.datas(mem3_lineIdx) & ~mem3_bank_reqs(b).mask) |
-            (cacheLine.datas(mem3_lineIdx) & mem3_bank_reqs(b).mask)
-
-        // write to dcache
-        for(w <- 0 until p(L1CacheWayNum)) {
-            dataBanks(w)(b).io.wen := mem3_bankHit && mem3_isStore
-            dataBanks(w)(b).io.waddr := mem3_bank_reqs(b).addr(
-                p(DCacheIndexBits) - 1 + p(L1CacheOffsetBits) + p(FETCH_OFFSET),
-                bankBits + p(L1CacheOffsetBits) + p(FETCH_OFFSET)
-            )
-            dataBanks(w)(b).io.wdata := mem3_bank_reqs(b).data
-            dataBanks(w)(b).io.wmask := ~((0.U)(cacheLineWidth.W))
-        }
-
-        // write the cacheLineResult to writeback buffer
-        io.mem3_dcache_wb_req(b).valid := mem3_isStore
-        io.mem3_dcache_wb_req(b).cacheLine := cacheLineResult
-        io.mem3_dcache_wb_req(b).pa := mem3_bank_pas(b)
-
-        // do refill
-        
     }
 
-    io.mem3_dcache_wb_stall := !io.mem3_dcache_wb_buffer_enqReady
+    
 }

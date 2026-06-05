@@ -92,12 +92,11 @@ class DCacheMSHRQueue(size: Int)(implicit p: Parameters) extends Module {
         }
     }
 
-    io.deqEnable := headPtr =/= tailPtr
-
     val headBankId = headPtr(bankBits - 1, 0)
     val headBankRow = headPtr(ptrWidth - 1, bankBits)
     
     tailPtr := Mux(io.mem3_enqReady, tailPtr + writeCount - canMergeCount, tailPtr)
-    io.deq := Mux(io.deqEnable, banks(headBankId)(headBankRow), 0.U.asTypeOf(new CacheRefillReq))
+    headPtr := headPtr + (io.deqEnable && (headPtr =/= tailPtr)).asUInt
+    io.deq := Mux(io.deqEnable && (headPtr =/= tailPtr), banks(headBankId)(headBankRow), 0.U.asTypeOf(new CacheRefillReq))
 }
 

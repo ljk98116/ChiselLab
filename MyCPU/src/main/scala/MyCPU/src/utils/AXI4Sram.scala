@@ -54,8 +54,8 @@ class AXI4Sram (
         writeCnt := writeCnt + 1.U
     }
 
-    // B
-    io.axi4_slave.b.valid := io.axi4_slave.w.fire && io.axi4_slave.w.bits.last
+    // B after write, pull up valid
+    io.axi4_slave.b.valid := RegNext(io.axi4_slave.w.fire && io.axi4_slave.w.bits.last)
 
     io.axi4_slave.b.bits.id := writeId
     io.axi4_slave.b.bits.resp := 0.U

@@ -24,7 +24,7 @@ class ICacheRefiller(MSHRQueueSize: Int)(implicit p: Parameters) extends Module 
         val axi4_master = new AXI4(pa_bits, p(DATA_WIDTH), 4)
     })
 
-    val mshr_buffer = Module(new MSHRQueue(MSHRQueueSize))
+    val mshr_buffer = Module(new ICacheMSHRQueue(MSHRQueueSize))
 
     val refill_start = WireInit(false.B)
     val refill_pa = RegInit(0.U.asTypeOf(new PhysicalAddress))
