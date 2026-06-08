@@ -64,4 +64,5 @@ class DCacheHitInfo(implicit p: Parameters) extends Bundle with HasValid {
     val pa = new PhysicalAddress // cacheline start address
     val hit = Bool()
     val hitWay = UInt(log2Ceil(p(L1CacheWayNum)).W)
+    val data = new DCacheLine
 }

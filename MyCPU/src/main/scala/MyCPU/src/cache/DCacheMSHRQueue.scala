@@ -21,7 +21,6 @@ class DCacheMSHRQueue(size: Int)(implicit p: Parameters) extends Module {
 
     val io = IO(new Bundle {
         val flush = Input(Bool())
-        val stall_from_backpipe = Input(Bool())
         val mem3_enqs = Input(Vec(bankNum, new CacheRefillReq)) // from mem2
         val mem3_enqReady = Output(Bool())
         val deqEnable = Input(Bool())

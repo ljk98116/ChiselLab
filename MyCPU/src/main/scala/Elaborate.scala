@@ -26,5 +26,5 @@ object Elaborate extends App {
         new UseCustomLibraryConfig ++
         new StoreSetConfig
         
-    circt.stage.ChiselStage.emitSystemVerilogFile(new MiddleEnd, args, firtoolOptions)
+    circt.stage.ChiselStage.emitSystemVerilogFile(new DCache, args, firtoolOptions)
 }

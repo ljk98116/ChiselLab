@@ -19,7 +19,6 @@ class DCacheRefiller(MSHRQueueSize: Int)(implicit p: Parameters) extends Module 
 
     val io = IO(new Bundle {
         val flush = Input(Bool())
-        val stall_from_backpipe = Input(Bool())
         // from dcache wb buffer
         val mem4_wb_req = Input(new DCacheWriteBackReq)
         // from dcache sram
@@ -66,7 +65,6 @@ class DCacheRefiller(MSHRQueueSize: Int)(implicit p: Parameters) extends Module 
     // s_read_idle read MSHRQueue deq
     mshr_buffer.io.deqEnable := (rState === s_read_idle)
     mshr_buffer.io.flush := io.flush
-    mshr_buffer.io.stall_from_backpipe := io.stall_from_backpipe
 
     io.mem3_dcache_mshr_enqReady := mshr_buffer.io.mem3_enqReady
 
