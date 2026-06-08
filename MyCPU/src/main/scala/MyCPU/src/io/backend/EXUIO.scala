@@ -33,6 +33,7 @@ class AGUResult(implicit p: Parameters) extends Bundle with HasValid {
     val rd = UInt(p(AREG_WIDTH).W)
     val pd = UInt(p(PREG_WIDTH).W)
     val robLoc = UInt(p(ROBID_WIDTH).W)
+    val wen = Bool()
 }
 
 class LDUResult(implicit p: Parameters) extends Bundle with HasValid {

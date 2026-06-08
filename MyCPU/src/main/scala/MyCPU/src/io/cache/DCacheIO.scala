@@ -18,7 +18,6 @@ class DCacheReq(implicit p: Parameters) extends Bundle with HasValid {
     val wen = Bool()
     val mask = UInt(p(DATA_WIDTH).W)
     val data = UInt(p(DATA_WIDTH).W)
-    val pipeId = UInt(log2Ceil(p(LDU_NUM) + p(STU_NUM)).W)
     val isSignExt = Bool()
     val robLoc = UInt(p(ROBID_WIDTH).W)
 }
@@ -52,6 +51,8 @@ class DCacheWriteBackReq(implicit p: Parameters) extends Bundle with HasValid {
     val valid = Bool()
     val cacheLine = new DCacheLine
     val pa = new PhysicalAddress // cacheline start address
+    val bankId = UInt(bankBits.W)
+    val hitWay = UInt(log2Ceil(p(L1CacheWayNum)).W)
 }
 
 class DCacheHitInfo(implicit p: Parameters) extends Bundle with HasValid {
@@ -65,4 +66,7 @@ class DCacheHitInfo(implicit p: Parameters) extends Bundle with HasValid {
     val hit = Bool()
     val hitWay = UInt(log2Ceil(p(L1CacheWayNum)).W)
     val data = new DCacheLine
+    val robLoc = UInt(p(ROBID_WIDTH).W)
+    val mask = UInt(p(DATA_WIDTH).W)
+    val wdata = UInt(p(DATA_WIDTH).W)
 }

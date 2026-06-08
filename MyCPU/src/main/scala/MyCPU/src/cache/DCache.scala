@@ -26,12 +26,13 @@ class DCache(implicit p: Parameters) extends Module {
         // use bank output to access dtlb at mem1
         val mem1_dtlb_reqs = Output(Vec(bankNum, new DTLBReqInfo))
         // tlb miss, stall
-        val mem2_dtlb_miss_stall = Output(Bool())
+        val mem2_dtlb_miss_infos = Output(Vec(bankNum, new DTLBMissInfo))
         // stall when mshr queue can not enq
         val mem3_mshr_stall = Output(Bool())
         val mem3_dcache_hitInfos = Output(Vec(bankNum, new DCacheHitInfo))
         // stall when waiting queue can not enq
-        val mem4_stall = Input(Bool())
+        val mem4_ldu_stall = Input(Bool())
+        val mem4_stu_stall = Input(Bool())
         val mem4_wb_req = Input(new DCacheWriteBackReq)
         val storeBufferDeqEnable = Output(Bool()) 
         val axi4_master = new AXI4(pa_bits, p(DATA_WIDTH), 4)
@@ -45,23 +46,31 @@ class DCache(implicit p: Parameters) extends Module {
     sram.io.flush := io.flush
     sram.io.mem0_bank_reqs := io.mem0_bank_reqs
     sram.io.mem2_dtlb_resps := io.mem2_dtlb_resps
-    io.mem1_dtlb_reqs := sram.io.mem1_dtlb_reqs
-    io.mem2_dtlb_miss_stall := sram.io.mem2_dtlb_miss_stall
-    io.mem3_mshr_stall := sram.io.mem3_mshr_stall
-    io.mem3_dcache_hitInfos := sram.io.mem3_dcache_hitInfos
+    sram.io.mem4_ldu_stall := io.mem4_ldu_stall
+    sram.io.mem4_stu_stall := io.mem4_stu_stall
+    sram.io.mem4_wb_enq := io.mem4_wb_req
 
     sram.io.dcacheRefillResp := refiller.io.dcache_refill_resp
     sram.io.mem3_dcache_mshr_enqReady := refiller.io.mem3_dcache_mshr_enqReady
+
+    io.mem1_dtlb_reqs := sram.io.mem1_dtlb_reqs
+    io.mem2_dtlb_miss_infos := sram.io.mem2_dtlb_miss_infos
+    io.mem3_mshr_stall := sram.io.mem3_mshr_stall
+    io.mem3_dcache_hitInfos := sram.io.mem3_dcache_hitInfos
+
     refiller.io.mem3_dcache_refill_req := sram.io.mem3_refill_reqs
 
     sram.io.dcacheReplaceRefillResp := policy.io.refillResp
+
     policy.io.hitUpdate := sram.io.dcacheReplaceHitUpdate
     policy.io.refillUpdate := sram.io.dcacheRefillUpdate
 
     // refiller io
     refiller.io.flush := io.flush
     refiller.io.axi4_master <> io.axi4_master
+
     io.storeBufferDeqEnable := refiller.io.storeBufferDeqEnable
+    
     refiller.io.mem4_wb_req := io.mem4_wb_req
 
     policy.io.refillReq := refiller.io.dcacheReplaceRefillReq

@@ -37,3 +37,8 @@ class DTLBRefillReq(implicit p: Parameters) extends Bundle with HasValid {
     val wen = Bool()
     val valid = Bool()
 }
+
+class DTLBMissInfo(implicit p: Parameters) extends Bundle with HasValid {
+    val valid = Bool()
+    val robLoc = UInt(p(ROBID_WIDTH).W)
+}
