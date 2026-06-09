@@ -10,3 +10,4 @@ test_run_dir/**
 *.jou
 *.log
 *.str
+vivado*

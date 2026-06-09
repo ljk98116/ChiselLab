@@ -54,7 +54,7 @@ class MemStages(implicit p: Parameters) extends Module {
     ))
 
     val mem0_st_stalls = WireInit(VecInit(
-        Seq.fill(p(LDU_NUM))(false.B)
+        Seq.fill(p(STU_NUM))(false.B)
     ))
 
     val mem1_ld_stalls = WireInit(VecInit(
@@ -62,7 +62,11 @@ class MemStages(implicit p: Parameters) extends Module {
     ))
     
     val mem1_st_stalls = WireInit(VecInit(
-        Seq.fill(p(LDU_NUM))(false.B)
+        Seq.fill(p(STU_NUM))(false.B)
+    ))
+
+    val mem1_bank_stalls = WireInit(VecInit(
+        Seq.fill(bankNum)(false.B)
     ))
 
     val mem2_ld_stalls = WireInit(VecInit(
@@ -70,7 +74,7 @@ class MemStages(implicit p: Parameters) extends Module {
     ))
     
     val mem2_st_stalls = WireInit(VecInit(
-        Seq.fill(p(LDU_NUM))(false.B)
+        Seq.fill(p(STU_NUM))(false.B)
     ))
 
     val mem3_ld_stalls = WireInit(VecInit(
@@ -78,7 +82,7 @@ class MemStages(implicit p: Parameters) extends Module {
     ))
     
     val mem3_st_stalls = WireInit(VecInit(
-        Seq.fill(p(LDU_NUM))(false.B)
+        Seq.fill(p(STU_NUM))(false.B)
     ))
 
     val skidBuffers = Seq.fill(bankNum)(
@@ -107,16 +111,24 @@ class MemStages(implicit p: Parameters) extends Module {
         ))
     )
 
-    val mem0_skidBuffer_counters = Seq.fill(bankNum)(
-        RegInit(0.U(bankBits.W))
-    )
-
     val mem0_bank_hit_count = Seq.fill(bankNum)(
         WireInit(0.U(bankBits.W))
     )
 
     val mem0_need_stall_mask = Seq.fill(bankNum)(
         WireInit(false.B)
+    )
+
+    val mem0_skidBuffer_heads = Seq.fill(bankNum)(
+        RegInit(0.U(bankBits.W))
+    )
+
+    val mem0_skidBuffer_tails = Seq.fill(bankNum)(
+        RegInit(0.U(bankBits.W))
+    )
+
+    val mem0_skidBuffer_counters = Seq.fill(bankNum)(
+        RegInit(0.U((bankBits + 1).W))
     )
 
     val mem0_results = WireInit(VecInit(
@@ -128,7 +140,7 @@ class MemStages(implicit p: Parameters) extends Module {
         PipeReg(io.ex_ldu_result(i), mem0_ld_stalls(i), io.flush)
     ))
 
-    val mem0_stu_result = VecInit((0 until p(LDU_NUM)).map(i =>
+    val mem0_stu_result = VecInit((0 until p(STU_NUM)).map(i =>
         PipeReg(io.ex_stu_result(i), mem0_st_stalls(i), io.flush)
     ))
 
@@ -168,24 +180,11 @@ class MemStages(implicit p: Parameters) extends Module {
         mem0_has_bank_hits(b) := mem0_bank_hit_mask(b).asUInt.orR
         mem0_bank_hit_idxs(b) := PriorityEncoder(mem0_bank_hit_mask(b))
         mem0_bank_hit_count(b) := PopCount(mem0_bank_hit_mask(b))
-        mem0_need_stall_mask(b) := 
-            mem0_skidBuffer_counters(b) =/= 0.U &&
-            mem0_skidBuffer_counters(b) + mem0_bank_hit_count(b) >= bankNum.U
 
         mem0_bank_hit_prefix_sums(b)(0) := 0.U
         for(i <- 1 until bankNum) {
             mem0_bank_hit_prefix_sums(b)(i) := PopCount(mem0_bank_hit_mask(b).asUInt(i-1, 0))
         }
-
-        mem0_skidBuffer_counters(b) := Mux(
-            mem0_skidBuffer_counters(b) === 0.U,
-            mem0_skidBuffer_counters(b) + mem0_bank_hit_count(b) - 1.U, 
-            Mux(
-                mem0_need_stall_mask.reduce(_ || _),
-                mem0_skidBuffer_counters(b),
-                mem0_skidBuffer_counters(b) + mem0_bank_hit_count(b)
-            )
-        )
 
         val mem0_bank_req = WireInit(0.U.asTypeOf(new DCacheReq))
         mem0_bank_req.valid := mem0_has_bank_hits(b)
@@ -197,45 +196,80 @@ class MemStages(implicit p: Parameters) extends Module {
         mem0_bank_req.isSignExt := mem0_results(mem0_bank_hit_idxs(b)).is_sign_ext
 
         io.mem0_bank_reqs(b) := Mux(
-            mem0_skidBuffer_counters(b) === 0.U,
+            mem0_skidBuffer_heads(b) === mem0_skidBuffer_tails(b),
             Mux(
                 mem0_has_bank_hits(b), 
                 mem0_bank_req,
                 0.U.asTypeOf(new DCacheReq)
             ),
-            skidBuffers(b)(0)
+            skidBuffers(b)(mem0_skidBuffer_heads(b))
+        )
+
+        mem0_need_stall_mask(b) := 
+            mem0_skidBuffer_counters(b) =/= 0.U &&
+            mem0_skidBuffer_counters(b) + mem0_bank_hit_count(b) >= bankNum.U
+
+        mem0_skidBuffer_counters(b) := Mux(
+            mem0_skidBuffer_counters(b) === 0.U,
+            Mux(
+                mem0_bank_hit_count(b) === 0.U, 
+                0.U, 
+                mem0_skidBuffer_counters(b) + mem0_bank_hit_count(b) - 1.U
+            ),
+            Mux(
+                mem0_need_stall_mask(b),
+                mem0_skidBuffer_counters(b),
+                mem0_skidBuffer_counters(b) + mem0_bank_hit_count(b) - !mem1_bank_stalls(b)
+            )
         )
 
         // update skidBuffer
         for(i <- 0 until bankNum) {
             when(
+                mem0_bank_hit_mask(b)(i) && 
                 mem0_skidBuffer_counters(b) === 0.U &&
                 mem0_bank_hit_prefix_sums(b)(i) =/= 0.U
             ) {
-                skidBuffers(b)(mem0_bank_hit_prefix_sums(b)(i) - 1.U).addr := 
-                    mem0_results(i).addr
-                skidBuffers(b)(mem0_bank_hit_prefix_sums(b)(i) - 1.U).data := 
-                    mem0_results(i).wdata
-                skidBuffers(b)(mem0_bank_hit_prefix_sums(b)(i) - 1.U).isSignExt := 
-                    mem0_results(i).is_sign_ext
-                skidBuffers(b)(mem0_bank_hit_prefix_sums(b)(i) - 1.U).mask := 
-                    mem0_results(i).mask
-                skidBuffers(b)(mem0_bank_hit_prefix_sums(b)(i) - 1.U).robLoc := 
-                    mem0_results(i).robLoc
-                skidBuffers(b)(mem0_bank_hit_prefix_sums(b)(i) - 1.U).valid := 
-                    mem0_results(i).valid
-                skidBuffers(b)(mem0_bank_hit_prefix_sums(b)(i) - 1.U).wen := 
-                    mem0_results(i).wen
+                val writeIdx = mem0_skidBuffer_tails(b) + mem0_bank_hit_prefix_sums(b)(i) - 1.U
+                skidBuffers(b)(writeIdx).addr := mem0_results(i).addr
+                skidBuffers(b)(writeIdx).data := mem0_results(i).wdata
+                skidBuffers(b)(writeIdx).isSignExt := mem0_results(i).is_sign_ext
+                skidBuffers(b)(writeIdx).mask := mem0_results(i).mask
+                skidBuffers(b)(writeIdx).robLoc := mem0_results(i).robLoc
+                skidBuffers(b)(writeIdx).valid := mem0_results(i).valid
+                skidBuffers(b)(writeIdx).wen := mem0_results(i).wen
             }.elsewhen(
-                mem0_skidBuffer_counters(b) =/= 0.U && 
+                mem0_bank_hit_mask(b)(i) && 
+                mem0_skidBuffer_counters(b) =/= 0.U &&
                 !mem0_need_stall_mask(b)
             ) {
-                skidBuffers(b)(
-                    mem0_bank_hit_prefix_sums(b)(i) + 
-                    mem0_skidBuffer_counters(b)
-                ) := skidBuffers(b)(i)
+                val writeIdx = mem0_skidBuffer_tails(b) + mem0_bank_hit_prefix_sums(b)(i)
+                skidBuffers(b)(writeIdx).addr := mem0_results(i).addr
+                skidBuffers(b)(writeIdx).data := mem0_results(i).wdata
+                skidBuffers(b)(writeIdx).isSignExt := mem0_results(i).is_sign_ext
+                skidBuffers(b)(writeIdx).mask := mem0_results(i).mask
+                skidBuffers(b)(writeIdx).robLoc := mem0_results(i).robLoc
+                skidBuffers(b)(writeIdx).valid := mem0_results(i).valid
+                skidBuffers(b)(writeIdx).wen := mem0_results(i).wen                
             }
         }
+
+        mem0_skidBuffer_tails(b) := Mux(
+            mem0_need_stall_mask(b), 
+            mem0_skidBuffer_tails(b), 
+            mem0_skidBuffer_tails(b) + 
+            Mux(
+                mem0_skidBuffer_counters(b) === 0.U, 
+                Mux(mem0_bank_hit_count(b) =/= 0.U, mem0_bank_hit_count(b) - 1.U, 0.U),
+                mem0_bank_hit_count(b)
+            )
+        )
+
+        mem0_skidBuffer_heads(b) := Mux(
+            mem0_skidBuffer_counters(b) =/= 0.U && !mem1_bank_stalls(b),
+            mem0_skidBuffer_heads(b) + 1.U,
+            mem0_skidBuffer_heads(b)
+        )
     }
 
     // mem1 stage
@@ -243,7 +277,7 @@ class MemStages(implicit p: Parameters) extends Module {
         PipeReg(mem0_ldu_result(i), mem1_ld_stalls(i), io.flush)
     ))
 
-    val mem1_stu_result = VecInit((0 until p(LDU_NUM)).map(i =>
+    val mem1_stu_result = VecInit((0 until p(STU_NUM)).map(i =>
         PipeReg(mem0_stu_result(i), mem1_st_stalls(i), io.flush)
     ))
 
@@ -252,7 +286,7 @@ class MemStages(implicit p: Parameters) extends Module {
         PipeReg(mem1_ldu_result(i), mem2_ld_stalls(i), io.flush)
     ))
 
-    val mem2_stu_result = VecInit((0 until p(LDU_NUM)).map(i =>
+    val mem2_stu_result = VecInit((0 until p(STU_NUM)).map(i =>
         PipeReg(mem1_stu_result(i), mem2_st_stalls(i), io.flush)
     ))
 
@@ -261,7 +295,7 @@ class MemStages(implicit p: Parameters) extends Module {
         PipeReg(mem2_ldu_result(i), mem3_ld_stalls(i), io.flush)
     ))
 
-    val mem3_stu_result = VecInit((0 until p(LDU_NUM)).map(i =>
+    val mem3_stu_result = VecInit((0 until p(STU_NUM)).map(i =>
         PipeReg(mem2_stu_result(i), mem3_st_stalls(i), io.flush)
     ))
 
@@ -321,7 +355,7 @@ class MemStages(implicit p: Parameters) extends Module {
     // mem4 stage, enq to load/store waiting queue
     // mem4 stage, deq item get real reg data
     val mem4_ldu_enqs = PipeReg(mem3_ldu_enqs, io.mem4_ldu_wb_stall, io.flush)
-    val mem4_stu_enqs = PipeReg(mem3_stu_enqs, io.mem4_ldu_wb_stall, io.flush)
+    val mem4_stu_enqs = PipeReg(mem3_stu_enqs, io.mem4_stu_wb_stall, io.flush)
 
     val mem4_ldu_enqs_o = WireInit(VecInit(
         Seq.fill(p(LDU_NUM))(0.U.asTypeOf(new LoadWbQueueItem))
@@ -450,8 +484,10 @@ class MemStages(implicit p: Parameters) extends Module {
 
         val mem0_bank_conflict_stall_mask = VecInit((0 until bankNum).map(b => 
             mem0_need_stall_mask(b) &&
-            mem0_ldu_result(i).robLoc === io.mem0_bank_reqs(b).robLoc &&
-            mem0_ldu_result(i).valid
+            (
+                mem0_ldu_result(i).robLoc === io.mem0_bank_reqs(b).robLoc ||
+                mem0_bank_hit_mask(b)(i + writePortNum)
+            )
         ))
         mem0_ld_stalls(i) := mem1_ld_stalls(i) || mem0_bank_conflict_stall_mask.asUInt.orR
     }
@@ -468,12 +504,21 @@ class MemStages(implicit p: Parameters) extends Module {
 
         val mem0_bank_conflict_stall_mask = VecInit((0 until bankNum).map(b => 
             mem0_need_stall_mask(b) &&
-            mem0_stu_result(i).robLoc === io.mem0_bank_reqs(b).robLoc &&
-            mem0_stu_result(i).valid
+            (
+                mem0_stu_result(i).robLoc === io.mem0_bank_reqs(b).robLoc ||
+                mem0_bank_hit_mask(b)(i)
+            )
         ))
         mem0_st_stalls(i) := mem1_st_stalls(i) || mem0_bank_conflict_stall_mask.asUInt.orR
     }
 
+    for(b <- 0 until bankNum) {
+        mem1_bank_stalls(b) := 
+            io.mem2_dtlb_miss_infos(b).valid ||
+            io.mem3_mshr_stall ||
+            io.mem4_ldu_wb_stall ||
+            io.mem4_stu_wb_stall
+    }
     io.mem0_ld_bankconflict_stalls := mem0_ld_stalls
     io.mem0_st_bankconflict_stalls := mem0_st_stalls
 }

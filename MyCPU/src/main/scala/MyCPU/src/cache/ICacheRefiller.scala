@@ -14,7 +14,7 @@ class ICacheRefiller(MSHRQueueSize: Int)(implicit p: Parameters) extends Module 
     val pa_bits = (new PhysicalAddress).GetWidth
     val io = IO(new Bundle {
         // from icache sram
-        val if1_icache_refill_req = Input(new ICacheRefillReq)
+        val if1_icache_refill_req = Input(new CacheRefillReq)
         // to replace policy module
         val icacheReplaceRefillReq = Output(new ReplacePolicyRefillReqInfo)
         // to icache sram

@@ -38,7 +38,7 @@ class DCacheSram(implicit p: Parameters) extends Module {
         val mem2_dtlb_resps = Input(Vec(bankNum, new DTLBRespInfo))
         // mem3 stage, stage data, tagV at mem1, judge dcache hit, send refill req 
         // dcache mshr io
-        val mem3_refill_reqs = Output(Vec(bankNum, new DCacheRefillReq))
+        val mem3_refill_reqs = Output(Vec(bankNum, new CacheRefillReq))
         val mem3_dcache_mshr_enqReady = Input(Bool())
         // refill resp, broadcast to load waiting queue to get data
         val dcacheRefillResp = Input(new DCacheRefillResp)
@@ -47,7 +47,7 @@ class DCacheSram(implicit p: Parameters) extends Module {
         // from replace policy module resp
         val dcacheReplaceRefillResp = Input(new ReplacePolicyRefillRespInfo)
         // to replace policy module
-        val dcacheRefillUpdate = Output(new ReplacePolicyRefillUpdateInfo)
+        val dcacheRefillUpdate = Output(new DCacheReplacePolicyRefillUpdateInfo)
         // judge bank output, may need to stall a pipeline
         // use bank output to access dtlb at mem1
         val mem1_dtlb_reqs = Output(Vec(bankNum, new DTLBReqInfo))

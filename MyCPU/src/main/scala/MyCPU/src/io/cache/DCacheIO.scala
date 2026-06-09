@@ -27,11 +27,6 @@ class DCacheReadReq(implicit p: Parameters) extends Bundle with HasValid {
     val index = UInt(p(DCacheIndexBits).W)
 }
 
-class DCacheRefillReq(implicit p: Parameters) extends Bundle with HasValid {
-    val valid = Bool()
-    val pa = new PhysicalAddress
-}
-
 class DCacheRefillResp(implicit p: Parameters) extends Bundle with HasValid {
     val valid = Bool()
     val pa = new PhysicalAddress

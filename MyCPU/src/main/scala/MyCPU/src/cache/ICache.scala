@@ -59,7 +59,7 @@ class ICache(implicit p: Parameters) extends Module {
     sram.io.icacheReplaceRefillResp := policy.io.refillResp
     policy.io.hitUpdate(0) := sram.io.icacheReplaceHitUpdate
     policy.io.refillReq := refiller.io.icacheReplaceRefillReq
-    policy.io.refillUpdate := sram.io.icacheRefillUpdate
+    policy.io.refillUpdate := sram.io.icacheRefillUpdate.asTypeOf(new ReplacePolicyRefillUpdateInfo)
 
     // refiller <> io
     io.axi4_master <> refiller.io.axi4_master

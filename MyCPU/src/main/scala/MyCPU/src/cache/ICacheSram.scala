@@ -24,7 +24,7 @@ class ICacheSram(implicit p: Parameters) extends Module {
         // if1 stage, use ppn to judge hit
         val if1_itlb_resp = Input(Vec(p(FETCH_WIDTH), new ITLBRespInfo))
         // refill req
-        val if2_icache_refill_req = Output(new ICacheRefillReq)
+        val if2_icache_refill_req = Output(new CacheRefillReq)
         val if2_mshr_enqReady = Input(Bool())
         // refill resp
         val icache_refill_resp = Input(new ICacheRefillResp)
@@ -33,7 +33,7 @@ class ICacheSram(implicit p: Parameters) extends Module {
         // from replace policy module resp
         val icacheReplaceRefillResp = Input(new ReplacePolicyRefillRespInfo)
         // to replace policy module
-        val icacheRefillUpdate = Output(new ReplacePolicyRefillUpdateInfo)
+        val icacheRefillUpdate = Output(new ICacheReplacePolicyRefillUpdateInfo)
         // resp
         val if2_icacheline_resp = Output(Vec(p(L1CacheLineLength), UInt(p(DATA_WIDTH).W)))
         val if2_icache_hit = Output(Bool())

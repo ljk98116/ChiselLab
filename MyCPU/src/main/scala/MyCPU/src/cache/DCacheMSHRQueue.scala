@@ -42,10 +42,10 @@ class DCacheMSHRQueue(size: Int)(implicit p: Parameters) extends Module {
             idx => banks(b)(idx).valid && io.mem3_enqs(b).valid &&
                 banks(b)(idx).pa.GetPPN === io.mem3_enqs(b).pa.GetPPN &&
                 banks(b)(idx).pa.bits(
-                    p(L1CacheOffsetBits) + p(FETCH_OFFSET) + p(ICacheIndexBits) - 1, 
+                    p(L1CacheOffsetBits) + p(FETCH_OFFSET) + p(DCacheIndexBits) - 1, 
                     p(L1CacheOffsetBits) + p(FETCH_OFFSET)
                 ) === io.mem3_enqs(b).pa.bits(
-                    p(L1CacheOffsetBits) + p(FETCH_OFFSET) + p(ICacheIndexBits) - 1, 
+                    p(L1CacheOffsetBits) + p(FETCH_OFFSET) + p(DCacheIndexBits) - 1, 
                     p(L1CacheOffsetBits) + p(FETCH_OFFSET)                
                 )
             )).orR

@@ -90,7 +90,7 @@ class DCacheRefiller(MSHRQueueSize: Int)(implicit p: Parameters) extends Module 
 
     io.dcacheReplaceRefillReq.valid := rState === s_read_rresp
     io.dcacheReplaceRefillReq.index := refill_pa.bits(
-        p(ICacheIndexBits) + p(L1CacheOffsetBits) + p(FETCH_OFFSET) - 1,
+        p(DCacheIndexBits) + p(L1CacheOffsetBits) + p(FETCH_OFFSET) - 1,
         p(L1CacheOffsetBits) + p(FETCH_OFFSET)        
     )
 

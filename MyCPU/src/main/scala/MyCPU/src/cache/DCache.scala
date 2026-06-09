@@ -63,7 +63,7 @@ class DCache(implicit p: Parameters) extends Module {
     sram.io.dcacheReplaceRefillResp := policy.io.refillResp
 
     policy.io.hitUpdate := sram.io.dcacheReplaceHitUpdate
-    policy.io.refillUpdate := sram.io.dcacheRefillUpdate
+    policy.io.refillUpdate := sram.io.dcacheRefillUpdate.asTypeOf(new ReplacePolicyRefillUpdateInfo)
 
     // refiller io
     refiller.io.flush := io.flush
