@@ -23,6 +23,10 @@ class MemStages(implicit p: Parameters) extends Module {
         val mem0_st_bankconflict_stalls = Output(Vec(p(STU_NUM), Bool()))
         // to store buffer
         val mem0_stu_result = Output(Vec(p(STU_NUM), new AGUResult))
+        val mem0_storeBufferCanEnq = Input(Bool())
+        val mem2_storeBuffer_resps = Input(Vec(p(LDU_NUM), new StoreBufferRespInfo))
+        val mem2_ld_stalls = Output(Vec(p(LDU_NUM), Bool()))
+        val mem1_ld_results = Output(Vec(p(LDU_NUM), new AGUResult))
         // to dcache
         val mem0_bank_reqs = Output(Vec(bankNum, new DCacheReq))
         val mem4_ldu_wb_stall = Input(Bool())
@@ -39,13 +43,11 @@ class MemStages(implicit p: Parameters) extends Module {
         val mem4_ldu_result = Output(Vec(p(LDU_NUM), new LoadWbQueueItem))
         val mem4_stu_result = Output(Vec(p(STU_NUM), new StoreWbQueueItem))
         // from load / store wb queue
-        val mem4_ldu_deqs = Input(Vec(p(LDU_NUM), new LoadWbQueueItem))
-        val mem4_stu_deqs = Input(Vec(p(STU_NUM), new StoreWbQueueItem))
+        val mem5_ldu_deqs = Input(Vec(p(LDU_NUM), new LoadWbQueueItem))
+        val mem5_stu_deqs = Input(Vec(p(STU_NUM), new StoreWbQueueItem))
         // agu result
-        val mem4_ldu_result_o = Output(Vec(p(LDU_NUM), new LDUResult))
+        val mem5_ldu_result_o = Output(Vec(p(LDU_NUM), new LDUResult))
         // to dcache wb queue
-        val mem4_ldu_stall = Input(Bool())
-        val mem4_stu_stall = Input(Bool())
         val mem4_wb_enqs = Output(Vec(p(STU_NUM), new DCacheWriteBackReq))
     })
 
@@ -307,6 +309,14 @@ class MemStages(implicit p: Parameters) extends Module {
         Seq.fill(p(STU_NUM))(0.U.asTypeOf(new StoreWbQueueItem))
     ))
 
+    val mem3_storeBuffer_resps = VecInit((0 until p(LDU_NUM)).map(i =>
+        PipeReg(io.mem2_storeBuffer_resps(i), mem3_ld_stalls(i), io.flush)
+    ))
+
+    val mem4_storeBuffer_resps = VecInit((0 until p(LDU_NUM)).map(i =>
+        PipeReg(mem3_storeBuffer_resps(i), io.mem4_ldu_wb_stall, io.flush)
+    ))
+
     for(i <- 0 until p(LDU_NUM)) {
         mem3_ldu_enqs(i) := 0.U.asTypeOf(new LoadWbQueueItem)
         for(b <- 0 until bankNum) {
@@ -414,44 +424,45 @@ class MemStages(implicit p: Parameters) extends Module {
 
     io.mem4_ldu_result := mem4_ldu_enqs_o
     io.mem4_stu_result := mem4_stu_enqs_o
+    io.mem1_ld_results := mem1_ldu_result
 
     // load result
     for(i <- 0 until p(LDU_NUM)) {
-        val lineIdx = io.mem4_ldu_deqs(i).pa.bits(
+        val lineIdx = io.mem5_ldu_deqs(i).pa.bits(
             p(FETCH_OFFSET) + p(L1CacheOffsetBits) - 1,
             p(FETCH_OFFSET)
         )
-        val readData = io.mem4_ldu_deqs(i).cacheLine.datas(lineIdx)
-        val readMask = io.mem4_ldu_deqs(i).mask
+        val readData = io.mem5_ldu_deqs(i).cacheLine.datas(lineIdx)
+        val readMask = io.mem5_ldu_deqs(i).mask
 
         val lduResultData = WireInit(0.U(p(DATA_WIDTH).W))
 
         when(readMask === "h000000FF".U) {
-            lduResultData := Mux(io.mem4_ldu_deqs(i).is_sign_ext, Cat(Fill(24, readData(7)), readData(7, 0)), readData)
+            lduResultData := Mux(io.mem5_ldu_deqs(i).is_sign_ext, Cat(Fill(24, readData(7)), readData(7, 0)), readData)
         }.elsewhen(readMask === "h0000FFFF".U) {
-            lduResultData := Mux(io.mem4_ldu_deqs(i).is_sign_ext, Cat(Fill(16, readData(15)), readData(15, 0)), readData)
+            lduResultData := Mux(io.mem5_ldu_deqs(i).is_sign_ext, Cat(Fill(16, readData(15)), readData(15, 0)), readData)
         }.otherwise {
             lduResultData := readData
         }
 
-        io.mem4_ldu_result_o(i).HasRd := io.mem4_ldu_deqs(i).HasRd
-        io.mem4_ldu_result_o(i).pd := io.mem4_ldu_deqs(i).pd
-        io.mem4_ldu_result_o(i).rd := io.mem4_ldu_deqs(i).rd
-        io.mem4_ldu_result_o(i).result := lduResultData
-        io.mem4_ldu_result_o(i).robLoc := io.mem4_ldu_deqs(i).robLoc
-        io.mem4_ldu_result_o(i).valid := io.mem4_ldu_deqs(i).valid
+        io.mem5_ldu_result_o(i).HasRd := io.mem5_ldu_deqs(i).HasRd
+        io.mem5_ldu_result_o(i).pd := io.mem5_ldu_deqs(i).pd
+        io.mem5_ldu_result_o(i).rd := io.mem5_ldu_deqs(i).rd
+        io.mem5_ldu_result_o(i).result := Mux(mem4_storeBuffer_resps(i).valid, mem4_storeBuffer_resps(i).data, lduResultData)
+        io.mem5_ldu_result_o(i).robLoc := io.mem5_ldu_deqs(i).robLoc
+        io.mem5_ldu_result_o(i).valid := io.mem5_ldu_deqs(i).valid
     }
 
     // store result
     for(i <- 0 until p(STU_NUM)) {
-        val lineIdx = io.mem4_stu_deqs(i).pa.bits(
+        val lineIdx = io.mem5_stu_deqs(i).pa.bits(
             p(FETCH_OFFSET) + p(L1CacheOffsetBits) - 1,
             p(FETCH_OFFSET)
         )
-        val writeMask = io.mem4_stu_deqs(i).mask
-        val writeData = io.mem4_stu_deqs(i).cacheLine.datas(lineIdx)
+        val writeMask = io.mem5_stu_deqs(i).mask
+        val writeData = io.mem5_stu_deqs(i).cacheLine.datas(lineIdx)
         val writtenData = WireInit(0.U(p(DATA_WIDTH).W))
-        val wdata = io.mem4_stu_deqs(i).wdata
+        val wdata = io.mem5_stu_deqs(i).wdata
 
         when(writeMask === "h000000FF".U) {
             writtenData := Cat(writeData(p(DATA_WIDTH) - 1, 8), wdata(7, 0))
@@ -462,14 +473,14 @@ class MemStages(implicit p: Parameters) extends Module {
         }
 
         val cacheLineResult = WireInit(0.U.asTypeOf(new DCacheLine))
-        cacheLineResult := io.mem4_stu_deqs(i).cacheLine
+        cacheLineResult := io.mem5_stu_deqs(i).cacheLine
         cacheLineResult.datas(lineIdx) := writtenData
 
-        io.mem4_wb_enqs(i).valid := io.mem4_stu_deqs(i).valid
+        io.mem4_wb_enqs(i).valid := io.mem5_stu_deqs(i).valid
         io.mem4_wb_enqs(i).cacheLine := cacheLineResult
-        io.mem4_wb_enqs(i).pa := io.mem4_stu_deqs(i).pa
-        io.mem4_wb_enqs(i).bankId := io.mem4_stu_deqs(i).bankId
-        io.mem4_wb_enqs(i).hitWay := io.mem4_stu_deqs(i).hitWay
+        io.mem4_wb_enqs(i).pa := io.mem5_stu_deqs(i).pa
+        io.mem4_wb_enqs(i).bankId := io.mem5_stu_deqs(i).bankId
+        io.mem4_wb_enqs(i).hitWay := io.mem5_stu_deqs(i).hitWay
     }
 
     for(i <- 0 until p(LDU_NUM)) {
@@ -492,6 +503,8 @@ class MemStages(implicit p: Parameters) extends Module {
         mem0_ld_stalls(i) := mem1_ld_stalls(i) || mem0_bank_conflict_stall_mask.asUInt.orR
     }
 
+    io.mem2_ld_stalls := mem2_ld_stalls
+
     for(i <- 0 until p(STU_NUM)) {
         mem3_st_stalls(i) := io.mem4_stu_wb_stall || io.mem3_mshr_stall
         val mem2_dtlb_miss_mask = VecInit((0 until bankNum).map(b => 
@@ -509,7 +522,7 @@ class MemStages(implicit p: Parameters) extends Module {
                 mem0_bank_hit_mask(b)(i)
             )
         ))
-        mem0_st_stalls(i) := mem1_st_stalls(i) || mem0_bank_conflict_stall_mask.asUInt.orR
+        mem0_st_stalls(i) := mem1_st_stalls(i) || mem0_bank_conflict_stall_mask.asUInt.orR || !io.mem0_storeBufferCanEnq
     }
 
     for(b <- 0 until bankNum) {
