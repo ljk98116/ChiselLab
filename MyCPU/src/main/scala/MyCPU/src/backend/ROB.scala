@@ -134,7 +134,7 @@ class ROB(implicit p: Parameters) extends Module {
         )
     }
 
-    for(b <- 0 until p(FETCH_WIDTH)) {
+    for(b <- 0 until p(FETCH_WIDTHload robLoc < tail)) {
         headRdyMask(b) := rdyBanks(b)(headRow) | !validBanks(b)(headRow)
     }
 

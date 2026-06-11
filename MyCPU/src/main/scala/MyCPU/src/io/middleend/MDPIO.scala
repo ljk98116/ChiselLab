@@ -22,6 +22,7 @@ class LoadRAWHarvardInfo(implicit p: Parameters) extends Bundle {
     val valid = Bool()
     val loadPC = UInt(p(ADDR_WIDTH).W)
     val storePC = UInt(p(ADDR_WIDTH).W)
+    val ldRobLoc = UInt(p(ROBID_WIDTH).W)
 }
 
 class StoreMDPInfo(implicit p: Parameters) extends Bundle {

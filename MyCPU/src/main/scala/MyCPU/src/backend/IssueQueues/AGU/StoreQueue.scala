@@ -102,7 +102,7 @@ class StoreQueue(implicit p: Parameters) extends Module {
 
       // at ROB head
       val atRobHead = Wire(Bool())
-      atRobHead := VecInit(io.robEnable.map(r => r.valid && r.robId === entry.rob_id)).reduce(_ || _)
+      atRobHead := VecInit(io.robEnable.map(r => r.valid && r.robLoc === entry.robLoc)).reduce(_ || _)
       entry.atRobHead := atRobHead
 
       entry.valid := true.B
@@ -117,7 +117,7 @@ class StoreQueue(implicit p: Parameters) extends Module {
       when(!entry.valid || entry.rdy1 && entry.rdy2) {
         entry.rdy1 := entry.rdy1 || !io.busyTableVec(entry.ps1) || aluWakeup_ps1((i * p(STU_NUM) + b).U)
         entry.rdy2 := entry.rdy2 || !io.busyTableVec(entry.ps2) || aluWakeup_ps2((i * p(STU_NUM) + b).U)
-        val atRobHead = io.robEnable.map(r => r.valid && r.robId === entry.rob_id).reduce(_ || _)
+        val atRobHead = io.robEnable.map(r => r.valid && r.robLoc === entry.robLoc).reduce(_ || _)
         entry.atRobHead := entry.atRobHead || atRobHead
       }
     }

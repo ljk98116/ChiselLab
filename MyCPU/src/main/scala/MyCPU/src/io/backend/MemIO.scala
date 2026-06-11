@@ -7,6 +7,11 @@ import MyCPU.config._
 import org.chipsalliance.cde.config._
 
 class LoadWbQueueItem(implicit p: Parameters) extends Bundle with HasValid {
+    val readPortNum = p(LDU_NUM)
+    val writePortNum = p(STU_NUM)
+    val bankNum = writePortNum + readPortNum
+    val bankBits = log2Ceil(bankNum)
+    
     val valid = Bool()
     val hit = Bool()
     val pa = new PhysicalAddress
@@ -17,6 +22,8 @@ class LoadWbQueueItem(implicit p: Parameters) extends Bundle with HasValid {
     val HasRd = Bool()
     val is_sign_ext = Bool()
     val mask = UInt(p(DATA_WIDTH).W)
+    val bankId = UInt(bankBits.W)
+    val hitWay = UInt(log2Ceil(p(L1CacheWayNum)).W)
 }
 
 class StoreWbQueueItem(implicit p: Parameters) extends Bundle with HasValid {

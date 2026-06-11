@@ -23,7 +23,7 @@ class CommitStage(implicit p: Parameters) extends Module {
 
     for(b <- 0 until p(FETCH_WIDTH)) {
         io.storeEnable(b).valid := io.commit_uops(b).valid && (io.commit_uops(b).opcode === OpcodeVal.SB)
-        io.storeEnable(b).robId := io.commit_uops(b).rob_id
+        io.storeEnable(b).robLoc := io.commit_uops(b).rob_loc
     }
 
     

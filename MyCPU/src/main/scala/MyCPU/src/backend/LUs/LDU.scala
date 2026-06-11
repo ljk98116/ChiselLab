@@ -28,6 +28,7 @@ class LDU(implicit p: Parameters) extends Module {
     result.mask := 0.U
     result.wdata := 0.U
     result.robLoc := io.ldu_item.uop.robLoc
+    result.pc := io.ldu_item.uop.pc
     
     switch(io.ldu_item.uop.funct3) {
         is("b000".U, "b100".U) {

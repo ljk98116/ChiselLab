@@ -28,6 +28,7 @@ class STU(implicit p: Parameters) extends Module {
     result.is_sign_ext := false.B
     result.mask := 0.U
     result.robLoc := io.stu_item.uop.robLoc
+    result.pc := io.stu_item.uop.pc
     
     switch(io.stu_item.uop.funct3) {
         is("b000".U) {

@@ -34,6 +34,7 @@ class DCache(implicit p: Parameters) extends Module {
         val mem4_ldu_stall = Input(Bool())
         val mem4_stu_stall = Input(Bool())
         val mem4_wb_req = Input(new DCacheWriteBackReq)
+        val dcache_refill_way_update = Output(new ReplacePolicyRefillRespInfo)
         val storeBufferDeqEnable = Output(Bool()) 
         val axi4_master = new AXI4(pa_bits, p(DATA_WIDTH), 4)
     })
@@ -74,4 +75,5 @@ class DCache(implicit p: Parameters) extends Module {
     refiller.io.mem4_wb_req := io.mem4_wb_req
 
     policy.io.refillReq := refiller.io.dcacheReplaceRefillReq
+    io.dcache_refill_way_update := policy.io.refillResp
 }

@@ -106,12 +106,12 @@ class LoadQueue(implicit p: Parameters) extends Module {
     for (i <- 0 until perBankSize) {
       // load reached rob top 
       val canExec = VecInit((0 until p(FETCH_WIDTH)).map(j =>
-        io.ldRobEnable(j).valid && (io.ldRobEnable(j).robId === entryRam(b)(i).rob_id) && entryRam(b)(i).valid
+        io.ldRobEnable(j).valid && (io.ldRobEnable(j).robLoc === entryRam(b)(i).robLoc) && entryRam(b)(i).valid
       )).asUInt.orR
 
       val canSpecExec = VecInit((0 until p(SLOT_NUM)).map(j => 
         VecInit((0 until p(FETCH_WIDTH)).map(k => 
-          io.stRobEnable(k).valid && (io.stRobEnable(k).robId === entryRam(b)(i).blockStIds(j)) && entryRam(b)(i).canSpecExec(j)
+          io.stRobEnable(k).valid && (io.stRobEnable(k).robLoc === entryRam(b)(i).blockStIds(j)) && entryRam(b)(i).canSpecExec(j)
         )).asUInt.orR
       ))
 

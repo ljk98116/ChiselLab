@@ -78,12 +78,12 @@ class LDUIQFreeIdBufferWriteReq(implicit p: Parameters) extends Bundle with HasV
 
 class StoreQueueEnable(implicit p: Parameters) extends Bundle with HasValid {
     val valid = Bool()
-    val robId = UInt(p(ROBID_WIDTH).W)
+    val robLoc = UInt(p(ROBID_WIDTH).W)
 }
 
 class LoadQueueEnable(implicit p: Parameters) extends Bundle with HasValid {
     val valid = Bool()
-    val robId = UInt(p(ROBID_WIDTH).W)
+    val robLoc = UInt(p(ROBID_WIDTH).W)
 }
 
 class STUIQEntry(implicit p: Parameters) extends Bundle with HasValid {
