@@ -10,6 +10,45 @@ import MyCPU.io._
 import MyCPU.utils._
 import MyCPU.middleend._
 
+class LoadBufferEntry(implicit p: Parameters) extends Bundle with HasValid {
+    val valid = Bool()
+    val store_pc = UInt(p(ADDR_WIDTH).W) 
+    val aguResult = new AGUResult
+    val atRobTop = Bool()
+}
+
+class LoadBufferPerBankFreeLocQueue(size: Int)(implicit p: Parameters) extends Module {
+    val width = log2Ceil(size)
+    val io = IO(new Bundle {
+        val deqEnable = Input(Bool())
+        val enqEnable = Input(Bool())
+        val enqId = Input(UInt(width.W))
+        val deqId = Output(UInt(width.W))
+        val deqValid = Output(Bool())
+    })
+
+    val headPtr = RegInit(0.U(width.W))
+    val tailPtr = RegInit((size - 1).U(width.W))
+
+    val ram = RegInit(VecInit(
+        Seq.fill(size)(0.U(width.W))
+    ))
+
+    for(i <- 0 until size) {
+        ram(i) := i.U
+    }
+
+    io.deqId := Mux(io.deqEnable && (headPtr =/= tailPtr), ram(headPtr), 0.U)
+    io.deqValid := io.deqEnable && (headPtr =/= tailPtr)
+
+    when((tailPtr + 1.U =/= headPtr) && io.enqEnable) {
+        ram(tailPtr) := io.enqId
+    }
+
+    headPtr := headPtr + io.deqValid
+    tailPtr := tailPtr + ((tailPtr + 1.U =/= headPtr) && io.enqEnable).asUInt
+}
+
 // used for Load RAW harvard mark, enq at ex stage
 // only store LDU result
 // when load reached ROB top, rob enabled, deq
@@ -21,6 +60,7 @@ class LoadBuffer(size: Int)(implicit p: Parameters) extends Module {
     val perBankSize = size / bankNum
     val rowWidth = log2Ceil(perBankSize)
 
+    assert(bankNum == p(LDU_NUM))
     val io = IO(new Bundle {
         val flush = Input(Bool())
         // mem0
@@ -34,26 +74,14 @@ class LoadBuffer(size: Int)(implicit p: Parameters) extends Module {
         val robTailPtr = Input(UInt(p(ROBID_WIDTH).W))
         val mem0_loadBufferCanEnq = Output(Bool())
         // output to rob, mark the load inst as RAW harvard pred err
-        val mem2_loadBuffer_resps = Output(Vec(p(STU_NUM), new LoadRAWHarvardInfo))
+        val load_raw_harvards = Output(Vec(bankNum, new LoadRAWHarvardInfo))
     })
-
-    val headPtr = RegInit(0.U(ptrWidth.W))
-    val tailPtr = RegInit(0.U(ptrWidth.W))
-    val freeCount = RegInit(size.U((ptrWidth + 1).W))
 
     val banks = Seq.fill(bankNum)(
         RegInit(VecInit(
-            Seq.fill(perBankSize)(0.U.asTypeOf(new AGUResult))
+            Seq.fill(perBankSize)(0.U.asTypeOf(new LoadBufferEntry))
         ))
     )
-
-    val atRobTopVec = Seq.fill(bankNum)(
-        RegInit(VecInit(
-            Seq.fill(perBankSize)(false.B)
-        ))
-    )
-
-    val canDeq = headPtr =/= tailPtr
 
     val mem0_ldu_mask = VecInit(
         io.mem0_ldu_results.map(_.valid)
@@ -69,61 +97,6 @@ class LoadBuffer(size: Int)(implicit p: Parameters) extends Module {
 
     val mem0_enqCount = WireInit(0.U((bankBits + 1).W))
 
-    val deqMask = WireInit(VecInit(
-        Seq.fill(bankNum)(false.B)
-    ))
-
-    val deqCount = WireInit(0.U((bankBits + 1).W))
-
-    for(b <- 0 until bankNum) {
-        deqMask(b) := canDeq && 
-            atRobTopVec(b)(headPtr(ptrWidth - 1, bankBits)) &&
-            banks(b)(headPtr(ptrWidth - 1, bankBits)).valid
-    }
-
-    mem0_enqCount := PopCount(mem0_ldu_mask)
-    deqCount := PopCount(deqMask)
-
-    mem0_ldu_prefix_sums(0) := 0.U
-    for(i <- 1 until p(LDU_NUM)) {
-        mem0_ldu_prefix_sums(i) := mem0_ldu_prefix_sums(i-1) + mem0_ldu_mask(i-1)
-    }
-
-    for(i <- 0 until p(LDU_NUM)) {
-        when(io.mem0_ldu_results(i).valid) {
-            mem0_ldu_enqs(mem0_ldu_prefix_sums(i)) := io.mem0_ldu_results(i)
-        }
-    }    
-
-    io.mem0_loadBufferCanEnq := !(freeCount < mem0_enqCount)
-
-    for(i <- 0 until p(LDU_NUM)) {
-        val idx = tailPtr + i.U
-        val bankId = idx(bankBits - 1, 0)
-        val bankRow = idx(ptrWidth - 1, bankBits)
-        for(b <- 0 until bankNum) {
-            when(b.U === bankId && mem0_ldu_enqs(i).valid) {
-                banks(b)(bankRow) := mem0_ldu_enqs(i)
-                atRobTopVec(b)(bankRow) := VecInit((0 until p(FETCH_WIDTH)).map(j => 
-                    io.loadBufferRobEnables(j).valid &&
-                    io.loadBufferRobEnables(j).robLoc === mem0_ldu_enqs(i).robLoc    
-                )).asUInt.orR
-            }
-        }
-    }
-
-    for(i <- 0 until p(LDU_NUM)) {
-        val idx = headPtr + i.U
-        val bankId = idx(bankBits - 1, 0)
-        val bankRow = idx(ptrWidth - 1, bankBits)
-        for(b <- 0 until bankNum) {
-            when(b.U === bankId && banks(b)(bankRow).valid && deqMask(b)) {
-                banks(b)(bankRow).valid := false.B
-                atRobTopVec(b)(bankRow) := false.B
-            }
-        }        
-    }
-
     val addr_los = WireInit(VecInit(
         Seq.fill(p(STU_NUM))(0.U((3 + p(FETCH_OFFSET)).W))
     ))
@@ -132,6 +105,37 @@ class LoadBuffer(size: Int)(implicit p: Parameters) extends Module {
         Seq.fill(p(STU_NUM))(0.U(p(DATA_WIDTH).W))
     ))
 
+    val freeIdQueue = Seq.fill(bankNum)(
+        Module(new LoadBufferPerBankFreeLocQueue(perBankSize))
+    )
+
+    val load_enqueue_ids = WireInit(VecInit(
+        Seq.fill(bankNum)(0.U(rowWidth.W))
+    ))
+
+    mem0_ldu_prefix_sums(0) := 0.U
+    for(i <- 1 until bankNum) {
+        mem0_ldu_prefix_sums(i) := mem0_ldu_prefix_sums(i-1) + io.mem0_ldu_results(i-1).valid
+    }
+
+    for(b <- 0 until bankNum) {
+        when(io.mem0_ldu_results(b).valid) {
+            mem0_ldu_enqs(mem0_ldu_prefix_sums(b)) := io.mem0_ldu_results(b)
+        }
+        freeIdQueue(b).io.deqEnable := mem0_ldu_enqs(b).valid
+        load_enqueue_ids(b) := Mux(freeIdQueue(b).io.deqValid, freeIdQueue(b).io.deqId, 0.U)
+    }
+
+    io.mem0_loadBufferCanEnq := VecInit((0 until p(LDU_NUM)).map(i => 
+        (freeIdQueue(i).io.deqValid && mem0_ldu_enqs(i).valid) ||
+        !mem0_ldu_enqs(i).valid   
+    )).asUInt.andR
+
+    for(i <- 0 until size) {
+        val bankId = i & (bankNum - 1)
+        val bankRow = i.U(ptrWidth - 1, bankBits)
+
+    }
     // get store inst robLoc -> rob head dis
     // get load inst robLoc -> rob head dis
     // 4 cases
@@ -142,7 +146,6 @@ class LoadBuffer(size: Int)(implicit p: Parameters) extends Module {
     // robHead > robTail store robLoc < tail, load robLoc > head -> store robLoc < load robLoc
     // robHead <= robTail, 4 cases, robLoc 1bit
     // 4 bit case table
-
     for(j <- 0 until p(STU_NUM)) {
         addr_los(j) := Cat(io.mem1_stu_results(j).addr(p(FETCH_OFFSET) - 1, 0), "b000".U) // addr_lo * 8
         addr_masks(j) := io.mem1_stu_results(j).mask << addr_los(j)
@@ -160,7 +163,7 @@ class LoadBuffer(size: Int)(implicit p: Parameters) extends Module {
 
         val hitItem = WireInit(0.U.asTypeOf(new AGUResult))
         // need to do pipe here
-        val mem2_st_results = PipeReg(io.mem1_stu_results(j), io.mem2_st_stalls(j), io.flush)
+        val mem2_st_result = PipeReg(io.mem1_stu_results(j), io.mem2_st_stalls(j), io.flush)
         val mem2_originMask = PipeReg(originMask, io.mem2_st_stalls(j), io.flush)
         val mem2_beforeLoadMask = PipeReg(beforeLoadMask, io.mem2_st_stalls(j), io.flush)
         val mem2_beforeLoadMaskRes = WireInit(VecInit(
@@ -178,10 +181,10 @@ class LoadBuffer(size: Int)(implicit p: Parameters) extends Module {
             bankRow := i.U(ptrWidth - 1, bankBits)
 
             val item = banks(bankId)(bankRow)
-            val loadMask = item.mask << Cat(item.addr(p(FETCH_OFFSET) - 1, 0), "b000".U)
+            val loadMask = item.aguResult.mask << Cat(item.aguResult.addr(p(FETCH_OFFSET) - 1, 0), "b000".U)
 
             val robLocFlag = WireInit(false.B)
-            robLocFlag := io.mem1_st_results(j).robLoc < item.robLoc // store before load
+            robLocFlag := io.mem1_stu_results(j).robLoc < item.aguResult.robLoc // store before load
 
             switch(Cat(robPtrFlag, robLocFlag)) {
                 is("b00".U) {
@@ -192,12 +195,12 @@ class LoadBuffer(size: Int)(implicit p: Parameters) extends Module {
                 }
                 is("b10".U) {
                     beforeLoadMask(i) := 
-                        io.mem1_st_results(j).robLoc >= io.robHeadPtr &&
-                        item.robLoc < io.robTailPtr
+                        io.mem1_stu_results(j).robLoc >= io.robHeadPtr &&
+                        item.aguResult.robLoc < io.robTailPtr
                 }
                 is("b11".U) {
-                    beforeLoadMask(i) := !(io.mem1_st_results(j).robLoc >= io.robHeadPtr &&
-                        item.robLoc < io.robTailPtr)
+                    beforeLoadMask(i) := !(io.mem1_stu_results(j).robLoc >= io.robHeadPtr &&
+                        item.aguResult.robLoc < io.robTailPtr)
                 }
             }
 
@@ -206,16 +209,16 @@ class LoadBuffer(size: Int)(implicit p: Parameters) extends Module {
                 item.valid && 
                 io.mem1_stu_results(j).valid &&
                 io.mem1_stu_results(j).addr(p(DATA_WIDTH) - 1, p(FETCH_OFFSET)) === 
-                    item.addr(p(DATA_WIDTH) - 1, p(FETCH_OFFSET))        
+                    item.aguResult.addr(p(DATA_WIDTH) - 1, p(FETCH_OFFSET))        
 
-            mem2_beforeLoadMaskRes(i) := mem2_originMask(i) && mem2_beforeLoadMask(i)                
+            mem2_beforeLoadMaskRes(i) := mem2_originMask(i) && mem2_beforeLoadMask(i) 
+
+            // update load raw harvard store pc
+            // load's store pc may update as the nearest store pc before it
+            // because store execute must be in order
+            when(mem2_beforeLoadMaskRes(i)) {
+                banks(bankId)(bankRow).store_pc := mem2_st_result.pc
+            }               
         }
-
-        hasHit := mem2_beforeLoadMaskRes.asUInt.orR
-        
     }
-
-    tailPtr := Mux(io.mem0_loadBufferCanEnq, tailPtr + mem0_enqCount, tailPtr)
-    headPtr := Mux(canDeq, headPtr + deqCount, headPtr)
-    freeCount := freeCount - mem0_enqCount + deqCount
 }
