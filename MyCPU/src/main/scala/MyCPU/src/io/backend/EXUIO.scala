@@ -81,3 +81,21 @@ class SYSEXUInputInfo(implicit p: Parameters) extends Bundle with HasValid {
     val ps1_data = UInt(p(DATA_WIDTH).W)  
     val ps2_data = UInt(p(DATA_WIDTH).W)
 }
+
+class IntegerUnitInputInfo(implicit p: Parameters) extends Bundle with HasValid {
+    val valid = Bool()
+    val funct3 = UInt(3.W)
+    val funct7 = UInt(7.W)
+    val data1 = UInt(p(DATA_WIDTH).W)
+    val data2 = UInt(p(DATA_WIDTH).W)
+}
+
+class BranchUnitInputInfo(implicit p: Parameters) extends Bundle with HasValid {
+    val valid = Bool()
+    val is_jal = Bool()
+    val funct3 = UInt(3.W)
+    val data1 = UInt(p(DATA_WIDTH).W)
+    val data2 = UInt(p(DATA_WIDTH).W) 
+    val pc = UInt(p(ADDR_WIDTH).W)
+    val imm = UInt(p(DATA_WIDTH).W)   
+}

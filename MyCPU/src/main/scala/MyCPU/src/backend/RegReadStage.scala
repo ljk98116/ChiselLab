@@ -11,6 +11,7 @@ import MyCPU.utils._
 // prepare   enq       select      regread                     ex                                       wb
 // prepare   enq                    select        regread(ex + judge ps1/ps2 == pd ?)                   ex
 // judge use bypass or prf
+// dispatch alu insts to their subunits
 class RegReadStage(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
         val flush = Input(Bool())
@@ -51,6 +52,10 @@ class RegReadStage(implicit p: Parameters) extends Module {
         val ps2SYSEXUReadLoc = Output(Vec(p(SYS_ALU_NUM), UInt(p(PREG_WIDTH).W)))
         val ps1SYSEXUReadData = Input(Vec(p(SYS_ALU_NUM), UInt(p(DATA_WIDTH).W)))
         val ps2SYSEXUReadData = Input(Vec(p(SYS_ALU_NUM), UInt(p(DATA_WIDTH).W)))
+
+        // to alu sub units
+        val integer_inputs = Output(Vec(p(ALU_NUM), new IntegerUnitInputInfo))
+        val branch_inputs = Output(Vec(p(ALU_NUM), new BranchUnitInputInfo))
 
         val alu_items_ready = Output(Vec(p(ALU_NUM), new ALUInputInfo))
         val ldu_items_ready = Output(Vec(p(LDU_NUM), new LDUInputInfo))
