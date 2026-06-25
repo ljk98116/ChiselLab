@@ -121,6 +121,47 @@ class LoadBuffer(size: Int)(implicit p: Parameters) extends Module {
         Seq.fill(bankNum)(0.U(rowWidth.W))
     ))
 
+    io.mem0_loadBufferCanEnq := VecInit((0 until p(LDU_NUM)).map(i => 
+        (freeIdQueue(i).io.deqValid && mem0_ldu_enqs(i).valid) ||
+        !mem0_ldu_enqs(i).valid   
+    )).asUInt.andR
+
+    // update banks
+    val canDeqs = Seq.fill(bankNum)(
+        Seq.fill(perBankSize)(WireInit(false.B))
+    )
+
+    val mem2_beforeLoadMaskResVec = WireInit(VecInit(
+        Seq.fill(size)(
+            VecInit(Seq.fill(p(STU_NUM))(false.B))
+        )
+    ))
+
+    val mem2_st_results = VecInit((0 until p(STU_NUM)).map(j => 
+        PipeReg(io.mem1_stu_results(j), io.mem2_st_stalls(j), io.flush)
+    ))
+
+    // real deq onehot mask
+    val deqHitOHs = Seq.fill(bankNum)(
+        Seq.fill(perBankSize)(WireInit(false.B))
+    )
+
+    // real deq hit
+    val deqHasHits = Seq.fill(bankNum)(
+        WireInit(false.B)
+    )
+
+    // real deq idx
+    val deqHitBankRows = Seq.fill(bankNum)(
+        WireInit(0.U(rowWidth.W))
+    )
+
+    // choose oldest canDeq perbank to deq and release slot
+    // ageMat[i][j] = 1 <=> i is older than j
+    val ageMats = Seq.fill(bankNum)(
+        Seq.fill(perBankSize)(RegInit(0.U(perBankSize.W)))
+    )
+
     mem0_ldu_prefix_sums(0) := 0.U
     for(i <- 1 until bankNum) {
         mem0_ldu_prefix_sums(i) := mem0_ldu_prefix_sums(i-1) + io.mem0_ldu_results(i-1).valid
@@ -133,23 +174,15 @@ class LoadBuffer(size: Int)(implicit p: Parameters) extends Module {
         freeIdQueue(b).io.flush := io.flush
         freeIdQueue(b).io.deqEnable := mem0_ldu_enqs(b).valid
         load_enqueue_ids(b) := Mux(freeIdQueue(b).io.deqValid, freeIdQueue(b).io.deqId, 0.U)
+        freeIdQueue(b).io.enqEnable := deqHasHits(b)
+        freeIdQueue(b).io.enqId := deqHitBankRows(b)
     }
-
-    io.mem0_loadBufferCanEnq := VecInit((0 until p(LDU_NUM)).map(i => 
-        (freeIdQueue(i).io.deqValid && mem0_ldu_enqs(i).valid) ||
-        !mem0_ldu_enqs(i).valid   
-    )).asUInt.andR
-
-    // update banks
-    val canDeqs = Seq.fill(bankNum)(
-        WireInit(VecInit(
-            Seq.fill(perBankSize)(false.B)
-        ))
-    )
 
     for(i <- 0 until size) {
         val bankId = i & (bankNum - 1)
         val bankRow = i.U(ptrWidth - 1, bankBits)
+        val bankRowInt = i >> bankBits
+
         val canDeqMask = WireInit(VecInit(
             Seq.fill(p(LDU_NUM))(false.B)
         ))
@@ -162,27 +195,92 @@ class LoadBuffer(size: Int)(implicit p: Parameters) extends Module {
         }
         canDeq := canDeqMask.asUInt.orR
 
-        canDeqs(bankId)(bankRow) := canDeq
-        
+        canDeqs(bankId)(bankRowInt) := canDeq
+
         when(freeIdQueue(bankId).io.deqValid && load_enqueue_ids(bankId) === i.U) {
             banks(bankId)(bankRow).aguResult := mem0_ldu_enqs(bankId)
+            // ageMat[j][i] = 1
+            for(j <- 0 until perBankSize) {
+                ageMats(bankId)(j) := ageMats(bankId)(j) | (1 << i).U
+            }
         }.elsewhen(io.flush) {
             banks(bankId)(bankRow).aguResult := 0.U.asTypeOf(new AGUResult)
+            for(j <- 0 until perBankSize) {
+                ageMats(bankId)(j) := 0.U
+            }            
         }
+
+        val deqed = WireInit(false.B)
+        deqed := deqHasHits(bankId) && (deqHitBankRows(bankId) === i.U)
 
         when(freeIdQueue(bankId).io.deqValid && load_enqueue_ids(bankId) === i.U) {
             banks(bankId)(bankRow).valid := mem0_ldu_enqs(bankId).valid
-        }.elsewhen(io.flush || canDeq) { // flush or deqed
+        }.elsewhen(io.flush || deqed) { // flush or deqed
             banks(bankId)(bankRow).valid := false.B
         }
 
-        when(mem2_beforeLoadMaskRes(i)) {
-            banks(bankId)(bankRow).store_pc := mem2_st_result.pc
+        val mem2_beforeLoadMaskHitIdx = PriorityEncoder(mem2_beforeLoadMaskResVec(i))
+        val mem2_beforeLoadMaskHasHit = mem2_beforeLoadMaskResVec(i).asUInt.orR
+
+        when(mem2_beforeLoadMaskResVec(i).asUInt.orR) {
+            banks(bankId)(bankRow).store_pc := mem2_st_results(mem2_beforeLoadMaskHitIdx).pc
             banks(bankId)(bankRow).hasRAWHarvard := true.B
-        }.elsewhen(io.flush || canDeq) {
+        }.elsewhen(io.flush || deqed) { // flush or deqed
             banks(bankId)(bankRow).store_pc := 0.U
             banks(bankId)(bankRow).hasRAWHarvard := false.B
         }
+
+        val atRobTopHitMask = WireInit(VecInit(
+            Seq.fill(p(FETCH_WIDTH))(false.B)
+        ))
+
+        val atRobTopHasHit = WireInit(false.B)
+
+        for(j <- 0 until p(FETCH_WIDTH)) {
+            atRobTopHitMask(j) := 
+                banks(bankId)(bankRow).aguResult.robLoc === io.loadBufferRobEnables(j).robLoc && 
+                io.loadBufferRobEnables(j).valid && banks(bankId)(bankRow).valid
+        }
+
+        atRobTopHasHit := atRobTopHitMask.asUInt.orR
+
+        when(atRobTopHasHit) {
+            banks(bankId)(bankRow).atRobTop := true.B
+        }
+
+        // when deqed
+        when(deqed) {
+            ageMats(bankId)(bankRowInt) := 0.U
+        }
+
+        val robLocMatchMask = WireInit(VecInit(
+            Seq.fill(p(FETCH_WIDTH))(false.B)
+        ))
+
+        val robLocHasMatch = WireInit(false.B)
+        val robLocMatchIdx = WireInit(0.U(log2Ceil(p(FETCH_WIDTH)).W))
+
+        for(j <- 0 until p(FETCH_WIDTH)) {
+            robLocMatchMask(j) := io.loadBufferRobEnables(j).valid && 
+                banks(bankId)(bankRow).valid && 
+                io.loadBufferRobEnables(j).robLoc === banks(bankId)(bankRow).aguResult.robLoc
+        }
+
+        robLocHasMatch := robLocMatchMask.asUInt.orR
+        robLocMatchIdx := PriorityEncoder(robLocMatchMask)
+    }
+
+    for(b <- 0 until bankNum) {
+        for(r <- 0 until perBankSize) {
+            deqHitOHs(b)(r) := canDeqs(b)(r) && ageMats(b)(r).asUInt.andR
+        }
+        deqHasHits(b) := deqHitOHs(b).reduce(_||_)
+        deqHitBankRows(b) := PriorityEncoder(VecInit(deqHitOHs(b)))
+
+        io.load_raw_harvards(b).valid := banks(b)(deqHitBankRows(b)).hasRAWHarvard
+        io.load_raw_harvards(b).loadPC := banks(b)(deqHitBankRows(b)).aguResult.pc
+        io.load_raw_harvards(b).storePC := banks(b)(deqHitBankRows(b)).store_pc
+        io.load_raw_harvards(b).ldRobLoc := banks(b)(deqHitBankRows(b)).aguResult.robLoc
     }
 
     // get deq item perbank
@@ -211,7 +309,6 @@ class LoadBuffer(size: Int)(implicit p: Parameters) extends Module {
 
         val hitItem = WireInit(0.U.asTypeOf(new AGUResult))
         // need to do pipe here
-        val mem2_st_result = PipeReg(io.mem1_stu_results(j), io.mem2_st_stalls(j), io.flush)
         val mem2_originMask = PipeReg(originMask, io.mem2_st_stalls(j), io.flush)
         val mem2_beforeLoadMask = PipeReg(beforeLoadMask, io.mem2_st_stalls(j), io.flush)
         val mem2_beforeLoadMaskRes = WireInit(VecInit(
@@ -259,16 +356,8 @@ class LoadBuffer(size: Int)(implicit p: Parameters) extends Module {
                 io.mem1_stu_results(j).addr(p(DATA_WIDTH) - 1, p(FETCH_OFFSET)) === 
                     item.aguResult.addr(p(DATA_WIDTH) - 1, p(FETCH_OFFSET))        
 
-            mem2_beforeLoadMaskRes(i) := mem2_originMask(i) && mem2_beforeLoadMask(i) 
-
-            // update load raw harvard store pc
-            // load's store pc may update as the nearest store pc before it
-            // because store execute must be in order
-            // when(mem2_beforeLoadMaskRes(i)) {
-            //     banks(bankId)(bankRow).store_pc := mem2_st_result.pc
-            // }               
-        }
+            mem2_beforeLoadMaskRes(i) := mem2_originMask(i) && mem2_beforeLoadMask(i)     
+            mem2_beforeLoadMaskResVec(i)(j) := mem2_beforeLoadMaskRes(i)          
+        } 
     }
-
-
 }
