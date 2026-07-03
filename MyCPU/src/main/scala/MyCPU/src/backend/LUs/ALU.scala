@@ -14,6 +14,10 @@ class ALU(implicit p: Parameters) extends Module {
         val flush = Input(Bool())
         val stall_from_backpipe = Input(Bool())
         val alu_item = Input(new ALUInputInfo)
+        val integer_input = Input(new IntegerUnitInputInfo)
+        val branch_input = Input(new BranchUnitInputInfo)
+        val mult_input = Input(new MultUnitInputInfo)
+        val div_input = Input(new DivUnitInputInfo)
 
         val ex_stall = Output(Bool())
         val result = Output(new ALUResult)
@@ -23,6 +27,7 @@ class ALU(implicit p: Parameters) extends Module {
     val integerUnit = Module(new IntegerUnit)
     val multUnit = Module(new MultUnit)
     val divUnit = Module(new DivUnit)
+    val branchUnit = Module(new BranchUnitInputInfo)
 
     val result = WireInit(0.U(p(DATA_WIDTH).W))
     val brTarget = WireInit(0.U(p(ADDR_WIDTH).W))

@@ -56,6 +56,8 @@ class RegReadStage(implicit p: Parameters) extends Module {
         // to alu sub units
         val integer_inputs = Output(Vec(p(ALU_NUM), new IntegerUnitInputInfo))
         val branch_inputs = Output(Vec(p(ALU_NUM), new BranchUnitInputInfo))
+        val mult_inputs = Output(Vec(p(ALU_NUM), new MultUnitInputInfo))
+        val div_inputs = Output(Vec(p(ALU_NUM), new DivUnitInputInfo))
 
         val alu_items_ready = Output(Vec(p(ALU_NUM), new ALUInputInfo))
         val ldu_items_ready = Output(Vec(p(LDU_NUM), new LDUInputInfo))
@@ -215,5 +217,9 @@ class RegReadStage(implicit p: Parameters) extends Module {
 
         io.ps2SYSEXUReadValid(i) := sys_items(i).HasRs2
         io.ps2SYSEXUReadLoc(i) := sys_items(i).ps2        
+    }
+
+    for(i <- 0 until p(ALU_NUM)) {
+        
     }
 }

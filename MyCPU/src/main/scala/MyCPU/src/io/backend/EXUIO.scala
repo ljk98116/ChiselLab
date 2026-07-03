@@ -99,3 +99,18 @@ class BranchUnitInputInfo(implicit p: Parameters) extends Bundle with HasValid {
     val pc = UInt(p(ADDR_WIDTH).W)
     val imm = UInt(p(DATA_WIDTH).W)   
 }
+
+class MultUnitInputInfo(implicit p: Parameters) extends Bundle with HasValid {
+    val valid = Input(Bool())
+    val funct3 = Input(UInt(3.W)) 
+    val data1 = Input(UInt(p(DATA_WIDTH).W))
+    val data2 = Input(UInt(p(DATA_WIDTH).W))
+}
+
+class DivUnitInputInfo(implicit p: Parameters) extends Bundle with HasValid {
+    val valid = Input(Bool())
+    val funct3 = Input(UInt(3.W)) 
+
+    val data1 = Input(UInt(p(DATA_WIDTH).W))
+    val data2 = Input(UInt(p(DATA_WIDTH).W))    
+}
