@@ -74,10 +74,11 @@ class MultUnit(implicit p: Parameters) extends Module {
         val flush = Input(Bool())
         val stall_from_backpipe = Input(Bool())
 
-        val valid = Input(Bool())
-        val funct3 = Input(UInt(3.W)) 
-        val data1 = Input(UInt(p(DATA_WIDTH).W))
-        val data2 = Input(UInt(p(DATA_WIDTH).W))
+        // val valid = Input(Bool())
+        // val funct3 = Input(UInt(3.W)) 
+        // val data1 = Input(UInt(p(DATA_WIDTH).W))
+        // val data2 = Input(UInt(p(DATA_WIDTH).W))
+        val mult_input_info = Input(new MultUnitInputInfo)
 
         val result = Output(UInt(p(DATA_WIDTH).W))
         val resValid = Output(Bool()) 
@@ -89,8 +90,8 @@ class MultUnit(implicit p: Parameters) extends Module {
     val sign_ext_d1 = WireInit(false.B)
     val sign_ext_d2 = WireInit(false.B)
 
-    sign_ext_d1 := io.funct3 =/= Funct3Val.MULHU // MUL/MULH/MULHSU
-    sign_ext_d2 := !io.funct3(1) // MUL/MULH
+    sign_ext_d1 := io.mult_input_info.funct3 =/= Funct3Val.MULHU // MUL/MULH/MULHSU
+    sign_ext_d2 := !io.mult_input_info.funct3(1) // MUL/MULH
 
     // ext d1 and d2
     val sign_ext_data1 = WireInit(0.U(((p(DATA_WIDTH) + 2) * 2).W))
@@ -99,14 +100,14 @@ class MultUnit(implicit p: Parameters) extends Module {
     // judge and ext data
     sign_ext_data1 := 
         Cat(
-            Fill(p(DATA_WIDTH) + 3, sign_ext_d1 && io.data1(p(DATA_WIDTH) - 1)),
-            io.data1,
+            Fill(p(DATA_WIDTH) + 3, sign_ext_d1 && io.mult_input_info.data1(p(DATA_WIDTH) - 1)),
+            io.mult_input_info.data1,
             false.B
         )
     sign_ext_data2 := 
         Cat(
-            sign_ext_d2 && io.data2(p(DATA_WIDTH) - 1), 
-            io.data2, 
+            sign_ext_d2 && io.mult_input_info.data2(p(DATA_WIDTH) - 1), 
+            io.mult_input_info.data2, 
             false.B
         )
 
@@ -132,7 +133,7 @@ class MultUnit(implicit p: Parameters) extends Module {
     for(i <- 0 until(p(DATA_WIDTH) + 2, 2)) {
         val realIdx = i + 1
 
-        booth2BitModules(i / 2).io.en := io.valid
+        booth2BitModules(i / 2).io.en := io.mult_input_info.valid
         booth2BitModules(i / 2).io.x := sign_ext_data1 << i.U
         
         booth2BitModules(i / 2).io.y_sub := sign_ext_data2(realIdx - 1)
@@ -161,7 +162,7 @@ class MultUnit(implicit p: Parameters) extends Module {
 
     cycleCounter := Mux(
         io.multReady, 0.U,
-        Mux(io.valid, cycleCounter + 1.U, cycleCounter)
+        Mux(io.mult_input_info.valid, cycleCounter + 1.U, cycleCounter)
     )
 
     // at most 17 68 bits number
@@ -224,12 +225,12 @@ class MultUnit(implicit p: Parameters) extends Module {
                 boothP(i) := 0.U
             }
         }.otherwise {
-            boothP(i) := Mux(io.valid, booth2BitModules(i).io.p, boothP(i))
+            boothP(i) := Mux(io.mult_input_info.valid, booth2BitModules(i).io.p, boothP(i))
         }
     }
 
     boothP(boothNum - 1) := Mux(
-        io.valid && cycleCounter === 0.U, booth2BitModules(boothNum - 1).io.p, boothP(boothNum - 1)
+        io.mult_input_info.valid && cycleCounter === 0.U, booth2BitModules(boothNum - 1).io.p, boothP(boothNum - 1)
     )
 
     val (sum, carry) = csa3(boothP(0), boothP(1), boothP(boothNum - 1))
@@ -245,10 +246,10 @@ class MultUnit(implicit p: Parameters) extends Module {
 
     io.result := Mux(
         io.multReady,
-        Mux(io.funct3 === 0.U, lo, hi),
+        Mux(io.mult_input_info.funct3 === 0.U, lo, hi),
         0.U
     )
 
-    io.resValid := io.valid && io.multReady
+    io.resValid := io.mult_input_info.valid && io.multReady
     io.multReady := (cycleCounter === 4.U)
 }

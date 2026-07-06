@@ -15,12 +15,12 @@ class DivUnit(implicit p: Parameters) extends Module {
         val flush = Input(Bool())
         val stall_from_backpipe = Input(Bool())
 
-        val valid = Input(Bool())
-        val funct3 = Input(UInt(3.W)) 
+        // val valid = Input(Bool())
+        // val funct3 = Input(UInt(3.W)) 
 
-        val data1 = Input(UInt(p(DATA_WIDTH).W))
-        val data2 = Input(UInt(p(DATA_WIDTH).W))
-
+        // val data1 = Input(UInt(p(DATA_WIDTH).W))
+        // val data2 = Input(UInt(p(DATA_WIDTH).W))
+        val div_input_info = Input(new DivUnitInputInfo)
         val divResult = Output(UInt(p(DATA_WIDTH).W))
         val remResult = Output(UInt(p(DATA_WIDTH).W))
 
@@ -29,9 +29,9 @@ class DivUnit(implicit p: Parameters) extends Module {
         val divReady = Output(Bool())      
     })
 
-    val isREM = io.funct3(1)
-    val isDIV = !io.funct3(1)
-    val isSigned = !io.funct3(0)
+    val isREM = io.div_input_info.funct3(1)
+    val isDIV = !io.div_input_info.funct3(1)
+    val isSigned = !io.div_input_info.funct3(0)
 
     val divResultIsMinus = RegInit(false.B)
     val remResultIsMinus = RegInit(false.B)
@@ -53,15 +53,15 @@ class DivUnit(implicit p: Parameters) extends Module {
     val abs2 = WireInit(0.U(p(DATA_WIDTH).W))
 
     abs1 := Mux(
-        isSigned & io.data1(p(DATA_WIDTH) - 1),
-        ~(io.data1(p(DATA_WIDTH) - 1, 0)) + 1.U,
-        io.data1
+        isSigned & io.div_input_info.data1(p(DATA_WIDTH) - 1),
+        ~(io.div_input_info.data1(p(DATA_WIDTH) - 1, 0)) + 1.U,
+        io.div_input_info.data1
     )
 
     abs2 := Mux(
-        isSigned & io.data2(p(DATA_WIDTH) - 1),
-        ~(io.data2(p(DATA_WIDTH) - 1, 0)) + 1.U,
-        io.data2
+        isSigned & io.div_input_info.data2(p(DATA_WIDTH) - 1),
+        ~(io.div_input_info.data2(p(DATA_WIDTH) - 1, 0)) + 1.U,
+        io.div_input_info.data2
     )
 
     val zero_ext_abs1 = WireInit(0.U((p(DATA_WIDTH) * 2).W))
@@ -73,18 +73,18 @@ class DivUnit(implicit p: Parameters) extends Module {
     zero_ext_abs2 := Cat(false.B, abs2)
 
     divResultIsMinus := isSigned & (
-        io.data1(p(DATA_WIDTH) - 1) ^ io.data2(p(DATA_WIDTH) - 1)
+        io.div_input_info.data1(p(DATA_WIDTH) - 1) ^ io.div_input_info.data2(p(DATA_WIDTH) - 1)
     )
 
-    remResultIsMinus := isSigned & io.data1(p(DATA_WIDTH) - 1)
+    remResultIsMinus := isSigned & io.div_input_info.data1(p(DATA_WIDTH) - 1)
 
     io.divReady := cycleCounter === 33.U
 
     cycleCounter := Mux(
-        io.divReady && io.valid,
+        io.divReady && io.div_input_info.valid,
         0.U,
         Mux(
-            io.valid, 
+            io.div_input_info.valid, 
             cycleCounter + 1.U,
             cycleCounter
         )
@@ -135,5 +135,5 @@ class DivUnit(implicit p: Parameters) extends Module {
         ~(0.U)(p(DATA_WIDTH).W)
     )
 
-    io.resValid := io.divReady && io.valid
+    io.resValid := io.divReady && io.div_input_info.valid
 }

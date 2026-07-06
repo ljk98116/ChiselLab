@@ -9,6 +9,9 @@ import org.chipsalliance.cde.config._
 import MyCPU.config._
 import MyCPU.cache._
 
+import chisel3.stage.ChiselGeneratorAnnotation
+import circt.stage.FirtoolOption
+
 object Elaborate extends App {
     val firtoolOptions = Array(
         "--lowering-options=" + List(
@@ -25,6 +28,15 @@ object Elaborate extends App {
         new UseSv32Config ++
         new UseCustomLibraryConfig ++
         new StoreSetConfig
-        
-    circt.stage.ChiselStage.emitSystemVerilogFile(new LoadBuffer(16), args, firtoolOptions)
+
+    // circt.stage.ChiselStage.emitSystemVerilogFile(
+    //     new DivUnit, 
+    //     args,
+    //     firtoolOptions
+    // )
+    circt.stage.ChiselStage.emitSystemVerilogFile(
+        new ALU,
+        Array("--output-annotation-file", "/home/ljk/Arch/ChiselLab/MyCPUAnno.json") ++ args,
+        firtoolOptions
+    )
 }

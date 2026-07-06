@@ -48,4 +48,5 @@ class BranchUnit(implicit p: Parameters) extends Module {
 
     io.br_jump := br_jump
     io.br_target := br_target    
+    io.result := Mux(io.branch_inputs.is_jal, io.branch_inputs.pc + 4.U, 0.U)
 }

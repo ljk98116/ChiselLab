@@ -13,6 +13,11 @@ class EXStage(implicit p: Parameters) extends Module {
         val flush = Input(Bool())
         val stall_from_backpipe = Input(Bool())
 
+        val integer_inputs = Input(Vec(p(ALU_NUM), new IntegerUnitInputInfo))
+        val branch_inputs = Input(Vec(p(ALU_NUM), new BranchUnitInputInfo))
+        val mult_inputs = Input(Vec(p(ALU_NUM), new MultUnitInputInfo))
+        val div_inputs = Input(Vec(p(ALU_NUM), new DivUnitInputInfo))
+
         val alu_items = Input(Vec(p(ALU_NUM), new ALUInputInfo))
         val ldu_items = Input(Vec(p(LDU_NUM), new LDUInputInfo))
         val stu_items = Input(Vec(p(STU_NUM), new STUInputInfo))
@@ -36,11 +41,21 @@ class EXStage(implicit p: Parameters) extends Module {
     val stu_items = PipeReg(io.stu_items, io.stall_from_backpipe || io.ex_stall, io.flush)
     val sys_items = PipeReg(io.sys_items, io.stall_from_backpipe || io.ex_stall, io.flush)
 
+    val integer_inputs = PipeReg(io.integer_inputs, io.stall_from_backpipe || io.ex_stall, io.flush)
+    val branch_inputs = PipeReg(io.branch_inputs, io.stall_from_backpipe || io.ex_stall, io.flush)
+    val mult_inputs = PipeReg(io.mult_inputs, io.stall_from_backpipe || io.ex_stall, io.flush)
+    val div_inputs = PipeReg(io.div_inputs, io.stall_from_backpipe || io.ex_stall, io.flush)
+
     for(b <- 0 until p(ALU_NUM)) {
         alus(b).io.alu_item := alu_items(b)
         alus(b).io.flush := io.flush
         alus(b).io.stall_from_backpipe := io.stall_from_backpipe
-        
+
+        alus(b).io.integer_input := integer_inputs(b)
+        alus(b).io.branch_input := branch_inputs(b)
+        alus(b).io.mult_input := mult_inputs(b)
+        alus(b).io.div_input := div_inputs(b)
+
         io.aluResult(b) := alus(b).io.result
     }
 

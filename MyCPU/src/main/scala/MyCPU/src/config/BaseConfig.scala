@@ -45,6 +45,6 @@ class BaseConfig extends Config(
         case LDUIQ_SIZE => 16
         case STUIQ_SIZE => 16
         case SYSIQ_SIZE => 8
-        case SIM_FLAG => false
+        case SIM_FLAG => true
     }
 )
