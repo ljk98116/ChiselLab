@@ -78,14 +78,21 @@ class ALU(implicit p: Parameters) extends Module {
         Mux(isRem, divUnit.io.remResult, 0.U)
     )
 
-    resultIdx := PriorityEncoder(Cat(
+    val sel = Cat(
         io.div_input.valid,
         io.mult_input.valid,
         io.branch_input.valid,
         io.integer_input.valid
-    ))
+    )
 
-    result := Mux(io.alu_item.valid, results(resultIdx), 0.U)
+    result := Mux1H(
+        Seq(
+            sel(0) -> results(0),
+            sel(1) -> results(1),
+            sel(2) -> results(2),
+            sel(3) -> results(3)
+        )
+    )
 
     io.uop := Mux(io.alu_item.valid, io.alu_item.uop, 0.U.asTypeOf(new ALUIQEntry))
     io.uop.branchPredInfo.target := Mux(io.branch_input.valid || io.branch_input.is_jal, brTarget, 0.U)

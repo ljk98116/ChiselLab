@@ -11,9 +11,9 @@ import MyCPU.utils._
 // Wallace Tree x Booth 2 bits Impl, have pipeline stall, need several cycles to get result
 // 6 64bits number add within 1 cycle
 // 6 datas -> carry & sum
-class CSA4(width: Int)(implicit p: Parameters) extends Module {
+class CSA3(width: Int)(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
-        val datas  = Input(Vec(4, UInt(width.W)))
+        val datas  = Input(Vec(3, UInt(width.W)))
         val sum    = Output(UInt(width.W))
         val carry = Output(UInt(width.W))
     })
@@ -24,11 +24,10 @@ class CSA4(width: Int)(implicit p: Parameters) extends Module {
         (sum, carry << 1.U) 
     }
 
-    val (sum0, carry0) = csa3(io.datas(0), io.datas(1), io.datas(2))
-    val (sum1, carry1) = csa3(sum0, carry0, io.datas(3))
+    val (sum, carry) = csa3(io.datas(0), io.datas(1), io.datas(2))
 
-    io.sum := sum1
-    io.carry := carry1
+    io.sum := sum
+    io.carry := carry
 }
 
 // get P
@@ -49,8 +48,8 @@ class BoothMult2Bits(width: Int)(implicit p : Parameters) extends Module {
 
     val pp = WireInit(0.U(width.W))
 
-    sel_neg := io.y_add & (io.y & ~io.y_sub | ~io.y & io.y_sub) 
-    sel_pos := ~io.y_add & (io.y & ~io.y_sub | ~io.y & io.y_sub)
+    sel_neg := io.y_add & (io.y ^ io.y_sub) // (io.y & ~io.y_sub | ~io.y & io.y_sub) 
+    sel_pos := ~io.y_add & (io.y ^ io.y_sub) // (io.y & ~io.y_sub | ~io.y & io.y_sub)
 
     sel_double_neg := io.y_add & ~io.y & ~io.y_sub
     sel_double_pos := ~io.y_add & io.y & io.y_sub
@@ -69,6 +68,7 @@ class BoothMult2Bits(width: Int)(implicit p : Parameters) extends Module {
     io.p := Mux(io.en, pp, 0.U)
 }
 
+// non pipeline version
 class MultUnit(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
         val flush = Input(Bool())
@@ -85,6 +85,9 @@ class MultUnit(implicit p: Parameters) extends Module {
 
         val multReady = Output(Bool())      
     })
+    // at most 17 68 bits number, now use 18 datas
+    val adderNum = ((p(DATA_WIDTH) + 2) / 2 + 3 - 1) / 3
+    val boothNum = ((p(DATA_WIDTH) + 2) / 2 + 3 - 1) / 3 * 3
 
     // decode Funct3
     val sign_ext_d1 = WireInit(false.B)
@@ -111,14 +114,9 @@ class MultUnit(implicit p: Parameters) extends Module {
             false.B
         )
 
-    // build booth 2 bits part mult
-    val boothResultVec = RegInit(VecInit(
-        Seq.fill((p(DATA_WIDTH) + 2))(0.U(((p(DATA_WIDTH) + 2) * 2).W))
-    ))
-
     // 17 68bits number
     val boothP = RegInit(VecInit(
-        Seq.fill((p(DATA_WIDTH) + 2) / 2)(
+        Seq.fill(boothNum)(
             0.U(((p(DATA_WIDTH) + 2) * 2).W)
         )
     ))
@@ -126,7 +124,7 @@ class MultUnit(implicit p: Parameters) extends Module {
     // 17 68bits numbers, 17bits c
     // left shift X 2 bits each iter
     // cycle 0 get 17 68bits numbers, 17 bits carry
-    val booth2BitModules = Seq.fill((p(DATA_WIDTH) + 2) / 2)(
+    val booth2BitModules = Seq.fill((p(DATA_WIDTH) + 2) / 2 + 1)(
         Module(new BoothMult2Bits((p(DATA_WIDTH) + 2) * 2))
     )
 
@@ -146,97 +144,60 @@ class MultUnit(implicit p: Parameters) extends Module {
         }
     }
 
+    booth2BitModules(boothNum - 1).io.en := false.B;
+    booth2BitModules(boothNum - 1).io.x := 0.U
+    booth2BitModules(boothNum - 1).io.y := false.B
+    booth2BitModules(boothNum - 1).io.y_sub := false.B
+    booth2BitModules(boothNum - 1).io.y_add := false.B
+    
     // build Wallace tree
-    // 17 / 4 = 4 CSA 4 adders, 1 data left, 1
-    // 8 + 1 / 4 = 2 CSA4 adders, 1 data left, 2
-    // 4 + 1 / 4 = 1 CSA4 adders, 1 data left, 3
-    // 3 datas -> CSA adder and a full adder, 4
-    def csa3(a: UInt, b: UInt, c: UInt): (UInt, UInt) = {
-        var sum = a ^ b ^ c
-        var carry = (a & b) | (a & c) | (b & c)
-        (sum, carry << 1.U) 
-    }
+    // 17 68 bits data, fill all CSA3s, last for 7 periods
+    // 18 / 3 = 6 CSAs -> 18 boothP -> 12 boothP
+    // 12 / 3 = 4 CSAs -> 12 boothP -> 8 boothP
+    // 8 / 3 = 2 CSAs + 2 datas 
+    // 6 / 3 = 2 CSAs
+    // 4 / 3 = 1 CSA + 1 data
+    // 3 / 3 = 1 CSA + 2 datas
+    // do 68 bits add
 
-    // cycleCounter == 4, results done
-    val cycleCounter = RegInit(0.U(3.W))
+    // 5 -> 4 -> 2 -> 2 -> 1 -> 1
+    // cycleCounter == 8, results done
+    val cycleCounter = RegInit(0.U(4.W))
 
-    cycleCounter := Mux(
-        io.multReady, 0.U,
-        Mux(io.mult_input_info.valid, cycleCounter + 1.U, cycleCounter)
-    )
-
-    // at most 17 68 bits number
-    // its a special case, mix CSA4 and CSA3
-
-    val adderNum = (p(DATA_WIDTH) + 2) / 2 / 4
-    val boothNum = (p(DATA_WIDTH) + 2) / 2
-    val CSA4Adders = Seq.fill(adderNum)(
-        Module(new CSA4((p(DATA_WIDTH) + 2) * 2))
+    cycleCounter := Mux(cycleCounter(3), 0.U, cycleCounter + io.mult_input_info.valid.asUInt)
+    
+    val CSA3Adders = Seq.fill(adderNum)(
+        Module(new CSA3((p(DATA_WIDTH) + 2) * 2))
     )
 
     for(i <- 0 until adderNum) {
-        when(!io.multReady) {
-            if(4 * i < boothNum) {
-                CSA4Adders(i).io.datas(0) := boothP(4 * i)
-            }
-            else {
-                CSA4Adders(i).io.datas(0) := 0.U
-            }
-
-            if(4 * i + 1 < boothNum) {
-                CSA4Adders(i).io.datas(1) := boothP(4 * i + 1)
-            }
-            else {
-                CSA4Adders(i).io.datas(1) := 0.U
-            }            
-
-            if(4 * i + 2 < boothNum) {
-                CSA4Adders(i).io.datas(2) := boothP(4 * i + 2)
-            }
-            else {
-                CSA4Adders(i).io.datas(2) := 0.U
-            }
-
-            if(4 * i + 3 < boothNum) {
-                CSA4Adders(i).io.datas(3) := boothP(4 * i + 3)
-            }
-            else {
-                CSA4Adders(i).io.datas(3) := 0.U
-            }
-        }.otherwise {
-            CSA4Adders(i).io.datas(0) := 0.U
-            CSA4Adders(i).io.datas(1) := 0.U
-            CSA4Adders(i).io.datas(2) := 0.U
-            CSA4Adders(i).io.datas(3) := 0.U
-        }
+        CSA3Adders(i).io.datas(0) := boothP(3 * i)
+        CSA3Adders(i).io.datas(1) := boothP(3 * i + 1)
+        CSA3Adders(i).io.datas(2) := boothP(3 * i + 2)
     }
 
-    for(i <- 0 until boothNum - 1) {
-        when(cycleCounter =/= 0.U) {
+    // csa -> booth mapping
+    for(i <- 0 until boothNum) {
+        when(cycleCounter === 1.U) {
+            boothP(i) := RegNext(booth2BitModules(i).io.p)
+        }.otherwise {
             if(i / 2 < adderNum) {
-                if(i % 2 == 1) {
-                    boothP(i) := CSA4Adders(i / 2).io.carry
+                if(i % 2 == 0) {
+                    boothP(i) := CSA3Adders(i / 2).io.sum
                 }
                 else {
-                    boothP(i) := CSA4Adders(i / 2).io.sum
+                    boothP(i) := CSA3Adders(i / 2).io.carry
                 }
             }
             else {
                 boothP(i) := 0.U
             }
-        }.otherwise {
-            boothP(i) := Mux(io.mult_input_info.valid, booth2BitModules(i).io.p, boothP(i))
         }
     }
 
-    boothP(boothNum - 1) := Mux(
-        io.mult_input_info.valid && cycleCounter === 0.U, booth2BitModules(boothNum - 1).io.p, boothP(boothNum - 1)
-    )
-
-    val (sum, carry) = csa3(boothP(0), boothP(1), boothP(boothNum - 1))
     val result = WireInit(0.U(((p(DATA_WIDTH) + 2) * 2).W))
 
-    result := sum + carry
+    result := boothP(0) + boothP(1)
 
     val hi = WireInit(0.U(p(DATA_WIDTH).W))
     val lo = WireInit(0.U(p(DATA_WIDTH).W))
@@ -244,12 +205,10 @@ class MultUnit(implicit p: Parameters) extends Module {
     hi := result(64, 33)
     lo := result(32, 1)
 
-    io.result := Mux(
-        io.multReady,
-        Mux(io.mult_input_info.funct3 === 0.U, lo, hi),
-        0.U
-    )
+    io.result := Mux(io.mult_input_info.funct3 === 0.U, lo, hi)
 
     io.resValid := io.mult_input_info.valid && io.multReady
-    io.multReady := (cycleCounter === 4.U)
+    io.multReady := cycleCounter(3)
 }
+
+// to do: pipelined version

@@ -24,11 +24,15 @@ class DispatchStage(implicit p: Parameters) extends Module {
         // to rob, use dispatch1 reg
         val inorder_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
         val inorder_locs = Input(Vec(p(FETCH_WIDTH), UInt(p(ROBID_WIDTH).W)))
-        // to issue enq stage
+        // to issue enq stage, take apart mult / div
         val load_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
         val store_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
         val alu_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
         val sys_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
+        
+        val mult_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
+        val div_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
+        val rem_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
     })
 
     val dispatch1_renameRes = PipeReg(io.renameRes_i, io.stall_from_backpipe, io.flush)

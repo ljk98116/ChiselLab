@@ -10,6 +10,7 @@ import MyCPU.utils._
 
 // get abs value for signed div, use abs value to div
 // use abs value to select final result
+// non pipeline div
 class DivUnit(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
         val flush = Input(Bool())
@@ -137,3 +138,5 @@ class DivUnit(implicit p: Parameters) extends Module {
 
     io.resValid := io.divReady && io.div_input_info.valid
 }
+
+// to do: pipelined div
