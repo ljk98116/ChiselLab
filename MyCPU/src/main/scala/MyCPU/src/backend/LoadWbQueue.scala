@@ -97,7 +97,6 @@ class LoadWbQueue(size: Int)(implicit p: Parameters) extends Module {
             loadBaseInfoBanks(i)(tailPtr).HasRd := mem5_ldu_enqs(i).HasRd
             loadBaseInfoBanks(i)(tailPtr).is_sign_ext := mem5_ldu_enqs(i).is_sign_ext
             loadBaseInfoBanks(i)(tailPtr).pd := mem5_ldu_enqs(i).pd
-            loadBaseInfoBanks(i)(tailPtr).rd := mem5_ldu_enqs(i).rd
             loadBaseInfoBanks(i)(tailPtr).bankId := mem5_ldu_enqs(i).bankId
         }
     }
@@ -144,7 +143,6 @@ class LoadWbQueue(size: Int)(implicit p: Parameters) extends Module {
             io.mem5_ldu_deqs(b).hitWay := loadCacheInfoBanks(b)(headPtr).hitWay
             io.mem5_ldu_deqs(b).HasRd := loadBaseInfoBanks(b)(headPtr).HasRd
             io.mem5_ldu_deqs(b).pd := loadBaseInfoBanks(b)(headPtr).pd
-            io.mem5_ldu_deqs(b).rd := loadBaseInfoBanks(b)(headPtr).rd
             io.mem5_ldu_deqs(b).is_sign_ext := loadBaseInfoBanks(b)(headPtr).is_sign_ext
         }
     }

@@ -112,7 +112,7 @@
 
 //           // 等待 MultUnit 完成。CSA3/CSA4 实现的 latency 可能不同，给足余量。
 //           var cycle = 0
-//           val maxCycles = 32
+//           val maxCycles = 10
 //           while (!dut.io.multReady.peek().litToBoolean && cycle < maxCycles) {
 //             dut.clock.step(1)
 //             cycle += 1

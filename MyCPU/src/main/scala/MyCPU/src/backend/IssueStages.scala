@@ -20,6 +20,8 @@ class IssueStages(implicit p: Parameters) extends Module {
         val stu_uops = Input(Vec(p(FETCH_WIDTH), new uOp))
         val alu_uops = Input(Vec(p(FETCH_WIDTH), new uOp))
         val sys_uops = Input(Vec(p(FETCH_WIDTH), new uOp))
+        val mult_uops = Input(Vec(p(FETCH_WIDTH), new uOp))
+        val div_uops = Input(Vec(p(FETCH_WIDTH), new uOp))
 
         val issue0_stall = Output(Bool())
         // load / store reached rob top
@@ -34,6 +36,9 @@ class IssueStages(implicit p: Parameters) extends Module {
     })
 
     val alu_iq = Module(new ALUIQ)
+    val mult_iq = Module(new MultIQ)
+    val div_iq = Module(new DivIQ)
+
     val ldu_iq = Module(new LoadQueue)
     val stu_iq = Module(new StoreQueue)
     val sys_iq = Module(new SYSIQ)
@@ -42,6 +47,16 @@ class IssueStages(implicit p: Parameters) extends Module {
     alu_iq.io.stall_from_backpipe := io.stall_from_backpipe
     alu_iq.io.busytableVec := io.busyTableVec
     alu_iq.io.alu_uops := PipeReg(io.alu_uops, io.stall_from_backpipe || io.issue0_stall, io.flush)
+
+    mult_iq.io.flush := io.flush
+    mult_iq.io.stall_from_backpipe := io.stall_from_backpipe
+    mult_iq.io.busytableVec := io.busyTableVec
+    mult_iq.io.alu_uops := PipeReg(io.mult_uops, io.stall_from_backpipe || io.issue0_stall, io.flush)
+
+    div_iq.io.flush := io.flush
+    div_iq.io.stall_from_backpipe := io.stall_from_backpipe
+    div_iq.io.busytableVec := io.busyTableVec
+    div_iq.io.alu_uops := PipeReg(io.div_uops, io.stall_from_backpipe || io.issue0_stall, io.flush)
 
     ldu_iq.io.flush := io.flush
     ldu_iq.io.stall_from_backpipe := io.stall_from_backpipe
@@ -71,5 +86,6 @@ class IssueStages(implicit p: Parameters) extends Module {
 
     io.issue0_stall := 
         alu_iq.io.issue0_stall || ldu_iq.io.issue0_stall || 
-        stu_iq.io.issue0_stall || sys_iq.io.issue0_stall
+        stu_iq.io.issue0_stall || sys_iq.io.issue0_stall ||
+        mult_iq.io.issue0_stall || div_iq.io.issue0_stall
 }

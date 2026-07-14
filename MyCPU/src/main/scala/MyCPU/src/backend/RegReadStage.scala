@@ -77,7 +77,6 @@ class RegReadStage(implicit p: Parameters) extends Module {
     for(i <- 0 until p(ALU_NUM)) {
         results(i).HasRd := io.aluResult(i).HasRd
         results(i).pd := io.aluResult(i).pd
-        results(i).rd := io.aluResult(i).rd
         results(i).result := io.aluResult(i).result
         results(i).valid := io.aluResult(i).valid
     }
@@ -86,7 +85,6 @@ class RegReadStage(implicit p: Parameters) extends Module {
         val idx = i + p(ALU_NUM)
         results(idx).HasRd := io.lduResult(i).HasRd
         results(idx).pd := io.lduResult(i).pd
-        results(idx).rd := io.lduResult(i).rd
         results(idx).result := io.lduResult(i).result
         results(idx).valid := io.lduResult(i).valid        
     }
@@ -95,7 +93,6 @@ class RegReadStage(implicit p: Parameters) extends Module {
         val idx = i + p(ALU_NUM) + p(LDU_NUM)
         results(idx).HasRd := io.sysResult(i).HasRd
         results(idx).pd := io.sysResult(i).pd
-        results(idx).rd := io.sysResult(i).rd
         results(idx).result := io.sysResult(i).result
         results(idx).valid := io.sysResult(i).valid        
     }
@@ -122,10 +119,8 @@ class RegReadStage(implicit p: Parameters) extends Module {
         val ps1HitIndex = PriorityEncoder(ps1HitMask)
         val ps2HitIndex = PriorityEncoder(ps2HitMask)       
 
-        io.alu_items_ready(i).uop := alu_items(i)
-
-        io.alu_items_ready(i).ps1_data := Mux(hasPs1Hit, results(ps1HitIndex).result, io.ps1ALUReadData(i))
-        io.alu_items_ready(i).ps2_data := Mux(hasPs2Hit, results(ps2HitIndex).result, io.ps2ALUReadData(i))
+        // io.alu_items_ready(i).ps1_data := Mux(hasPs1Hit, results(ps1HitIndex).result, io.ps1ALUReadData(i))
+        // io.alu_items_ready(i).ps2_data := Mux(hasPs2Hit, results(ps2HitIndex).result, io.ps2ALUReadData(i))
 
         io.ps1ALUReadValid(i) := alu_items(i).HasRs1
         io.ps1ALUReadLoc(i) := alu_items(i).ps1
@@ -156,7 +151,6 @@ class RegReadStage(implicit p: Parameters) extends Module {
         val ps1HitIndex = PriorityEncoder(ps1HitMask)
         val ps2HitIndex = PriorityEncoder(ps2HitMask)
 
-        io.stu_items_ready(i).uop := stu_items(i)
         io.stu_items_ready(i).ps1_data := Mux(hasPs1Hit, results(ps1HitIndex).result, io.ps1STUReadData(i))
         io.stu_items_ready(i).ps2_data := Mux(hasPs2Hit, results(ps2HitIndex).result, io.ps2STUReadData(i))
 
@@ -179,7 +173,6 @@ class RegReadStage(implicit p: Parameters) extends Module {
         val hasPs1Hit = ps1HitMask.asUInt.orR
         val ps1HitIndex = PriorityEncoder(ps1HitMask)
 
-        io.ldu_items_ready(i).uop := ldu_items(i)
         io.ldu_items_ready(i).ps1_data := Mux(hasPs1Hit, results(ps1HitIndex).result, io.ps1LDUReadData(i))
 
         io.ps1LDUReadValid(i) := ldu_items(i).HasRs1
@@ -208,7 +201,6 @@ class RegReadStage(implicit p: Parameters) extends Module {
         val ps1HitIndex = PriorityEncoder(ps1HitMask)
         val ps2HitIndex = PriorityEncoder(ps2HitMask)
 
-        io.sys_items_ready(i).uop := sys_items(i)
         io.sys_items_ready(i).ps1_data := Mux(hasPs1Hit, results(ps1HitIndex).result, io.ps1SYSEXUReadData(i))
         io.sys_items_ready(i).ps2_data := Mux(hasPs2Hit, results(ps2HitIndex).result, io.ps2SYSEXUReadData(i))
 

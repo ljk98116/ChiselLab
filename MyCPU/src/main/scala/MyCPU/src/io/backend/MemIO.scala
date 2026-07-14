@@ -17,7 +17,6 @@ class LoadWbQueueItem(implicit p: Parameters) extends Bundle with HasValid {
     val pa = new PhysicalAddress
     val cacheLine = new DCacheLine
     val robLoc = UInt(p(ROBID_WIDTH).W)
-    val rd = UInt(p(AREG_WIDTH).W)
     val pd = UInt(p(PREG_WIDTH).W)
     val HasRd = Bool()
     val is_sign_ext = Bool()

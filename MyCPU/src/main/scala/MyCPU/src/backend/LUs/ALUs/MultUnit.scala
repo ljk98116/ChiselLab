@@ -21,7 +21,7 @@ class CSA3(width: Int)(implicit p: Parameters) extends Module {
     def csa3(a: UInt, b: UInt, c: UInt): (UInt, UInt) = {
         var sum = a ^ b ^ c
         var carry = (a & b) | (a & c) | (b & c)
-        (sum, carry << 1.U) 
+        (sum, Cat(carry, false.B)) 
     }
 
     val (sum, carry) = csa3(io.datas(0), io.datas(1), io.datas(2))
@@ -38,34 +38,36 @@ class BoothMult2Bits(width: Int)(implicit p : Parameters) extends Module {
         val y = Input(Bool())
         val y_add = Input(Bool())
         val y_sub = Input(Bool())
-        val p = Output(UInt(width.W))
+
+        val pp = Output(UInt(width.W))
+        val c  = Output(Bool())
     })
 
-    val sel_neg = WireInit(false.B)
-    val sel_pos = WireInit(false.B)
-    val sel_double_neg = WireInit(false.B)
-    val sel_double_pos = WireInit(false.B)
+    val selNeg       =  io.y_add && (io.y ^ io.y_sub)        // -x
+    val selPos       = !io.y_add && (io.y ^ io.y_sub)        // +x
+    val selDoubleNeg =  io.y_add && !io.y && !io.y_sub       // -2x
+    val selDoublePos = !io.y_add &&  io.y &&  io.y_sub       // +2x
 
-    val pp = WireInit(0.U(width.W))
+    val useNeg    = selNeg || selDoubleNeg
+    val useDouble = selDoubleNeg || selDoublePos
+    val nonZero   = selNeg || selPos || selDoubleNeg || selDoublePos
 
-    sel_neg := io.y_add & (io.y ^ io.y_sub) // (io.y & ~io.y_sub | ~io.y & io.y_sub) 
-    sel_pos := ~io.y_add & (io.y ^ io.y_sub) // (io.y & ~io.y_sub | ~io.y & io.y_sub)
+    val x1 = io.x
+    val x2 = Cat(io.x(width - 2, 0), false.B)
 
-    sel_double_neg := io.y_add & ~io.y & ~io.y_sub
-    sel_double_pos := ~io.y_add & io.y & io.y_sub
+    val abs = Mux(useDouble, x2, x1)
 
-    val sel = Cat(sel_neg, sel_pos, sel_double_neg, sel_double_pos)
-
-    pp := Mux1H(
-        Seq(
-            sel(0) -> Cat(io.x(width - 2, 0), false.B),
-            sel(1) -> (~Cat(io.x(width - 2, 0), false.B) + 1.U),
-            sel(2) -> io.x,
-            sel(3) -> (~io.x + 1.U)
-        )
+    io.pp := Mux(
+        io.en && nonZero,
+        Mux(useNeg, ~abs, abs),
+        0.U
     )
 
-    io.p := Mux(io.en, pp, 0.U)
+    io.c := Mux(
+        io.en && useNeg,
+        1.U,
+        0.U
+    )
 }
 
 // non pipeline version
@@ -73,16 +75,9 @@ class MultUnit(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
         val flush = Input(Bool())
         val stall_from_backpipe = Input(Bool())
-
-        // val valid = Input(Bool())
-        // val funct3 = Input(UInt(3.W)) 
-        // val data1 = Input(UInt(p(DATA_WIDTH).W))
-        // val data2 = Input(UInt(p(DATA_WIDTH).W))
         val mult_input_info = Input(new MultUnitInputInfo)
 
         val result = Output(UInt(p(DATA_WIDTH).W))
-        val resValid = Output(Bool()) 
-
         val multReady = Output(Bool())      
     })
     // at most 17 68 bits number, now use 18 datas
@@ -97,9 +92,10 @@ class MultUnit(implicit p: Parameters) extends Module {
     sign_ext_d2 := !io.mult_input_info.funct3(1) // MUL/MULH
 
     // ext d1 and d2
-    val sign_ext_data1 = WireInit(0.U(((p(DATA_WIDTH) + 2) * 2).W))
-    val sign_ext_data2 = WireInit(0.U((p(DATA_WIDTH) + 2).W))
+    val sign_ext_data1 = RegInit(0.U(((p(DATA_WIDTH) + 2) * 2).W))
+    val sign_ext_data2 = RegInit(0.U((p(DATA_WIDTH) + 2).W))
 
+    val cycleCounter = RegInit(0.U(4.W))
     // judge and ext data
     sign_ext_data1 := 
         Cat(
@@ -115,11 +111,9 @@ class MultUnit(implicit p: Parameters) extends Module {
         )
 
     // 17 68bits number
-    val boothP = RegInit(VecInit(
-        Seq.fill(boothNum)(
-            0.U(((p(DATA_WIDTH) + 2) * 2).W)
-        )
-    ))
+    val boothP = Seq.fill(boothNum)(
+        RegInit(0.U(((p(DATA_WIDTH) + 2) * 2).W))
+    )
 
     // 17 68bits numbers, 17bits c
     // left shift X 2 bits each iter
@@ -128,11 +122,12 @@ class MultUnit(implicit p: Parameters) extends Module {
         Module(new BoothMult2Bits((p(DATA_WIDTH) + 2) * 2))
     )
 
+    // cycle1: get boothP and boothC
     for(i <- 0 until(p(DATA_WIDTH) + 2, 2)) {
         val realIdx = i + 1
 
-        booth2BitModules(i / 2).io.en := io.mult_input_info.valid
-        booth2BitModules(i / 2).io.x := sign_ext_data1 << i.U
+        booth2BitModules(i / 2).io.en := io.mult_input_info.valid && cycleCounter === 1.U
+        booth2BitModules(i / 2).io.x := Cat(sign_ext_data1((p(DATA_WIDTH) + 2) * 2 - 1 - i, 0), 0.U(i.W))  // sign_ext_data1 << i.U
         
         booth2BitModules(i / 2).io.y_sub := sign_ext_data2(realIdx - 1)
         booth2BitModules(i / 2).io.y := sign_ext_data2(realIdx)
@@ -161,10 +156,8 @@ class MultUnit(implicit p: Parameters) extends Module {
     // do 68 bits add
 
     // 5 -> 4 -> 2 -> 2 -> 1 -> 1
-    // cycleCounter == 8, results done
-    val cycleCounter = RegInit(0.U(4.W))
-
-    cycleCounter := Mux(cycleCounter(3), 0.U, cycleCounter + io.mult_input_info.valid.asUInt)
+    // cycleCounter == 9, results done
+    cycleCounter := Mux(io.multReady, 0.U, cycleCounter + io.mult_input_info.valid.asUInt)
     
     val CSA3Adders = Seq.fill(adderNum)(
         Module(new CSA3((p(DATA_WIDTH) + 2) * 2))
@@ -178,8 +171,18 @@ class MultUnit(implicit p: Parameters) extends Module {
 
     // csa -> booth mapping
     for(i <- 0 until boothNum) {
-        when(cycleCounter === 1.U) {
-            boothP(i) := RegNext(booth2BitModules(i).io.p)
+        // cycle2: fill boothPs using cycle1's pp and c
+        when(cycleCounter === 2.U) {
+            if(i < boothNum - 1) {
+                boothP(i) := RegNext(booth2BitModules(i).io.pp)
+            }
+            else {
+                boothP(i) := PopCount(
+                    Cat((0 until boothNum - 1).map(j =>
+                        RegNext(booth2BitModules(j).io.c(0))
+                    ))
+                )
+            }
         }.otherwise {
             if(i / 2 < adderNum) {
                 if(i % 2 == 0) {
@@ -207,8 +210,7 @@ class MultUnit(implicit p: Parameters) extends Module {
 
     io.result := Mux(io.mult_input_info.funct3 === 0.U, lo, hi)
 
-    io.resValid := io.mult_input_info.valid && io.multReady
-    io.multReady := cycleCounter(3)
+    io.multReady := cycleCounter === 9.U
 }
 
 // to do: pipelined version

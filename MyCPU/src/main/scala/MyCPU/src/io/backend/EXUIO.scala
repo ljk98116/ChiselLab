@@ -18,9 +18,9 @@ class ALUResult(implicit p: Parameters) extends Bundle with HasValid {
     val valid = Bool()
     val HasRd = Bool()
     val result = UInt(p(DATA_WIDTH).W)
-    val rd = UInt(p(AREG_WIDTH).W)
     val pd = UInt(p(PREG_WIDTH).W)
     val robLoc = UInt(p(ROBID_WIDTH).W)
+    val branchPredInfo = new BranchPredInfo
 }
 
 class AGUResult(implicit p: Parameters) extends Bundle with HasValid {
@@ -30,7 +30,6 @@ class AGUResult(implicit p: Parameters) extends Bundle with HasValid {
     val wdata = UInt(p(DATA_WIDTH).W)
     val mask = UInt(p(DATA_WIDTH).W)
     val is_sign_ext = Bool()
-    val rd = UInt(p(AREG_WIDTH).W)
     val pd = UInt(p(PREG_WIDTH).W)
     val robLoc = UInt(p(ROBID_WIDTH).W)
     val wen = Bool()
@@ -41,7 +40,6 @@ class LDUResult(implicit p: Parameters) extends Bundle with HasValid {
     val valid = Bool()
     val HasRd = Bool()
     val result = UInt(p(DATA_WIDTH).W)
-    val rd = UInt(p(AREG_WIDTH).W)
     val pd = UInt(p(PREG_WIDTH).W)
     val robLoc = UInt(p(ROBID_WIDTH).W)
 }
@@ -50,34 +48,54 @@ class SysResult(implicit p: Parameters) extends Bundle with HasValid {
     val valid = Bool()
     val HasRd = Bool()
     val result = UInt(p(DATA_WIDTH).W)
-    val rd = UInt(p(AREG_WIDTH).W)
     val pd = UInt(p(PREG_WIDTH).W)
     val robLoc = UInt(p(ROBID_WIDTH).W)
 }
 
 class ALUInputInfo(implicit p: Parameters) extends Bundle with HasValid {
     val valid = Bool()
-    val uop = new ALUIQEntry
-    val ps1_data = UInt(p(DATA_WIDTH).W)
-    val ps2_data = UInt(p(DATA_WIDTH).W)
+    val HasRd = Bool()
+    val pd = UInt(p(PREG_WIDTH).W)
+    val robLoc = UInt(p(ROBID_WIDTH).W)
+    val branchPredInfo = new BranchPredInfo
 }
 
 class LDUInputInfo(implicit p: Parameters) extends Bundle with HasValid {
     val valid = Bool()
-    val uop = new LDUIQEntry
+    val pc = UInt(p(ADDR_WIDTH).W)
+    val imm = UInt(p(DATA_WIDTH).W)
+    val funct3 = UInt(3.W)
+    val opcode = UInt(7.W)
+    val HasRd = Bool()
+    val pd = UInt(p(PREG_WIDTH).W)
+    val robLoc = UInt(p(ROBID_WIDTH).W)    
     val ps1_data = UInt(p(DATA_WIDTH).W)  
 }
 
 class STUInputInfo(implicit p: Parameters) extends Bundle with HasValid {
     val valid = Bool()
-    val uop = new STUIQEntry
+    val pc = UInt(p(ADDR_WIDTH).W)
+    val imm = UInt(p(DATA_WIDTH).W)
+    val funct3 = UInt(3.W)
+    val opcode = UInt(7.W)
+    val HasRd = Bool()
+    val pd = UInt(p(PREG_WIDTH).W)
+    val robLoc = UInt(p(ROBID_WIDTH).W)
     val ps1_data = UInt(p(DATA_WIDTH).W)  
     val ps2_data = UInt(p(DATA_WIDTH).W)
 }
 
 class SYSEXUInputInfo(implicit p: Parameters) extends Bundle with HasValid {
     val valid = Bool()
-    val uop = new SYSIQEntry
+    val pc = UInt(p(ADDR_WIDTH).W)
+    val imm = UInt(p(DATA_WIDTH).W)
+    val funct3 = UInt(3.W)
+    val funct7 = UInt(7.W)
+    val opcode = UInt(7.W)
+    val HasRd = Bool()
+    val pd = UInt(p(PREG_WIDTH).W)
+    val robLoc = UInt(p(ROBID_WIDTH).W)
+    val branchPredInfo = new BranchPredInfo
     val ps1_data = UInt(p(DATA_WIDTH).W)  
     val ps2_data = UInt(p(DATA_WIDTH).W)
 }

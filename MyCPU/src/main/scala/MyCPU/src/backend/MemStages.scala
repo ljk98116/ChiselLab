@@ -331,7 +331,6 @@ class MemStages(implicit p: Parameters) extends Module {
                 mem3_ldu_enqs(i).hit := io.mem3_dcache_hitInfos(b).hit
                 mem3_ldu_enqs(i).pa := io.mem3_dcache_hitInfos(b).pa
                 mem3_ldu_enqs(i).pd := mem3_ldu_result(i).pd
-                mem3_ldu_enqs(i).rd := mem3_ldu_result(i).rd
                 mem3_ldu_enqs(i).robLoc := mem3_ldu_result(i).robLoc
                 mem3_ldu_enqs(i).valid := mem3_ldu_result(i).valid
                 mem3_ldu_enqs(i).is_sign_ext := mem3_ldu_result(i).is_sign_ext
@@ -390,7 +389,6 @@ class MemStages(implicit p: Parameters) extends Module {
                 mem4_ldu_enqs_o(i).hit := io.mem3_dcache_hitInfos(b).hit
                 mem4_ldu_enqs_o(i).pa := io.mem3_dcache_hitInfos(b).pa
                 mem4_ldu_enqs_o(i).pd := mem4_ldu_enqs(i).pd
-                mem4_ldu_enqs_o(i).rd := mem4_ldu_enqs(i).rd
                 mem4_ldu_enqs_o(i).robLoc := mem4_ldu_enqs(i).robLoc
                 mem4_ldu_enqs_o(i).valid := mem4_ldu_enqs(i).valid
                 mem4_ldu_enqs_o(i).is_sign_ext := mem4_ldu_enqs(i).is_sign_ext
@@ -447,7 +445,6 @@ class MemStages(implicit p: Parameters) extends Module {
 
         io.mem5_ldu_result_o(i).HasRd := io.mem5_ldu_deqs(i).HasRd
         io.mem5_ldu_result_o(i).pd := io.mem5_ldu_deqs(i).pd
-        io.mem5_ldu_result_o(i).rd := io.mem5_ldu_deqs(i).rd
         io.mem5_ldu_result_o(i).result := Mux(mem4_storeBuffer_resps(i).valid, mem4_storeBuffer_resps(i).data, lduResultData)
         io.mem5_ldu_result_o(i).robLoc := io.mem5_ldu_deqs(i).robLoc
         io.mem5_ldu_result_o(i).valid := io.mem5_ldu_deqs(i).valid

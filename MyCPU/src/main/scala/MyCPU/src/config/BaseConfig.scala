@@ -18,6 +18,9 @@ case object FETCH_OFFSET extends WidthConfig
 case object SIM_FLAG extends FlagConfig
 
 case object ALU_NUM extends WidthConfig
+case object MULT_NUM extends WidthConfig
+case object DIV_NUM extends WidthConfig
+
 case object LDU_NUM extends WidthConfig
 case object STU_NUM extends WidthConfig
 case object SYS_ALU_NUM extends WidthConfig
@@ -37,7 +40,9 @@ class BaseConfig extends Config(
         case ROBID_WIDTH => here(AREG_WIDTH) + 2
         case FETCH_OFFSET => log2Ceil(here(DATA_WIDTH) / 8)
         // 8 ports for Integer PRF
-        case ALU_NUM => 3
+        case ALU_NUM => 2
+        case MULT_NUM => 1
+        case DIV_NUM => 1
         case LDU_NUM => 2
         case STU_NUM => 2
         case SYS_ALU_NUM => 1

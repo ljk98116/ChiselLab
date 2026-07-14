@@ -87,7 +87,6 @@ class SYSIQ(implicit p: Parameters) extends Module {
             entry.ps1 := io.sys_uops(w).ps1
             entry.ps2 := io.sys_uops(w).ps2
             entry.rd := io.sys_uops(w).rd
-            entry.rob_id := io.sys_uops(w).rob_id
             entry.rs1 := io.sys_uops(w).rs1
             entry.rs2 := io.sys_uops(w).rs2
 

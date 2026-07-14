@@ -31,7 +31,6 @@ class PRFWbQueue(size: Int, bankNum: Int)(implicit p: Parameters) extends Module
     for(i <- 0 until p(ALU_NUM)) {
         results(i).HasRd := io.aluResult(i).HasRd
         results(i).pd := io.aluResult(i).pd
-        results(i).rd := io.aluResult(i).rd
         results(i).result := io.aluResult(i).result
         results(i).valid := io.aluResult(i).valid
     }
@@ -40,7 +39,6 @@ class PRFWbQueue(size: Int, bankNum: Int)(implicit p: Parameters) extends Module
         val idx = i + p(ALU_NUM)
         results(idx).HasRd := io.lduResult(i).HasRd
         results(idx).pd := io.lduResult(i).pd
-        results(idx).rd := io.lduResult(i).rd
         results(idx).result := io.lduResult(i).result
         results(idx).valid := io.lduResult(i).valid        
     }
@@ -49,7 +47,6 @@ class PRFWbQueue(size: Int, bankNum: Int)(implicit p: Parameters) extends Module
         val idx = i + p(ALU_NUM) + p(LDU_NUM)
         results(idx).HasRd := io.sysResult(i).HasRd
         results(idx).pd := io.sysResult(i).pd
-        results(idx).rd := io.sysResult(i).rd
         results(idx).result := io.sysResult(i).result
         results(idx).valid := io.sysResult(i).valid        
     }

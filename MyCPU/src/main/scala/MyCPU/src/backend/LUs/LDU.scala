@@ -15,22 +15,20 @@ class LDU(implicit p: Parameters) extends Module {
         val ldu_item = Input(new LDUInputInfo)
 
         val result = Output(new AGUResult)
-        val uop = Output(new LDUIQEntry) 
     })
 
     val result = WireInit(0.U.asTypeOf(new AGUResult))
 
     result.valid := io.ldu_item.valid
-    result.rd := io.ldu_item.uop.rd
-    result.pd := io.ldu_item.uop.pd
-    result.addr := io.ldu_item.ps1_data + io.ldu_item.uop.imm
-    result.is_sign_ext := !io.ldu_item.uop.funct3(2) // except LBU/LHU
+    result.pd := io.ldu_item.pd
+    result.addr := io.ldu_item.ps1_data + io.ldu_item.imm
+    result.is_sign_ext := !io.ldu_item.funct3(2) // except LBU/LHU
     result.mask := 0.U
     result.wdata := 0.U
-    result.robLoc := io.ldu_item.uop.robLoc
-    result.pc := io.ldu_item.uop.pc
+    result.robLoc := io.ldu_item.robLoc
+    result.pc := io.ldu_item.pc
     
-    switch(io.ldu_item.uop.funct3) {
+    switch(io.ldu_item.funct3) {
         is("b000".U, "b100".U) {
             result.mask := "h000000FF".U
         }
@@ -43,5 +41,4 @@ class LDU(implicit p: Parameters) extends Module {
     }
 
     io.result := result
-    io.uop := io.ldu_item.uop
 }

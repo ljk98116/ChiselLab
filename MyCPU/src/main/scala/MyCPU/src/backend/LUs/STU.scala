@@ -15,22 +15,21 @@ class STU(implicit p: Parameters) extends Module {
         val stu_item = Input(new STUInputInfo)
 
         val result = Output(new AGUResult)
-        val uop = Output(new STUIQEntry) 
     })
 
     val result = WireInit(0.U.asTypeOf(new AGUResult))
 
     result.valid := io.stu_item.valid
-    result.rd := io.stu_item.uop.rd
-    result.pd := io.stu_item.uop.pd
-    result.addr := io.stu_item.ps1_data + io.stu_item.uop.imm
+    result.HasRd := false.B
+    result.pd := io.stu_item.pd
+    result.addr := io.stu_item.ps1_data + io.stu_item.imm
     result.wdata := io.stu_item.ps2_data
     result.is_sign_ext := false.B
     result.mask := 0.U
-    result.robLoc := io.stu_item.uop.robLoc
-    result.pc := io.stu_item.uop.pc
+    result.robLoc := io.stu_item.robLoc
+    result.pc := io.stu_item.pc
     
-    switch(io.stu_item.uop.funct3) {
+    switch(io.stu_item.funct3) {
         is("b000".U) {
             result.mask := "h000000FF".U // SB
         }
@@ -43,5 +42,4 @@ class STU(implicit p: Parameters) extends Module {
     }
 
     io.result := result
-    io.uop := io.stu_item.uop
 }
