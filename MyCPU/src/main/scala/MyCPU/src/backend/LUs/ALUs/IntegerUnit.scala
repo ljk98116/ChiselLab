@@ -14,7 +14,33 @@ class IntegerUnit(implicit p: Parameters) extends Module {
         val result = Output(UInt(p(DATA_WIDTH).W))
     })
 
+    val sign_bits = WireInit(0.U(2.W))
+    val less_than = WireInit(false.B)
+
+    sign_bits := Cat(
+        io.integer_input_info.data1(p(DATA_WIDTH)-1), 
+        io.integer_input_info.data2(p(DATA_WIDTH)-1)
+    )
+
+    val op1 = io.integer_input_info.data1
+    val op2 = Mux(io.integer_input_info.is_i_type, io.integer_input_info.imm, io.integer_input_info.data2)
+
+    switch(sign_bits) {
+        is("b00".U, "b11".U) {
+            less_than := io.integer_input_info.data1(p(DATA_WIDTH) - 2, 0) < 
+                io.integer_input_info.data2(p(DATA_WIDTH) - 2, 0)
+        }
+        is("b01".U) {
+            less_than := false.B
+        }
+        is("b10".U) {
+            less_than := true.B
+        }
+    }
+
     val result = WireInit(0.U(p(DATA_WIDTH).W))
+    result := op2
+
     switch(io.integer_input_info.funct3) {
         is(Funct3Val.ADD) {
             switch(io.integer_input_info.funct7) {
@@ -47,7 +73,7 @@ class IntegerUnit(implicit p: Parameters) extends Module {
         }
 
         is(Funct3Val.SLT) {
-            result := Mux(io.integer_input_info.data1.asSInt < io.integer_input_info.data2.asSInt, 1.U, 0.U)
+            result := Mux(less_than, 1.U, 0.U)
         }
 
         is(Funct3Val.SLTU) {
@@ -67,5 +93,6 @@ class IntegerUnit(implicit p: Parameters) extends Module {
         }
     }
 
+    result := Mux(io.integer_input_info.is_auipc, io.integer_input_info.pc + io.integer_input_info.imm, result)
     io.result := Mux(io.integer_input_info.valid, result, 0.U)
 }

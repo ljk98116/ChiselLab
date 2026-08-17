@@ -3,7 +3,7 @@
 #            		   dpicpp   -> obj_file
 PROJ=MyCPU
 ARCH=RV32E
-TOP=L0BTB
+TOP=MemStages
 
 CC = g++
 VERILATOR = verilator
@@ -94,3 +94,7 @@ clean:
 	@rm -rf $(OBJ_DIR) $(SIM_OBJ_DIR)
 	@rm -rf verilog/$(PROJ)
 	@mill -i clean
+
+.PHONY: emulator
+emulator:
+	@echo "Building emulator..."

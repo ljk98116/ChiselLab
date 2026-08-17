@@ -16,6 +16,10 @@ class PRFWbQueue(size: Int, bankNum: Int)(implicit p: Parameters) extends Module
         val aluResult = Input(Vec(p(ALU_NUM), new ALUResult))
         val lduResult = Input(Vec(p(LDU_NUM), new LDUResult))
         val sysResult = Input(Vec(p(SYS_ALU_NUM), new SysResult))
+
+        val multResult = Input(Vec(p(MULT_NUM), new ALUResult))
+        val divResult = Input(Vec(p(DIV_NUM), new ALUResult))
+
         val enqReady = Output(Bool())
         val deq = Output(Vec(bankNum, new PRFWriteReq))
     })
@@ -49,6 +53,24 @@ class PRFWbQueue(size: Int, bankNum: Int)(implicit p: Parameters) extends Module
         results(idx).pd := io.sysResult(i).pd
         results(idx).result := io.sysResult(i).result
         results(idx).valid := io.sysResult(i).valid        
+    }
+
+    if(p(UseRV32IM)) {
+        for(i <- 0 until p(MULT_NUM)) {
+            val idx = i + p(ALU_NUM) + p(LDU_NUM) + p(SYS_ALU_NUM)
+            results(idx).HasRd := io.multResult(i).HasRd
+            results(idx).pd := io.multResult(i).pd
+            results(idx).result := io.multResult(i).result
+            results(idx).valid := io.multResult(i).valid        
+        }
+
+        for(i <- 0 until p(DIV_NUM)) {
+            val idx = i + p(ALU_NUM) + p(LDU_NUM) + p(SYS_ALU_NUM) + p(MULT_NUM)
+            results(idx).HasRd := io.divResult(i).HasRd
+            results(idx).pd := io.divResult(i).pd
+            results(idx).result := io.divResult(i).result
+            results(idx).valid := io.divResult(i).valid        
+        }
     }
 
     for(b <- 0 until bankNum) {

@@ -16,7 +16,6 @@ class ALUIQEntry(implicit p: Parameters) extends Bundle with HasValid {
     val funct3 = UInt(3.W)
     val funct7 = UInt(7.W)
     val opcode = UInt(7.W)
-    val lat = UInt(3.W)
     val HasRs1 = Bool()
     val HasRs2 = Bool()
     val HasRd = Bool()
@@ -50,7 +49,7 @@ class LDUIQEntry(implicit p: Parameters) extends Bundle with HasValid {
     val pd = UInt(p(PREG_WIDTH).W)
     val old_pd = UInt(p(PREG_WIDTH).W)
     val rob_id = UInt(p(ROBID_WIDTH).W)
-    val LDSpecExec = Bool()
+    val LDSpecExec = Vec(p(SLOT_NUM),Bool())
     val branchPredInfo = new BranchPredInfo
     val rdy1 = Bool()
     val rdy2 = Bool()
@@ -103,10 +102,22 @@ class STUIQEntry(implicit p: Parameters) extends Bundle with HasValid {
     val pd = UInt(p(PREG_WIDTH).W)
     val old_pd = UInt(p(PREG_WIDTH).W)
     val rob_id = UInt(p(ROBID_WIDTH).W)
-    val LDSpecExec = Bool()
+    val LDSpecExec = Vec(p(SLOT_NUM),Bool())
     val branchPredInfo = new BranchPredInfo
     val rdy1 = Bool()
     val rdy2 = Bool()    
     val atRobHead = Bool()
     val robLoc = UInt(p(ROBID_WIDTH).W)
+}
+
+class WakeUpQueueEntry(implicit p: Parameters) extends Bundle with HasValid {
+    val valid = Bool()
+    val HasRd = Bool()
+    val pd = UInt(p(PREG_WIDTH).W)
+}
+
+object WakeUpQueuePortNum {
+    def apply(implicit p: Parameters) = {
+        p(ALU_NUM) + p(MULT_NUM) + p(SYS_ALU_NUM)
+    }
 }

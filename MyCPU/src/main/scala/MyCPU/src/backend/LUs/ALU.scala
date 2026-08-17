@@ -12,7 +12,6 @@ import MyCPU.utils._
 class ALU(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
         val flush = Input(Bool())
-        val stall_from_backpipe = Input(Bool())
         val alu_item = Input(new ALUInputInfo)
 
         val integer_input = Input(new IntegerUnitInputInfo)

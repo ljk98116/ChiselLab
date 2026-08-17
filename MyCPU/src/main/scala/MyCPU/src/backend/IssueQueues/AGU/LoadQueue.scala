@@ -16,13 +16,14 @@ class LoadQueue(implicit p: Parameters) extends Module {
 
   val freeIdBuffer = Module(new LDUIQFreeIdBuffer)
 
+  val wakeUpPortNum = WakeUpQueuePortNum(p)
   val io = IO(new Bundle {
     val flush = Input(Bool())
     val stall_from_backpipe = Input(Bool())
     val ldu_uops = Input(Vec(p(FETCH_WIDTH), new uOp))
     val issue0_stall = Output(Bool())
     val busytableVec = Input(UInt((1 << p(PREG_WIDTH)).W))
-    val aluSelectRes = Input(Vec(p(ALU_NUM), new ALUIQEntry))
+    val wakeup_signals = Input(Vec(wakeUpPortNum, new WakeUpQueueEntry))
     val ldRobEnable = Input(Vec(p(FETCH_WIDTH), new LoadQueueEnable))
     val stRobEnable = Input(Vec(p(FETCH_WIDTH), new StoreQueueEnable))
     val lduiq_o = Output(Vec(p(LDU_NUM), new LDUIQEntry))
@@ -44,7 +45,7 @@ class LoadQueue(implicit p: Parameters) extends Module {
   }
 
   val skidBuffers = Seq.fill(p(LDU_NUM))(
-    Module(new MultiPortQueueNW1R(p(FETCH_WIDTH), p(FETCH_WIDTH) / p(LDU_NUM), new BufferItem))
+    Module(new MultiPortQueueNW1R(p(FETCH_WIDTH) * 2, p(FETCH_WIDTH) / p(LDU_NUM), new BufferItem))
   )
 
   val enqUops = RegInit(VecInit(
@@ -115,25 +116,31 @@ class LoadQueue(implicit p: Parameters) extends Module {
         )).asUInt.orR
       ))
 
-      val aluWakeUp1 = VecInit((0 until p(ALU_NUM)).map(j =>
-        io.aluSelectRes(j).HasRd && enqUops(b).HasRs1 && io.aluSelectRes(j).pd === enqUops(b).ps1
-      )).asUInt.orR
-
-      val aluWakeUp2 = VecInit((0 until p(ALU_NUM)).map(j =>
-        io.aluSelectRes(j).HasRd && enqUops(b).HasRs2 && io.aluSelectRes(j).pd === enqUops(b).ps2
-      )).asUInt.orR
-
       when(i.U === enqLocs(b)(ptrWidth-1, bankBits) && enqUops(b).valid) {
+        val wakeUp1 = VecInit((0 until wakeUpPortNum).map(j =>
+          io.wakeup_signals(j).HasRd && enqUops(b).HasRs1 && io.wakeup_signals(j).pd === enqUops(b).ps1
+        )).asUInt.orR
+
+        val wakeUp2 = VecInit((0 until wakeUpPortNum).map(j =>
+          io.wakeup_signals(j).HasRd && enqUops(b).HasRs2 && io.wakeup_signals(j).pd === enqUops(b).ps2
+        )).asUInt.orR
         val iq_entry = WireInit(0.U.asTypeOf(new LDUIQEntry))
         iq_entry := enqUops(b).asTypeOf(new LDUIQEntry)  // 直接类型转换减少重复赋值
-        iq_entry.rdy1 := !io.busytableVec(enqUops(b).ps1) || aluWakeUp1
-        iq_entry.rdy2 := !io.busytableVec(enqUops(b).ps2) || aluWakeUp2
+        iq_entry.rdy1 := !io.busytableVec(enqUops(b).ps1) || wakeUp1
+        iq_entry.rdy2 := !io.busytableVec(enqUops(b).ps2) || wakeUp2
         iq_entry.LDSpecExec(0) := enqUops(b).LDSpecExec(0) || canSpecExec(0) || canExec
         iq_entry.LDSpecExec(1) := enqUops(b).LDSpecExec(1) || canSpecExec(1) || canExec
         entryRam(b)(enqLocs(b)(ptrWidth-1, bankBits)) := iq_entry
       }.otherwise {
-        entryRam(b)(i).rdy1 := entryRam(b)(i).rdy1 || aluWakeUp1 || !io.busytableVec(entryRam(b)(i).ps1)
-        entryRam(b)(i).rdy2 := entryRam(b)(i).rdy2 || aluWakeUp2 || !io.busytableVec(entryRam(b)(i).ps2)
+        val wakeUp1 = VecInit((0 until wakeUpPortNum).map(j =>
+          io.wakeup_signals(j).HasRd && entryRam(b)(i).HasRs1 && io.wakeup_signals(j).pd === entryRam(b)(i).ps1
+        )).asUInt.orR
+
+        val wakeUp2 = VecInit((0 until wakeUpPortNum).map(j =>
+          io.wakeup_signals(j).HasRd && entryRam(b)(i).HasRs2 && io.wakeup_signals(j).pd === entryRam(b)(i).ps2
+        )).asUInt.orR
+        entryRam(b)(i).rdy1 := entryRam(b)(i).rdy1 || wakeUp1 || !io.busytableVec(entryRam(b)(i).ps1)
+        entryRam(b)(i).rdy2 := entryRam(b)(i).rdy2 || wakeUp2 || !io.busytableVec(entryRam(b)(i).ps2)
         entryRam(b)(i).LDSpecExec(0) := entryRam(b)(i).LDSpecExec(0) || canSpecExec(0) || canExec
         entryRam(b)(i).LDSpecExec(1) := entryRam(b)(i).LDSpecExec(1) || canSpecExec(1) || canExec
       }

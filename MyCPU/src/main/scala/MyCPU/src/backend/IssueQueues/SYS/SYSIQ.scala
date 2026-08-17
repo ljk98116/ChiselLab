@@ -13,13 +13,14 @@ class SYSIQ(implicit p: Parameters) extends Module {
     val perBankSize = p(SYSIQ_SIZE) / p(SYS_ALU_NUM)
     val ptrWidth = log2Ceil(p(SYSIQ_SIZE))
     val perBankPtrWidth = log2Ceil(perBankSize)
+    val wakeUpPortNum = WakeUpQueuePortNum(p)
 
     val io = IO(new Bundle {
         val flush = Input(Bool())
         val stall_from_backpipe = Input(Bool())
         val sys_uops = Input(Vec(p(FETCH_WIDTH), new uOp))
-        val aluSelectRes = Input(Vec(p(ALU_NUM), new ALUIQEntry))
         val issue0_stall = Output(Bool())
+        val wakeup_signals = Input(Vec(wakeUpPortNum, new WakeUpQueueEntry))
         val busyTableVec = Input(UInt((1 << p(PREG_WIDTH)).W))
         val sysiq_o = Output(Vec(p(SYS_ALU_NUM), new SYSIQEntry))        
     })
@@ -57,8 +58,8 @@ class SYSIQ(implicit p: Parameters) extends Module {
     val aluWakeup_ps2 = Wire(Vec(p(SYSIQ_SIZE), Bool()))
 
     for (i <- 0 until p(SYSIQ_SIZE)) {
-        aluWakeup_ps1(i) := io.aluSelectRes.map(a => a.HasRd && (a.pd === banks(i % p(SYS_ALU_NUM))(i / p(SYS_ALU_NUM)).ps1)).reduce(_ || _)
-        aluWakeup_ps2(i) := io.aluSelectRes.map(a => a.HasRd && (a.pd === banks(i % p(SYS_ALU_NUM))(i / p(SYS_ALU_NUM)).ps2)).reduce(_ || _)
+        aluWakeup_ps1(i) := io.wakeup_signals.map(a => a.HasRd && (a.pd === banks(i % p(SYS_ALU_NUM))(i / p(SYS_ALU_NUM)).ps1)).reduce(_ || _)
+        aluWakeup_ps2(i) := io.wakeup_signals.map(a => a.HasRd && (a.pd === banks(i % p(SYS_ALU_NUM))(i / p(SYS_ALU_NUM)).ps2)).reduce(_ || _)
     }    
 
     // --- Enqueue logic ---

@@ -44,14 +44,17 @@ class ALUIQFreeIdBuffer(implicit p: Parameters) extends Module {
     val recycle_writeReq = PipeReg(io.writeReq, io.stall_from_backpipe, io.flush)
     val writeCount = PopCount(recycle_writeReq.map(_.valid))
 
-    val used = tailPtr - headPtr
-    val free = totalSize.U - used
-
-    io.deqReady := free + readCount <= totalSize.U
-
     // read
     val readData = WireInit(VecInit(
         Seq.fill(p(FETCH_WIDTH))(0.U(ptrWidth.W))
+    ))
+
+    val readAbleVec = WireInit(VecInit(
+        Seq.fill(p(ALU_NUM))(false.B)
+    ))
+
+    val deqReadyVec = WireInit(VecInit(
+        Seq.fill(p(ALU_NUM))(false.B)
     ))
 
     for(i <- 0 until p(FETCH_WIDTH)) {
@@ -59,14 +62,21 @@ class ALUIQFreeIdBuffer(implicit p: Parameters) extends Module {
         val rd_bank = rd_idx(bankBits - 1, 0)
         val rd_row = rd_idx(ptrWidth - 1, bankBits)
 
-        for(b <- 0 until p(ALU_NUM)) {
-            when(b.U === rd_bank && io.allocReq(i) && io.deqReady) {
-                readData(i) := buffer(b)(rd_row)
-            }
-        }
+        readAbleVec(i) := rd_idx =/= headPtr
+        deqReadyVec(i) := readAbleVec(i) && io.allocReq(i)
+
+        val bankSelect = (0 until p(ALU_NUM)).map(
+            b => (b.U === rd_bank) && deqReadyVec(i) 
+        )
+
+        readData(i) := Mux1H(Seq.tabulate(p(ALU_NUM))(
+            b => bankSelect(b) -> buffer(b)(rd_row)
+        ))
 
         io.allocResp(i) := readData(i)
     }
+
+    io.deqReady := deqReadyVec.asUInt.andR
 
     // write
     // calculate prefix sum
@@ -87,6 +97,14 @@ class ALUIQFreeIdBuffer(implicit p: Parameters) extends Module {
         for(b <- 0 until p(ALU_NUM)) {
             when((b.U === writeBank) && io.writeReq(i).valid) {
                 buffer(b)(writeRow) := io.writeReq(i).id
+            }
+        }
+    }
+
+    when(io.flush) {
+        for(b <- 0 until p(ALU_NUM)) {
+            for(i <- 0 until perBankSize) {
+                buffer(b)(i.U) := (b * perBankSize + i).U
             }
         }
     }

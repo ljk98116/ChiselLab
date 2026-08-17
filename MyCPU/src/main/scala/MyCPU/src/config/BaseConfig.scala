@@ -30,6 +30,10 @@ case object LDUIQ_SIZE extends WidthConfig
 case object STUIQ_SIZE extends WidthConfig
 case object SYSIQ_SIZE extends WidthConfig
 
+case object UseRV32E extends FlagConfig
+case object UseRV32I extends FlagConfig
+case object UseRV32IM extends FlagConfig
+
 class BaseConfig extends Config(
     (site, here, up) => {
         case FETCH_WIDTH => 4
@@ -40,16 +44,19 @@ class BaseConfig extends Config(
         case ROBID_WIDTH => here(AREG_WIDTH) + 2
         case FETCH_OFFSET => log2Ceil(here(DATA_WIDTH) / 8)
         // 8 ports for Integer PRF
-        case ALU_NUM => 2
+        case ALU_NUM => 4
         case MULT_NUM => 1
         case DIV_NUM => 1
         case LDU_NUM => 2
         case STU_NUM => 2
         case SYS_ALU_NUM => 1
-        case ALUIQ_SIZE => 24
-        case LDUIQ_SIZE => 16
-        case STUIQ_SIZE => 16
-        case SYSIQ_SIZE => 8
+        case ALUIQ_SIZE => 8
+        case LDUIQ_SIZE => 8
+        case STUIQ_SIZE => 8
+        case SYSIQ_SIZE => 4
         case SIM_FLAG => true
+        case UseRV32E => false
+        case UseRV32I => true
+        case UseRV32IM => false
     }
 )

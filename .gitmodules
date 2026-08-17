@@ -10,3 +10,6 @@
 [submodule "tools/espresso"]
 	path = tools/espresso
 	url = https://github.com/chipsalliance/espresso
+[submodule "spike"]
+	path = tools/spike
+	url = https://github.com/riscv-software-src/riscv-isa-sim.git

@@ -19,6 +19,27 @@ class BranchUnit(implicit p: Parameters) extends Module {
     val br_jump = WireInit(false.B)
     val br_target = WireInit(0.U(p(DATA_WIDTH).W))
 
+    val sign_bits = WireInit(0.U(2.W))
+    val less_than = WireInit(false.B)
+
+    sign_bits := Cat(
+        io.branch_inputs.data1(p(DATA_WIDTH)-1), 
+        io.branch_inputs.data2(p(DATA_WIDTH)-1)
+    )
+
+    switch(sign_bits) {
+        is("b00".U, "b11".U) {
+            less_than := io.branch_inputs.data1(p(DATA_WIDTH) - 2, 0) < 
+                io.branch_inputs.data2(p(DATA_WIDTH) - 2, 0)
+        }
+        is("b01".U) {
+            less_than := false.B
+        }
+        is("b10".U) {
+            less_than := true.B
+        }
+    }
+
     switch(io.branch_inputs.funct3) {
         is(Funct3Val.BEQ) {
             br_jump := io.branch_inputs.data1 === io.branch_inputs.data2
@@ -27,10 +48,10 @@ class BranchUnit(implicit p: Parameters) extends Module {
             br_jump := io.branch_inputs.data1 =/= io.branch_inputs.data2            
         }
         is(Funct3Val.BLT) {
-            br_jump := io.branch_inputs.data1.asSInt < io.branch_inputs.data2.asSInt             
+            br_jump := less_than             
         }
         is(Funct3Val.BGE) {
-            br_jump := !(io.branch_inputs.data1.asSInt < io.branch_inputs.data2.asSInt)
+            br_jump := !less_than
         }
         is(Funct3Val.BLTU) {
             br_jump := io.branch_inputs.data1 < io.branch_inputs.data2

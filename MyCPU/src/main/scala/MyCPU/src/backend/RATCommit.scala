@@ -9,5 +9,7 @@ import MyCPU.io._
 import MyCPU.utils._
 
 class RATCommit(implicit p: Parameters) extends Module {
+  val io = IO(new Bundle {
     
+  })
 }

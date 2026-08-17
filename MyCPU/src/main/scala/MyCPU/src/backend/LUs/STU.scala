@@ -11,9 +11,7 @@ import MyCPU.utils._
 class STU(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
         val flush = Input(Bool())
-        val stall_from_backpipe = Input(Bool())
         val stu_item = Input(new STUInputInfo)
-
         val result = Output(new AGUResult)
     })
 

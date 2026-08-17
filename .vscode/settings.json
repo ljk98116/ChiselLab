@@ -1,10 +1,10 @@
 {
     "files.watcherExclude": {
-        "**/target/**": true,
-        "**/target": true
+        "**/target/**": true
     },
     "sonarlint.connectedMode.project": {
         "connectionId": "ljk98116",
         "projectKey": "ljk98116_ChiselLab"
-    }
+    },
+    "cmake.sourceDirectory": "/home/ljk/Arch/ChiselLab/tools/espresso"
 }

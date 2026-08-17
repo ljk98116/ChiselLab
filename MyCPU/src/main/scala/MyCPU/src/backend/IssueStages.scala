@@ -33,6 +33,8 @@ class IssueStages(implicit p: Parameters) extends Module {
         val stu_items = Output(Vec(p(STU_NUM), new STUIQEntry))
         val alu_items = Output(Vec(p(ALU_NUM), new ALUIQEntry))
         val sys_items = Output(Vec(p(SYS_ALU_NUM), new SYSIQEntry))
+        val mult_items = Output(Vec(p(MULT_NUM), new ALUIQEntry))
+        val div_items = Output(Vec(p(DIV_NUM), new ALUIQEntry))
     })
 
     val alu_iq = Module(new ALUIQ)
@@ -43,26 +45,36 @@ class IssueStages(implicit p: Parameters) extends Module {
     val stu_iq = Module(new StoreQueue)
     val sys_iq = Module(new SYSIQ)
 
+    val wakeup_queue = Module(new WakeUpQueue)
+
+    wakeup_queue.io.flush := io.flush
+    wakeup_queue.io.alu_iq_outputs := alu_iq.io.aluiq_o
+    wakeup_queue.io.mult_iq_outputs := mult_iq.io.aluiq_o
+    wakeup_queue.io.sys_iq_outputs := sys_iq.io.sysiq_o
+
     alu_iq.io.flush := io.flush
     alu_iq.io.stall_from_backpipe := io.stall_from_backpipe
     alu_iq.io.busytableVec := io.busyTableVec
     alu_iq.io.alu_uops := PipeReg(io.alu_uops, io.stall_from_backpipe || io.issue0_stall, io.flush)
+    alu_iq.io.wakeup_signals := wakeup_queue.io.wakeup_signals
 
     mult_iq.io.flush := io.flush
     mult_iq.io.stall_from_backpipe := io.stall_from_backpipe
     mult_iq.io.busytableVec := io.busyTableVec
     mult_iq.io.alu_uops := PipeReg(io.mult_uops, io.stall_from_backpipe || io.issue0_stall, io.flush)
+    mult_iq.io.wakeup_signals := wakeup_queue.io.wakeup_signals
 
     div_iq.io.flush := io.flush
     div_iq.io.stall_from_backpipe := io.stall_from_backpipe
     div_iq.io.busytableVec := io.busyTableVec
     div_iq.io.alu_uops := PipeReg(io.div_uops, io.stall_from_backpipe || io.issue0_stall, io.flush)
+    div_iq.io.wakeup_signals := wakeup_queue.io.wakeup_signals
 
     ldu_iq.io.flush := io.flush
     ldu_iq.io.stall_from_backpipe := io.stall_from_backpipe
     ldu_iq.io.busytableVec := io.busyTableVec
     ldu_iq.io.ldu_uops := PipeReg(io.ldu_uops, io.stall_from_backpipe || io.issue0_stall, io.flush)
-    ldu_iq.io.aluSelectRes := alu_iq.io.aluiq_o
+    ldu_iq.io.wakeup_signals := wakeup_queue.io.wakeup_signals
     ldu_iq.io.ldRobEnable := io.loadQueueRobEnable
     ldu_iq.io.stRobEnable := io.storeQueueRobEnable
 
@@ -70,19 +82,21 @@ class IssueStages(implicit p: Parameters) extends Module {
     stu_iq.io.stall_from_backpipe := io.stall_from_backpipe
     stu_iq.io.busyTableVec := io.busyTableVec
     stu_iq.io.store_uops := PipeReg(io.stu_uops, io.stall_from_backpipe || io.issue0_stall, io.flush)
-    stu_iq.io.aluSelectRes := alu_iq.io.aluiq_o
+    stu_iq.io.wakeup_signals := wakeup_queue.io.wakeup_signals
     stu_iq.io.robEnable := io.storeQueueRobEnable
 
     sys_iq.io.flush := io.flush
     sys_iq.io.stall_from_backpipe := io.stall_from_backpipe
     sys_iq.io.busyTableVec := io.busyTableVec
     sys_iq.io.sys_uops := PipeReg(io.sys_uops,io.stall_from_backpipe || io.issue0_stall, io.flush)
-    sys_iq.io.aluSelectRes := alu_iq.io.aluiq_o
+    sys_iq.io.wakeup_signals := wakeup_queue.io.wakeup_signals
 
     io.alu_items := alu_iq.io.aluiq_o
     io.ldu_items := ldu_iq.io.lduiq_o
     io.stu_items := stu_iq.io.issueItems
     io.sys_items := sys_iq.io.sysiq_o
+    io.mult_items := mult_iq.io.aluiq_o
+    io.div_items := div_iq.io.aluiq_o
 
     io.issue0_stall := 
         alu_iq.io.issue0_stall || ldu_iq.io.issue0_stall || 

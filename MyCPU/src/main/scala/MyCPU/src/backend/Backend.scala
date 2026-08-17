@@ -34,7 +34,11 @@ class Backend(implicit p: Parameters) extends Module {
     val loadWbQueue = Module(new LoadWbQueue(p(DCacheMSHRNum)))
     val storeWbQueue = Module(new StoreWbQueue(p(DCacheMSHRNum)))
 
-    val prfBankNum = p(ALU_NUM) + p(LDU_NUM) + p(SYS_ALU_NUM)
+    var prfBankNum = p(ALU_NUM) + p(LDU_NUM) + p(SYS_ALU_NUM)
+    if(p(UseRV32IM)) {
+        prfBankNum += p(MULT_NUM) + p(DIV_NUM)
+    }
+    
     val prfWbQueue = Module(new PRFWbQueue(prfBankNum * 4, prfBankNum))
     val loadBuffer = Module(new LoadBuffer(p(DCacheMSHRNum) * 4))
     val storeBuffer = Module(new StoreBuffer(p(DCacheMSHRNum) * 4))

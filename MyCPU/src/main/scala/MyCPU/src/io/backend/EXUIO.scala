@@ -106,6 +106,11 @@ class IntegerUnitInputInfo(implicit p: Parameters) extends Bundle with HasValid 
     val funct7 = UInt(7.W)
     val data1 = UInt(p(DATA_WIDTH).W)
     val data2 = UInt(p(DATA_WIDTH).W)
+    val pc = UInt(p(ADDR_WIDTH).W)
+    val imm = UInt(p(DATA_WIDTH).W)
+    val is_lui = Bool()
+    val is_auipc = Bool()
+    val is_i_type = Bool()
 }
 
 class BranchUnitInputInfo(implicit p: Parameters) extends Bundle with HasValid {

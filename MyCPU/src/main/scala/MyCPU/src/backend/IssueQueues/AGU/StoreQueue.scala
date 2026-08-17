@@ -15,12 +15,13 @@ class StoreQueue(implicit p: Parameters) extends Module {
   val ptrWidth = log2Ceil(p(STUIQ_SIZE))
   val perBankPtrWidth = log2Ceil(perBankSize)
 
+  val wakeUpPortNum = WakeUpQueuePortNum(p)
   val io = IO(new Bundle {
     val flush = Input(Bool())
     val stall_from_backpipe = Input(Bool())
     val store_uops = Input(Vec(p(FETCH_WIDTH), new uOp))
     val busyTableVec = Input(UInt((1 << p(PREG_WIDTH)).W))
-    val aluSelectRes = Input(Vec(p(ALU_NUM), new ALUIQEntry))
+    val wakeup_signals = Input(Vec(wakeUpPortNum, new WakeUpQueueEntry))
     val robEnable = Input(Vec(p(FETCH_WIDTH), new StoreQueueEnable))
     val issueItems = Output(Vec(p(STU_NUM), new STUIQEntry))
     val issue0_stall = Output(Bool())
@@ -62,8 +63,8 @@ class StoreQueue(implicit p: Parameters) extends Module {
   val aluWakeup_ps2 = Wire(Vec(p(STUIQ_SIZE), Bool()))
 
   for (i <- 0 until p(STUIQ_SIZE)) {
-    aluWakeup_ps1(i) := io.aluSelectRes.map(a => a.HasRd && (a.pd === banks(i % p(STU_NUM))(i / p(STU_NUM)).ps1)).reduce(_ || _)
-    aluWakeup_ps2(i) := io.aluSelectRes.map(a => a.HasRd && (a.pd === banks(i % p(STU_NUM))(i / p(STU_NUM)).ps2)).reduce(_ || _)
+    aluWakeup_ps1(i) := io.wakeup_signals.map(a => a.HasRd && (a.pd === banks(i % p(STU_NUM))(i / p(STU_NUM)).ps1)).reduce(_ || _)
+    aluWakeup_ps2(i) := io.wakeup_signals.map(a => a.HasRd && (a.pd === banks(i % p(STU_NUM))(i / p(STU_NUM)).ps2)).reduce(_ || _)
   }
 
   // --- Enqueue logic ---
@@ -102,7 +103,7 @@ class StoreQueue(implicit p: Parameters) extends Module {
 
       // at ROB head
       val atRobHead = Wire(Bool())
-      atRobHead := VecInit(io.robEnable.map(r => r.valid && r.robLoc === entry.robLoc)).reduce(_ || _)
+      atRobHead := VecInit(io.robEnable.map(r => r.valid && r.robLoc === entry.robLoc)).asUInt.orR
       entry.atRobHead := atRobHead
 
       entry.valid := true.B
@@ -117,7 +118,7 @@ class StoreQueue(implicit p: Parameters) extends Module {
       when(!entry.valid || entry.rdy1 && entry.rdy2) {
         entry.rdy1 := entry.rdy1 || !io.busyTableVec(entry.ps1) || aluWakeup_ps1((i * p(STU_NUM) + b).U)
         entry.rdy2 := entry.rdy2 || !io.busyTableVec(entry.ps2) || aluWakeup_ps2((i * p(STU_NUM) + b).U)
-        val atRobHead = io.robEnable.map(r => r.valid && r.robLoc === entry.robLoc).reduce(_ || _)
+        val atRobHead = VecInit(io.robEnable.map(r => r.valid && r.robLoc === entry.robLoc)).asUInt.orR
         entry.atRobHead := entry.atRobHead || atRobHead
       }
     }
