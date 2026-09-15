@@ -1,0 +1,59 @@
+package build
+
+import mill._
+import mill.scalalib._
+
+trait CommonModule extends ScalaModule {
+  def scalaVersion = "2.13.18"
+  def repositories = Seq(
+    "https://repo1.maven.org/maven2",
+    "https://oss.sonatype.org/content/repositories/snapshots"
+  )
+}
+
+object cde extends CommonModule
+
+object MyCPU extends CommonModule {
+  def mvnDeps = Seq(
+    mvn"org.chipsalliance::chisel:7.15.0",
+    mvn"org.scalatest::scalatest:3.2.18",
+    mvn"edu.berkeley.cs::chiseltest:6.0.0"
+  )
+
+  def moduleDeps = Seq(build.cde)
+  def verilatorArgs = Seq("-Wno-WIDTHEXPAND")
+
+  override def scalacOptions = Seq(
+    "-language:reflectiveCalls",
+    "-deprecation",
+    "-feature",
+    "-Xcheckinit",
+    "-Ymacro-annotations"
+  )
+
+  override def scalacPluginMvnDeps = Seq(
+    mvn"org.chipsalliance:::chisel-plugin:7.15.0"
+  )
+
+  object test extends ScalaTests {
+    def testFramework = "org.scalatest.tools.Framework"
+    def moduleDeps = Seq(
+      build.MyCPU,
+      build.cde
+    )
+
+    // 显式指定仓库（Sonatype 包含更多 Chisel 相关工件）
+    override def repositories = Seq(
+      "https://repo1.maven.org/maven2",
+      "https://oss.sonatype.org/content/repositories/snapshots",
+      "https://oss.sonatype.org/content/repositories/releases"
+    )
+
+    def ivyDeps = Seq(
+      mvn"org.scalatest::scalatest:3.2.18",
+      mvn"edu.berkeley.cs::chiseltest:6.0.0"
+    )
+
+    def verilatorArgs = Seq("-Wno-WIDTHEXPAND")
+  }
+}

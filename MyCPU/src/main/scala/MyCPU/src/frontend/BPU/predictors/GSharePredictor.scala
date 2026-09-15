@@ -26,10 +26,7 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
     val predictorSize = 1 << indexBits
     // 256x2 => 256x34[Nangate45]
     val phtBanks = Seq.tabulate(fetchWidth)(
-        index => {
-            if(p(UseNangate45)) Module(new Nangate45Bank(predictorSize / fetchWidth, UInt(34.W), s"PHTBank_${index}"))
-            else Module(new LargeBank(predictorSize / fetchWidth, UInt(counterBits.W)))
-        }
+        index => new LargeBank(clock, reset, predictorSize / fetchWidth, UInt(counterBits.W), "phtBank_" + index.toString())
     )
 
     var ghist_commit = RegInit(0.U(globalHistoryBits.W))
@@ -69,7 +66,8 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
 
     for(i <- 0 until p(FETCH_WIDTH)) {
         if0_phtReqIndex(i) := 
-            (io.if0_req(i).pc >> 2)(indexBits - 1, 0) ^ ghist_spec(indexBits - 1, 0)
+            (io.if0_req(i).pc >> 2)(indexBits - 1, 0) ^ 
+            ghist_spec(globalHistoryBits - 1, globalHistoryBits - indexBits)   // ← 改这里
     }
 
     val if0_phtReqIndexBankIds = if0_phtReqIndex.map(
@@ -91,18 +89,9 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
     val phtReadData = WireInit(VecInit(
         Seq.fill(fetchWidth)(0.U(counterBits.W))
     ))
-
-    // init bank ios
-    (0 until fetchWidth).map(
-        index => {
-            phtBanks(index).io.raddr := 0.U
-            phtBanks(index).io.wen := false.B
-            phtBanks(index).io.waddr := 0.U
-            phtBanks(index).io.wdata := 0.U
-            phtBanks(index).io.wmask := ~(0.U)(counterBits.W)
-        }
-    )
-
+    val phtBankReadData = WireInit(VecInit(
+        Seq.fill(fetchWidth)(0.U(counterBits.W))
+    ))
     for (b <- 0 until fetchWidth) {
 
         val hits = VecInit((0 until fetchWidth).map(i =>
@@ -112,8 +101,9 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
         val hasHit = hits.asUInt.orR
         val selIdx = PriorityEncoder(hits)
 
+        phtBankReadData(b) := 0.U
         when(hasHit) {
-            phtBanks(b).io.raddr := if0_phtReqIndexBankRow(selIdx)
+            phtBankReadData(b) := phtBanks(b).read(if0_phtReqIndexBankRow(selIdx))
         }
     }
 
@@ -123,7 +113,7 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
 
         phtReadData(i) := Mux1H(
             (0 until fetchWidth).map(b =>
-                (bankId_r === b.U && valid_r) -> phtBanks(b).io.rdata
+                (bankId_r === b.U && valid_r) -> phtBankReadData(b)
             )
         )
     }
@@ -151,10 +141,9 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
     val wb3_valid_vec = Wire(Vec(fetchWidth, Bool()))
 
     for(i <- 0 until fetchWidth) {
-
         val wb2_updatePhtIndex =
             (wb2_update(i).pc >> 2)(indexBits - 1, 0) ^
-            wb2_update(i).ghist(indexBits - 1, 0)
+            wb2_update(i).ghist(globalHistoryBits - 1, globalHistoryBits - indexBits)   // ← 改这里
 
         val wb2_bankId  = wb2_updatePhtIndex(log2Ceil(fetchWidth) - 1, 0)
         val wb2_bankRow = wb2_updatePhtIndex(indexBits - 1, log2Ceil(fetchWidth))
@@ -202,7 +191,6 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
 
 
     // ----------- 按 bank 做仲裁（关键） -----------
-
     for (b <- 0 until fetchWidth) {
 
         val hits = VecInit((0 until fetchWidth).map(i =>
@@ -213,10 +201,9 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
         val selIdx = PriorityEncoder(hits)
 
         when(hasHit) {
-            phtBanks(b).io.wen   := true.B
-            phtBanks(b).io.waddr := wb3_bankRow_vec(selIdx)
-            phtBanks(b).io.wdata := wb3_nextPhtResult_vec(selIdx)
+            phtBanks(b).write(wb3_bankRow_vec(selIdx), ~(0.U), wb3_nextPhtResult_vec(selIdx))
         }
+
     }
 
 

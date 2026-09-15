@@ -33,10 +33,7 @@ class MultiPortQueueNWNR[T <: Bundle with HasValid](size: Int, nPorts: Int, gen:
     val free = size.U - used
 
     val banks = Seq.fill(nPorts) {
-        if (perBankSize < 8)
-            Module(new SmallBank(perBankSize, gen))
-        else
-            Module(new LargeBank(perBankSize, gen))
+        new LargeBank(clock, reset, perBankSize, gen)
     }
 
     io.enqReady := used + writeCount <= size.U
@@ -48,14 +45,10 @@ class MultiPortQueueNWNR[T <: Bundle with HasValid](size: Int, nPorts: Int, gen:
         val wr_row = wr_index(ptrWidth - 1, bankBits)
 
         for(b <- 0 until nPorts) {
-            banks(b).io.wen := false.B
-            banks(b).io.waddr := 0.U
-            banks(b).io.wdata := 0.U.asTypeOf(gen)
-            banks(b).io.wmask := (~(0.U)).asTypeOf(gen)
             when(b.U === wr_bank && io.enqReady && io.enqValid(i)) {
-                banks(b).io.wen := true.B
-                banks(b).io.waddr := wr_row
-                banks(b).io.wdata := io.enq(i)               
+                banks(b).write(
+                    wr_row, ~(0.U), io.enq(i).asUInt
+                )            
             }
         }
     }
@@ -68,9 +61,8 @@ class MultiPortQueueNWNR[T <: Bundle with HasValid](size: Int, nPorts: Int, gen:
         val rd_row = rd_index(ptrWidth - 1, bankBits)
 
         for(b <- 0 until nPorts) {
-            banks(b).io.raddr := rd_row
             when(b.U === rd_bank && io.deqReady && io.deqValid(i)) {
-                readVec(i) := banks(b).io.rdata
+                readVec(i) := banks(b).read(rd_row)
             }
         }
     }

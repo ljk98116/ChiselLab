@@ -22,10 +22,17 @@ class ICache(implicit p: Parameters) extends Module {
         val if0_icache_req = Input(new ICacheReadReq)
         // if1 stage, use ppn to judge hit
         val if1_itlb_resp = Input(Vec(p(FETCH_WIDTH), new ITLBRespInfo))
+        // to pipeline if2 stage
+        val if2_mshr_id = Output(UInt(log2Ceil(p(ICacheMSHRNum)).W))
+        val if2_mshr_id_valid = Output(Bool())
+        // to pipeline if5 stage
+        val if5_mshr_id = Output(UInt(log2Ceil(p(ICacheMSHRNum)).W))
+        val if5_mshr_id_valid = Output(Bool())
+        val if5_icache_refill_resp = Output(new ICacheRefillResp)
         // to memory, axi
         val axi4_master = new AXI4(pa_bits, p(DATA_WIDTH), 4)
         // resp
-        val if2_icacheline_resp = Output(Vec(p(L1CacheLineLength), UInt(p(DATA_WIDTH).W)))
+        val if2_icacheline_resp = Output(Vec(p(FETCH_WIDTH), UInt(p(DATA_WIDTH).W)))
         val if2_icache_hit = Output(Bool())
         val if2_predecode = Output(Vec(p(FETCH_WIDTH), new ICacheBranchMetaInfo))
         // stall signal
@@ -63,4 +70,9 @@ class ICache(implicit p: Parameters) extends Module {
 
     // refiller <> io
     io.axi4_master <> refiller.io.axi4_master
+    io.if2_mshr_id := refiller.io.if2_mshr_id
+    io.if2_mshr_id_valid := refiller.io.if2_mshr_id_valid
+    io.if5_mshr_id := refiller.io.icache_refill_mshr_id
+    io.if5_mshr_id_valid := refiller.io.icache_refill_mshr_id_valid
+    io.if5_icache_refill_resp := refiller.io.icache_refill_resp
 }

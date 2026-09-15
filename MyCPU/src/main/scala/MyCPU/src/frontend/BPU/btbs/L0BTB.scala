@@ -23,7 +23,7 @@ class L0BTB(implicit p: Parameters) extends Module {
         val l0_btb_hit = Output(Vec(p(FETCH_WIDTH), Bool()))
     })
 
-    var l0_btb_target_array = RegInit(VecInit.fill(p(L0BTBParam).btbEntryNum)(0.U((p(ADDR_WIDTH) / 4).W)))
+    var l0_btb_target_array = RegInit(VecInit.fill(p(L0BTBParam).btbEntryNum)(0.U(p(ADDR_WIDTH).W)))
     val l0_btb_tag_array = RegInit(VecInit.fill(p(L0BTBParam).btbEntryNum)(0.U(p(L0BTBParam).btbTagBits.W)))
     val l0_btb_valid_array = RegInit(VecInit.fill(p(L0BTBParam).btbEntryNum)(false.B))
     val l0_btb_isCall_array = RegInit(VecInit.fill(p(L0BTBParam).btbEntryNum)(false.B))
@@ -56,7 +56,7 @@ class L0BTB(implicit p: Parameters) extends Module {
     io.resp.valid := l0_hit_array.reduce(_ || _)
     io.resp.target := Mux(
         io.resp.valid, 
-        l0_btb_target_array(io.req(hit_index).pc(l0_btbIndexBits + l0_btbOffsetBits - 1, l0_btbOffsetBits)) + io.req(hit_index).pc,
+        l0_btb_target_array(io.req(hit_index).pc(l0_btbIndexBits + l0_btbOffsetBits - 1, l0_btbOffsetBits)),
         io.req(p(FETCH_WIDTH) - 1).pc + 4.U
     )
     io.resp.isCall := Mux(io.resp.valid, l0_btb_isCall_array(io.req(hit_index).pc(l0_btbIndexBits + l0_btbOffsetBits - 1, l0_btbOffsetBits)), false.B)

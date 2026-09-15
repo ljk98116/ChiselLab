@@ -13,7 +13,8 @@ namespace emulator {
 
   enum class Mode: int32_t {
     EMU = 0,
-    DIFF_TEST = 1,
+    DUT_ONLY = 1,
+    DIFF_TEST = 2,
   };
 
   enum class ProgState: int32_t {

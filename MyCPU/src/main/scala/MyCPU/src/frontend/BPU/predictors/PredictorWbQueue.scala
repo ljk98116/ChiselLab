@@ -21,7 +21,7 @@ class PredictorWbQueue(size: Int)(implicit p: Parameters) extends Module {
     val offsetBits = p(L1BTBParam).btbOffsetBits
 
     val skidBuffers = Seq.fill(bankNum)(
-        Module(new MultiPortQueueNW1R(size / bankNum, p(FETCH_WIDTH), new PredictorUpdateInfo))
+        Module(new MultiPortQueueNW1R(size / bankNum, p(FETCH_WIDTH), "PredictorWbSkidBuffer", new PredictorUpdateInfo))
     )
 
     for(b <- 0 until bankNum) {

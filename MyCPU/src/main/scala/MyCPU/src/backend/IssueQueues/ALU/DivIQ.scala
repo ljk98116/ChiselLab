@@ -130,7 +130,7 @@ class DivIQ(implicit p: Parameters) extends Module {
   }
 
   val skidBuffers = Seq.fill(p(DIV_NUM))(
-    Module(new MultiPortQueueNW1R(p(FETCH_WIDTH) * 2, p(FETCH_WIDTH) / p(DIV_NUM), new BufferItem))
+    Module(new MultiPortQueueNW1R(p(FETCH_WIDTH) * 2, p(FETCH_WIDTH) / p(DIV_NUM), "DivIQSkidBuffer", new BufferItem))
   )
 
   // -------------------------

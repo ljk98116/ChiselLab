@@ -25,7 +25,7 @@ class PRFWbQueue(size: Int, bankNum: Int)(implicit p: Parameters) extends Module
     })
 
     val skidBuffers = Seq.fill(bankNum)(
-        Module(new MultiPortQueueNW1R(size / bankNum, bankNum, new PRFWriteReq))
+        Module(new MultiPortQueueNW1R(size / bankNum, bankNum, "PRFWbSkidBuffer", new PRFWriteReq))
     )
 
     val results = WireInit(VecInit(

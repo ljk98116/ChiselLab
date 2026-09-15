@@ -43,3 +43,16 @@ class BranchPredInfo(implicit p: Parameters) extends Bundle with HasValid {
     val lhist = UInt(BPUPredictorLocalHistoryBits.W) 
     val rasTopPtr = UInt(log2Ceil(p(RASParam).RASSize + 1).W)
 }
+
+class InstBufferEntry(implicit p: Parameters) extends Bundle with HasValid {
+    val valid = Bool()
+    val pc_vec = Vec(p(FETCH_WIDTH), UInt(p(DATA_WIDTH).W))
+    val inst_vec = Vec(p(FETCH_WIDTH), UInt(p(INST_WIDTH).W))
+    val inst_valid_vec = Vec(p(FETCH_WIDTH), Bool())
+    val branch_info = Vec(p(FETCH_WIDTH), new BranchPredInfo)
+    val pa = new PhysicalAddress
+    val hit = Bool()
+    val mshr = UInt(log2Ceil(p(ICacheMSHRNum)).W)
+    val mshr_valid = Bool()
+    val offsets = Vec(p(FETCH_WIDTH), UInt(p(L1CacheOffsetBits).W))
+}

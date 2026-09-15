@@ -15,19 +15,28 @@ class ICacheRefiller(MSHRQueueSize: Int)(implicit p: Parameters) extends Module 
     val io = IO(new Bundle {
         // from icache sram
         val if1_icache_refill_req = Input(new CacheRefillReq)
+        // to pipeline if2 stage
+        val if2_mshr_id = Output(UInt(log2Ceil(MSHRQueueSize).W))
+        val if2_mshr_id_valid = Output(Bool())
         // to replace policy module
         val icacheReplaceRefillReq = Output(new ReplacePolicyRefillReqInfo)
         // to icache sram
         val icache_refill_resp = Output(new ICacheRefillResp)
+        val icache_refill_mshr_id = Output(UInt(log2Ceil(MSHRQueueSize).W))
+        val icache_refill_mshr_id_valid = Output(Bool())
         val if2_mshr_enqReady = Output(Bool())
         // as master send req to crossbar
         val axi4_master = new AXI4(pa_bits, p(DATA_WIDTH), 4)
     })
 
     val mshr_buffer = Module(new ICacheMSHRQueue(MSHRQueueSize))
-
+    // not used as a reg, because
     val refill_start = WireInit(false.B)
+
     val refill_pa = RegInit(0.U.asTypeOf(new PhysicalAddress))
+    val refill_mshr_id = RegInit(0.U(log2Ceil(MSHRQueueSize).W))
+    val refill_mshr_id_valid = RegInit(false.B)
+
     val sIdle :: sAddr :: sRead :: sResp :: Nil = Enum(4)
     val state = RegInit(sIdle)
     val burst_len = p(L1CacheLineLength)
@@ -40,12 +49,15 @@ class ICacheRefiller(MSHRQueueSize: Int)(implicit p: Parameters) extends Module 
 
     mshr_buffer.io.enq := io.if1_icache_refill_req.asTypeOf(new CacheRefillReq)
     // sIdle read MSHRQueue deq
-    mshr_buffer.io.deqValid := (state === sIdle)
+    mshr_buffer.io.deq_ready := (state === sResp)
 
-    io.if2_mshr_enqReady := mshr_buffer.io.enqReady
+    io.if2_mshr_enqReady := mshr_buffer.io.enq_ready
 
-    refill_start := mshr_buffer.io.deqReady
-    refill_pa := mshr_buffer.io.deq.pa
+    refill_start := mshr_buffer.io.deq.valid
+
+    refill_pa := mshr_buffer.io.deq.paddr
+    refill_mshr_id := mshr_buffer.io.deq.mshr_id
+    refill_mshr_id_valid := mshr_buffer.io.deq.valid
 
     io.axi4_master.aw.bits.id := 0.U
     io.axi4_master.aw.bits.addr := 0.U
@@ -82,6 +94,7 @@ class ICacheRefiller(MSHRQueueSize: Int)(implicit p: Parameters) extends Module 
         p(ICacheIndexBits) + p(L1CacheOffsetBits) + p(FETCH_OFFSET) - 1,
         p(L1CacheOffsetBits) + p(FETCH_OFFSET)        
     )
+    io.icacheReplaceRefillReq.mshr_id := refill_mshr_id
     // FSM
     switch(state) {
         is(sIdle) {
@@ -108,4 +121,10 @@ class ICacheRefiller(MSHRQueueSize: Int)(implicit p: Parameters) extends Module 
             state := sIdle
         }
     }
+
+    io.if2_mshr_id := mshr_buffer.io.mshr_id
+    io.if2_mshr_id_valid := mshr_buffer.io.mshr_id_valid
+
+    io.icache_refill_mshr_id := refill_mshr_id
+    io.icache_refill_mshr_id_valid := refill_mshr_id_valid
 }

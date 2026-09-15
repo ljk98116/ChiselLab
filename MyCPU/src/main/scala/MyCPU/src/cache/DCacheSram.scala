@@ -74,15 +74,15 @@ class DCacheSram(implicit p: Parameters) extends Module {
         Seq.fill(bankNum)(false.B)
     ))
 
-    val tagVBanks = Seq.fill(p(L1CacheWayNum))(
-        Seq.fill(bankNum)(
-            Module(new LargeSyncBank(perBankSize, UInt((p(DCacheTagBits) + 1).W)))
+    val tagVBanks = Seq.tabulate(p(L1CacheWayNum))(
+        w => Seq.tabulate(bankNum)( 
+            b => new LargeSyncBank(clock, reset, perBankSize, UInt((p(DCacheTagBits) + 1).W), s"dacheTagVBank[$w][$b]")
         )
     )
 
-    val dataBanks = Seq.fill(p(L1CacheWayNum))(
-        Seq.fill(bankNum)(
-            Module(new LargeSyncBank(perBankSize, UInt(cacheLineWidth.W)))
+    val dataBanks = Seq.tabulate(p(L1CacheWayNum))(
+        w => Seq.tabulate(bankNum)(
+            b => new LargeSyncBank(clock, reset, perBankSize, UInt(cacheLineWidth.W), s"dcacheDataBank[$w][$b]")
         )
     )
 
@@ -177,11 +177,13 @@ class DCacheSram(implicit p: Parameters) extends Module {
                 p(DCacheIndexBits) + p(L1CacheOffsetBits) + p(FETCH_OFFSET) - 1,  
                 p(L1CacheOffsetBits) + p(FETCH_OFFSET)
             )
-            tagVBanks(w)(b).io.raddr := idx
-            mem1_tagVs(w)(b) := tagVBanks(w)(b).io.rdata
+            // tagVBanks(w)(b).io.raddr := idx
+            // mem1_tagVs(w)(b) := tagVBanks(w)(b).io.rdata
+            mem1_tagVs(w)(b) := tagVBanks(w)(b).read(idx)
 
-            dataBanks(w)(b).io.raddr := idx
-            mem1_datas(w)(b) := dataBanks(w)(b).io.rdata
+            // dataBanks(w)(b).io.raddr := idx
+            // mem1_datas(w)(b) := dataBanks(w)(b).io.rdata
+            mem1_datas(w)(b) := dataBanks(w)(b).read(idx)
         }
     }
  
@@ -245,25 +247,30 @@ class DCacheSram(implicit p: Parameters) extends Module {
         val refillBankWay = io.dcacheReplaceRefillResp.way
         val refillValid = io.dcacheRefillResp.valid && refillBankId === b.U && io.dcacheReplaceRefillResp.valid
         for(w <- 0 until p(L1CacheWayNum)) {
-            tagVBanks(w)(b).io.wen := false.B
-            tagVBanks(w)(b).io.waddr := 0.U
-            tagVBanks(w)(b).io.wdata := 0.U
-            tagVBanks(w)(b).io.wmask := ~(0.U)
+            // tagVBanks(w)(b).io.wen := false.B
+            // tagVBanks(w)(b).io.waddr := 0.U
+            // tagVBanks(w)(b).io.wdata := 0.U
+            // tagVBanks(w)(b).io.wmask := ~(0.U)
 
-            dataBanks(w)(b).io.wen := false.B
-            dataBanks(w)(b).io.waddr := 0.U
-            dataBanks(w)(b).io.wdata := 0.U
-            dataBanks(w)(b).io.wmask := ~(0.U)
+            // dataBanks(w)(b).io.wen := false.B
+            // dataBanks(w)(b).io.waddr := 0.U
+            // dataBanks(w)(b).io.wdata := 0.U
+            // dataBanks(w)(b).io.wmask := ~(0.U)
 
             when(w.U === refillBankWay && refillValid) {
-                tagVBanks(w)(b).io.wen := true.B
-                tagVBanks(w)(b).io.waddr := refillBankRow
-                tagVBanks(w)(b).io.wdata := Cat(
-                    true.B, io.dcacheRefillResp.pa.GetPPN)
+                // tagVBanks(w)(b).io.wen := true.B
+                // tagVBanks(w)(b).io.waddr := refillBankRow
+                // tagVBanks(w)(b).io.wdata := Cat(
+                //     true.B, io.dcacheRefillResp.pa.GetPPN)
+                tagVBanks(w)(b).write(refillBankRow, ~(0.U), 
+                    Cat(true.B, io.dcacheRefillResp.pa.GetPPN))
 
-                dataBanks(w)(b).io.wen := true.B
-                dataBanks(w)(b).io.waddr := refillBankRow
-                dataBanks(w)(b).io.wdata := io.dcacheRefillResp.data.asUInt
+                // dataBanks(w)(b).io.wen := true.B
+                // dataBanks(w)(b).io.waddr := refillBankRow
+                // dataBanks(w)(b).io.wdata := io.dcacheRefillResp.data.asUInt
+                dataBanks(w)(b).write(refillBankRow, ~(0.U)(io.dcacheRefillResp.data.getWidth.W),
+                    io.dcacheRefillResp.data.asUInt
+                )
             }
         }
 
@@ -277,13 +284,15 @@ class DCacheSram(implicit p: Parameters) extends Module {
         val wbTag = io.mem4_wb_enq.pa.GetPPN
         for(w <- 0 until p(L1CacheWayNum)) {
             when(wbValid && wbBankId === b.U && wbHitWay === w.U) {
-                tagVBanks(w)(b).io.wen := true.B
-                tagVBanks(w)(b).io.waddr := wbBankRow
-                tagVBanks(w)(b).io.wdata := Cat(true.B, wbTag)
+                // tagVBanks(w)(b).io.wen := true.B
+                // tagVBanks(w)(b).io.waddr := wbBankRow
+                // tagVBanks(w)(b).io.wdata := Cat(true.B, wbTag)
+                tagVBanks(w)(b).write(wbBankRow, ~(0.U), Cat(true.B, wbTag))
 
-                dataBanks(w)(b).io.wen := true.B
-                dataBanks(w)(b).io.waddr := wbBankRow
-                dataBanks(w)(b).io.wdata := io.mem4_wb_enq.cacheLine.datas.asUInt
+                // dataBanks(w)(b).io.wen := true.B
+                // dataBanks(w)(b).io.waddr := wbBankRow
+                // dataBanks(w)(b).io.wdata := io.mem4_wb_enq.cacheLine.datas.asUInt
+                dataBanks(w)(b).write(wbBankRow, ~(0.U), io.mem4_wb_enq.cacheLine.datas.asUInt)
             }
         }
 

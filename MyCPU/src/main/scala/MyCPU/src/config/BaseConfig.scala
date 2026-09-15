@@ -8,6 +8,7 @@ class WidthConfig extends Field[Int]
 class FlagConfig extends Field[Boolean]
 
 case object FETCH_WIDTH extends WidthConfig
+case object INST_WIDTH extends WidthConfig
 case object DATA_WIDTH extends WidthConfig
 case object ADDR_WIDTH extends WidthConfig
 case object AREG_WIDTH extends WidthConfig
@@ -33,16 +34,20 @@ case object SYSIQ_SIZE extends WidthConfig
 case object UseRV32E extends FlagConfig
 case object UseRV32I extends FlagConfig
 case object UseRV32IM extends FlagConfig
+case object UseRV64I extends FlagConfig
+
+case object UseTLB extends FlagConfig
 
 class BaseConfig extends Config(
     (site, here, up) => {
         case FETCH_WIDTH => 4
-        case DATA_WIDTH => 32
-        case ADDR_WIDTH => 32
-        case AREG_WIDTH => 5
-        case PREG_WIDTH => here(AREG_WIDTH) + 2
-        case ROBID_WIDTH => here(AREG_WIDTH) + 2
-        case FETCH_OFFSET => log2Ceil(here(DATA_WIDTH) / 8)
+        case INST_WIDTH => 32
+        // case DATA_WIDTH => 32
+        // case ADDR_WIDTH => 32
+        // case AREG_WIDTH => 5
+        // case PREG_WIDTH => here(AREG_WIDTH) + 2
+        // case ROBID_WIDTH => here(AREG_WIDTH) + 2
+        case FETCH_OFFSET => log2Ceil(here(INST_WIDTH) / 8)
         // 8 ports for Integer PRF
         case ALU_NUM => 4
         case MULT_NUM => 1
@@ -55,8 +60,70 @@ class BaseConfig extends Config(
         case STUIQ_SIZE => 8
         case SYSIQ_SIZE => 4
         case SIM_FLAG => true
-        case UseRV32E => false
-        case UseRV32I => true
-        case UseRV32IM => false
+        case UseTLB => false
     }
+)
+
+class BaseRV32EConfig extends Config(
+    new BaseConfig ++ new Config(
+        (site, here, up) => {
+            case DATA_WIDTH => 32
+            case ADDR_WIDTH => 32
+            case AREG_WIDTH => 4
+            case PREG_WIDTH => here(AREG_WIDTH) + 2
+            case ROBID_WIDTH => here(AREG_WIDTH) + 2            
+            case UseRV32E => true
+            case UseRV32I => false
+            case UseRV32IM => false
+            case UseRV64I => false
+        }
+    )
+)
+
+class BaseRV32IConfig extends Config(
+    new BaseConfig ++ new Config(
+        (site, here, up) => {
+            case DATA_WIDTH => 32
+            case ADDR_WIDTH => 32
+            case AREG_WIDTH => 5
+            case PREG_WIDTH => here(AREG_WIDTH) + 2
+            case ROBID_WIDTH => here(AREG_WIDTH) + 2            
+            case UseRV32E => false
+            case UseRV32I => true
+            case UseRV32IM => false
+            case UseRV64I => false
+        }
+    )
+)
+
+class BaseRV32IMConfig extends Config(
+    new BaseConfig ++ new Config(
+        (site, here, up) => {
+            case DATA_WIDTH => 32
+            case ADDR_WIDTH => 32
+            case AREG_WIDTH => 5
+            case PREG_WIDTH => here(AREG_WIDTH) + 2
+            case ROBID_WIDTH => here(AREG_WIDTH) + 2            
+            case UseRV32E => false
+            case UseRV32I => false
+            case UseRV32IM => true
+            case UseRV64I => false
+        }
+    )
+)
+
+class BaseRV64IConfig extends Config(
+    new BaseConfig ++ new Config(
+        (site, here, up) => {
+            case DATA_WIDTH => 64
+            case ADDR_WIDTH => 64
+            case AREG_WIDTH => 5
+            case PREG_WIDTH => here(AREG_WIDTH) + 2
+            case ROBID_WIDTH => here(AREG_WIDTH) + 2            
+            case UseRV32E => false
+            case UseRV32I => false
+            case UseRV32IM => false
+            case UseRV64I => true
+        }
+    )
 )

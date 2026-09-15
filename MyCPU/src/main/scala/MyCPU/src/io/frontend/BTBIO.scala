@@ -23,7 +23,7 @@ class L0BTBRespInfo(implicit p: Parameters) extends Bundle with HasValid {
 class L0BTBUpdateInfo(implicit p: Parameters) extends Bundle with HasValid {
     val valid = Bool()
     val pc = UInt(p(ADDR_WIDTH).W)
-    val target = UInt((p(ADDR_WIDTH) / 4).W)
+    val target = UInt(p(ADDR_WIDTH).W)
     val isCall = Bool()
     val isReturn = Bool()
 }
@@ -44,7 +44,7 @@ class L1BTBRespInfo(implicit p: Parameters) extends Bundle with HasValid {
 class L1BTBUpdateInfo(implicit p: Parameters) extends Bundle with HasValid {
     val valid = Bool()
     val pc = UInt(p(ADDR_WIDTH).W)
-    val target = UInt((p(ADDR_WIDTH) / 4).W)
+    val target = UInt(p(ADDR_WIDTH).W)
     val isCall = Bool()
     val isReturn = Bool()
 }
@@ -54,5 +54,5 @@ class L1BTBEntry(implicit p:Parameters) extends Bundle with HasValid {
     val isCall = Bool()
     val isReturn = Bool()
     val tag = UInt(p(L1BTBParam).btbTagBits.W)
-    val target = UInt((p(ADDR_WIDTH) / 4).W)
+    val target = UInt(p(ADDR_WIDTH).W)
 }

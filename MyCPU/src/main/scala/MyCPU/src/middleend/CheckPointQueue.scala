@@ -17,7 +17,7 @@ class CheckPointQueue(size: Int)(implicit p: Parameters) extends Module {
         val deq = Output(new CheckPointInfo)
     })
 
-    val queue = Module(new MultiPortQueueNW1R(size, p(FETCH_WIDTH), new CheckPointInfo))
+    val queue = Module(new MultiPortQueueNW1R(size, p(FETCH_WIDTH), "CheckPointQueue", new CheckPointInfo))
 
     queue.io.flush := io.flush
     queue.io.enq := io.enq

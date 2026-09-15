@@ -8,6 +8,7 @@ namespace emulator {
   static spike_wrapper spike_wrapper_;
   static void *spike_handle = nullptr;
 
+
   void init_spike(const std::string& filepath) {
     spike_handle = dlopen(filepath.c_str(), RTLD_LAZY);
     if (!spike_handle) {
@@ -40,7 +41,11 @@ namespace emulator {
       (spike_wrapper::spike_get_vl_func_t)dlsym(spike_handle, "spike_get_vl");
     spike_wrapper_.spike_get_vtype = 
       (spike_wrapper::spike_get_vtype_func_t)dlsym(spike_handle, "spike_get_vtype");
-    
+    spike_wrapper_.read_spike_mem = 
+      (spike_wrapper::read_spike_mem_funct_t)dlsym(spike_handle, "read_spike_mem");
+    spike_wrapper_.spike_disasm = 
+      (spike_wrapper::spike_disasm_funct_t)dlsym(spike_handle, "spike_disasm");
+
   }
 
   void deinit_spike() {
@@ -53,9 +58,12 @@ namespace emulator {
   }
 
   void spike_create(const std::string& program_path) {
+    std::cout << program_path << std::endl;
     if(spike_wrapper_.spike_create) {
       spike_wrapper_.spike_create(program_path);
     }
+    auto insn = read_spike_mem(0x80000000);
+    std::cout << "First inst is:" << spike_disasm(insn) << std::endl;
   }
 
   void spike_delete() {
@@ -102,5 +110,13 @@ namespace emulator {
 
   unsigned long long get_spike_vtype(int hart_id) {
     return spike_wrapper_.spike_get_vtype(hart_id);
+  }
+
+  unsigned long long read_spike_mem(unsigned long long va) {
+    return spike_wrapper_.read_spike_mem(va);
+  }
+  
+  std::string spike_disasm(unsigned long long insn_bits) {
+    return spike_wrapper_.spike_disasm(insn_bits);
   }
 }

@@ -33,6 +33,7 @@ class DCacheReplacePolicyRefillUpdateInfo(implicit p: Parameters) extends Bundle
 class ReplacePolicyRefillReqInfo(implicit p: Parameters) extends Bundle with HasValid {
     val valid = Bool()
     val index = UInt(p(ICacheIndexBits).W)
+    val mshr_id = UInt(log2Ceil(p(ICacheMSHRNum)).W)
 }
 
 class ReplacePolicyRefillRespInfo(implicit p: Parameters) extends Bundle with HasValid {

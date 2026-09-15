@@ -5,7 +5,7 @@ import chisel3.util._
 import MyCPU.io._
 
 // Mem Impl[LutRam]
-class MultiPortQueueNW1R[T <: Bundle with HasValid](size: Int, nWritePorts: Int, gen: T) extends Module {
+class MultiPortQueueNW1R[T <: Data](size: Int, nWritePorts: Int, name: String, gen: T) extends Module {
     val io = IO(new Bundle {
         val flush = Input(Bool())
         val enq = Input(Vec(nWritePorts, gen))
@@ -31,15 +31,13 @@ class MultiPortQueueNW1R[T <: Bundle with HasValid](size: Int, nWritePorts: Int,
     val used = tailPtr - headPtr
     val free = size.U - used
 
-    val banks = Seq.fill(nWritePorts) {
-        if (perBankSize < 8)
-            Module(new SmallBank(perBankSize, gen))
-        else
-            Module(new LargeBank(perBankSize, gen))
+    val banks = Seq.tabulate(nWritePorts) {
+        b => new LargeBank(clock, reset, perBankSize, gen, name + "_" + b.toString()) // to do, use a random string as name
     }
 
     io.enqReady := used + writeCount <= size.U
     io.deqReady := headPtr =/= tailPtr
+    
 
     for(i <- 0 until nWritePorts) {
         val wr_index = tailPtr + i.U
@@ -47,14 +45,8 @@ class MultiPortQueueNW1R[T <: Bundle with HasValid](size: Int, nWritePorts: Int,
         val wr_row = wr_index(ptrWidth - 1, bankBits)
 
         for(b <- 0 until nWritePorts) {
-            banks(b).io.wen := false.B
-            banks(b).io.waddr := 0.U
-            banks(b).io.wdata := 0.U.asTypeOf(gen)
-            banks(b).io.wmask := (~(0.U)).asTypeOf(gen)
             when(b.U === wr_bank && io.enqReady && io.enqValid(i)) {
-                banks(b).io.wen := true.B
-                banks(b).io.waddr := wr_row
-                banks(b).io.wdata := io.enq(i)               
+                banks(b).write(wr_row, ~(0.U)(io.enq(i).asUInt.getWidth.W), io.enq(i).asUInt)               
             }
         }
     }
@@ -62,8 +54,7 @@ class MultiPortQueueNW1R[T <: Bundle with HasValid](size: Int, nWritePorts: Int,
     val readVec = Wire(Vec(nWritePorts, gen))
 
     for(i <- 0 until nWritePorts) {
-        banks(i).io.raddr := headPtrRow
-        readVec(i) := banks(i).io.rdata
+        readVec(i) := banks(i).read(headPtrRow).asTypeOf(gen)
     }
 
     io.deq := Mux(io.deqValid, readVec(headPtrBank), 0.U.asTypeOf(gen))

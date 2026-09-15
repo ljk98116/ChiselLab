@@ -1,15 +1,3 @@
-[submodule "tools/cde"]
-	path = tools/cde
-	url = https://github.com/chipsalliance/cde.git
-[submodule "tools/diplomacy"]
-	path = tools/diplomacy
-	url = https://github.com/chipsalliance/diplomacy.git
-[submodule "tools/chisel"]
-	path = tools/chisel
-	url = https://github.com/chipsalliance/chisel.git
-[submodule "tools/espresso"]
-	path = tools/espresso
-	url = https://github.com/chipsalliance/espresso
 [submodule "spike"]
 	path = tools/spike
 	url = https://github.com/riscv-software-src/riscv-isa-sim.git

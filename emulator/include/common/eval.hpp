@@ -11,8 +11,10 @@ namespace emulator {
         static Eval eval;
         return eval;
       }
-      uint32_t eval(const std::string& expr);
+      bool eval(const std::string& expr, uint64_t& result);
   };
+
+  bool eval(const std::string& expr, uint64_t& result);
 }
 
 #endif

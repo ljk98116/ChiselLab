@@ -45,7 +45,7 @@ class LoadQueue(implicit p: Parameters) extends Module {
   }
 
   val skidBuffers = Seq.fill(p(LDU_NUM))(
-    Module(new MultiPortQueueNW1R(p(FETCH_WIDTH) * 2, p(FETCH_WIDTH) / p(LDU_NUM), new BufferItem))
+    Module(new MultiPortQueueNW1R(p(FETCH_WIDTH) * 2, p(FETCH_WIDTH) / p(LDU_NUM), "LoadQueueWbSkidBuffer", new BufferItem))
   )
 
   val enqUops = RegInit(VecInit(

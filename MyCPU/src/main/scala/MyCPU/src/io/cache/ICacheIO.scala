@@ -15,6 +15,11 @@ class ICacheLineEntry(implicit p: Parameters) extends Bundle {
 class ICacheReadReq(implicit p: Parameters) extends Bundle with HasValid {
     val valid = Bool()
     val index = UInt(p(ICacheIndexBits).W)
+    val offset = UInt(p(L1CacheOffsetBits).W)
+}
+
+class ICacheLine(implicit p: Parameters) extends Bundle {
+    val datas = Vec(p(L1CacheLineLength), UInt(p(DATA_WIDTH).W))
 }
 
 class ICacheRefillResp(implicit p: Parameters) extends Bundle with HasValid {

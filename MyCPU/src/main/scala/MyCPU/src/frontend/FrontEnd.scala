@@ -10,6 +10,7 @@ import MyCPU.frontend.BPU.predictors._
 import org.chipsalliance.cde.config._
 import MyCPU.utils._
 
+
 class FrontEnd(implicit p: Parameters) extends Module {
     // if0 stage: generate fetch pc, access L0 & L1 BTB
     // if0 stage: access ITLB
@@ -32,7 +33,6 @@ class FrontEnd(implicit p: Parameters) extends Module {
         val wb1_l1_btb_update = Input(Vec(p(FETCH_WIDTH), new L1BTBUpdateInfo))
         val wb1_predictor_update = Input(Vec(p(FETCH_WIDTH), new PredictorUpdateInfo))
         // to commit stage
-        val wb1_l1_btb_enqReady = Output(Bool())
         val wb1_predictor_enqReady = Output(Bool())
         // to iTLB
         val if0_itlb_req = Output(Vec(p(FETCH_WIDTH), new ITLBReqInfo))
@@ -41,13 +41,15 @@ class FrontEnd(implicit p: Parameters) extends Module {
         // to icache, use part of page offset as index
         val if0_icache_req = Output(new ICacheReadReq)
         // from icache
-        val if2_icacheline = Input(Vec(p(L1CacheLineLength), UInt(p(DATA_WIDTH).W)))
+        val if2_insts = Input(Vec(p(FETCH_WIDTH), UInt(p(DATA_WIDTH).W)))
         val if2_icache_hit = Input(Bool())
         val if2_predecode = Input(Vec(p(FETCH_WIDTH), new ICacheBranchMetaInfo))
-
-        val icache_refill_valid = Input(Bool())
-        val icache_refill_pa = Input(new PhysicalAddress)
-        val icache_refill_data = Input(Vec(p(L1CacheLineLength), UInt(p(DATA_WIDTH).W)))
+        val if2_mshr_id = Input(UInt(log2Ceil(p(ICacheMSHRNum)).W))
+        val if2_mshr_id_valid = Input(Bool())
+        // to pipeline if5 stage
+        val if5_mshr_id = Input(UInt(log2Ceil(p(ICacheMSHRNum)).W))
+        val if5_mshr_id_valid = Input(Bool())
+        val if5_icache_refill_resp = Input(new ICacheRefillResp)
         // to middle end
         val if5_pc_vec = Output(Vec(p(FETCH_WIDTH), UInt(p(ADDR_WIDTH).W)))
         val if5_inst = Output(Vec(p(FETCH_WIDTH), UInt(p(DATA_WIDTH).W)))
@@ -61,9 +63,13 @@ class FrontEnd(implicit p: Parameters) extends Module {
         val l0btbhitCount = Output(UInt(64.W))
         val l1btbhitCount = Output(UInt(64.W))
         val refGHR = Input(UInt(p(GShareParamKey).BPUPredictorGlobalHistoryBits.W))
+        // debug
+        val pushCount = Output(UInt(32.W))
+        val popCount = Output(UInt(32.W))
     })
 
     dontTouch(io.refGHR)
+
     // debug counter
     val btbaccessCount = RegInit(0.U(64.W))
     val l0btbhitCount = RegInit(0.U(64.W))
@@ -78,11 +84,10 @@ class FrontEnd(implicit p: Parameters) extends Module {
     val predictor = Module(new GSharePredictor)
     val ras = Module(new RAS)
 
-    val l1_btb_wb_queue = Module(new L1BTBWbQueue(32))
     val pred_wb_queue = Module(new PredictorWbQueue(32))
     val inst_buffer = Module(new InstBuffer(p(FETCH_WIDTH)))
 
-    val offsetBits = 2
+    val offsetBits = p(FETCH_OFFSET)
     val fetchBits = log2Ceil(p(FETCH_WIDTH))
     val rasPtrWidth = log2Ceil(p(RASParam).RASSize)
     val counterBits = 2
@@ -94,7 +99,7 @@ class FrontEnd(implicit p: Parameters) extends Module {
     val flush = io.commit_redirect.flush
     val if1_flush = flush || if3_redirect.redirect
     val if2_flush = flush || if3_redirect.redirect
-    val if3_flush = flush || if3_redirect.redirect
+    val if3_flush = flush
 
     // commit_redirect because of branch mispred ?
     // if0 stall 4 period
@@ -113,16 +118,12 @@ class FrontEnd(implicit p: Parameters) extends Module {
         Seq.fill(p(FETCH_WIDTH))(0.U.asTypeOf(new PredictorUpdateInfo))
     ))
 
-    l1_btb_wb_queue.io.flush := flush
-    l1_btb_wb_queue.io.enq := io.wb1_l1_btb_update
-
     pred_wb_queue.io.flush := flush
     pred_wb_queue.io.enq := io.wb1_predictor_update
 
-    io.wb1_l1_btb_enqReady := l1_btb_wb_queue.io.enqReady
     io.wb1_predictor_enqReady := pred_wb_queue.io.enqReady
 
-    l1_btb.io.update := l1_btb_wb_queue.io.deq
+    l1_btb.io.update := io.wb1_l1_btb_update
     predictor.io.update := pred_wb_queue.io.deq
 
     // if0 stage
@@ -171,9 +172,21 @@ class FrontEnd(implicit p: Parameters) extends Module {
     btbaccessCount := btbaccessCount + PopCount(if0_ReqValid)
 
     val pcLocs = WireInit(VecInit(
-        Seq.tabulate(p(FETCH_WIDTH))(i => Cat(pc(p(ADDR_WIDTH) - 1, offsetBits + fetchBits), i.U(log2Ceil(p(FETCH_WIDTH)).W), 0.U(2.W)))
+        Seq.tabulate(p(FETCH_WIDTH))(
+            i => Cat(
+                pc(p(ADDR_WIDTH) - 1, offsetBits + fetchBits), 
+                i.U(fetchBits.W), 
+                0.U(offsetBits.W)
+            )
+        )
     ))
 
+    // printf("current pc: 0x%x\n", pc)
+    // 00 00  0,1,2,3
+    // 01 00  x,1,2,3
+    // 10 00  x,x,2,3
+    // 11 00  x,x,x,3
+    // 
     for(i <- 0 until p(FETCH_WIDTH)) {
         if0_ReqVec(i) := Mux(!if0_stall, pcLocs(i), 0.U)
 
@@ -194,21 +207,6 @@ class FrontEnd(implicit p: Parameters) extends Module {
         nextRASTopPtr := io.commit_redirect.rasTopPtr
         nextRASRedirect := true.B
         nextRASRedirectPC := io.commit_redirect.pc
-    }
-    // to do: decode redirect
-    .elsewhen(if3_redirect.redirect) {
-        nextIsCall := if3_redirect.isCall
-        nextIsReturn := if3_redirect.isReturn
-        nextRASTopPtr := if3_redirect.rasTopPtr
-        nextRASRedirect := true.B
-        nextRASRedirectPC := if3_redirect.pc
-    }
-    .elsewhen(if0_redirect.valid) {
-        nextIsCall := if0_redirect.isCall
-        nextIsReturn := if0_redirect.isReturn
-        nextRASTopPtr := 0.U
-        nextRASRedirect := false.B
-        nextRASRedirectPC := if0_redirect.pc      
     }
 
     when(io.commit_redirect.flush) {
@@ -241,7 +239,7 @@ class FrontEnd(implicit p: Parameters) extends Module {
     // itlb req
     for(i <- 0 until p(FETCH_WIDTH)) {
         io.if0_itlb_req(i).addr := if0_ReqVec(i)
-        io.if0_itlb_req(i).valid := if0_ReqValid(i)
+        io.if0_itlb_req(i).valid := if0_ReqValid(i)    
     }
 
     // icache req merge
@@ -250,7 +248,7 @@ class FrontEnd(implicit p: Parameters) extends Module {
         p(ICacheIndexBits) + p(L1CacheOffsetBits) + p(FETCH_OFFSET) - 1, 
         p(FETCH_OFFSET) + p(L1CacheOffsetBits)
     )
-
+    io.if0_icache_req.offset := if0_ReqVec(0)(p(FETCH_OFFSET) + p(L1CacheOffsetBits) - 1, p(FETCH_OFFSET))
     // if1 stage
     val if1_ReqVec = PipeReg(if0_ReqVec, if1_stall, if1_flush)
     val if1_ReqValid = PipeReg(if0_ReqValid, if1_stall, if1_flush)
@@ -275,7 +273,15 @@ class FrontEnd(implicit p: Parameters) extends Module {
 
     val if1_pred_resp = predictor.io.if1_predict
     val if1_l0_btb_resp = PipeReg(l0_btb.io.resp, if1_stall, if1_flush)
-    val if1_pa = io.if1_itlb_resp(0).paddr
+
+    val if1_pa = if(p(UseTLB)) {
+        io.if1_itlb_resp(0).paddr
+    } else {
+        val paWire = WireInit(0.U.asTypeOf(new PhysicalAddress))
+        // When not using a TLB, derive a PhysicalAddress from the request PC
+        paWire.bits := if1_ReqVec(0) - "h80000000".U
+        paWire
+    }
 
     // if2 stage btb judge hit, gshare judge mispred
     val if2_ReqVec = PipeReg(if1_ReqVec, if2_stall, if2_flush)
@@ -295,7 +301,7 @@ class FrontEnd(implicit p: Parameters) extends Module {
     // if1 do pht read, if3 judge redirect
     val if2_pred_resp = PipeReg(if1_pred_resp, if2_stall, if2_flush)
 
-    val if2_insts = io.if2_icacheline
+    val if2_insts = io.if2_insts
     val if2_icache_hit = io.if2_icache_hit
 
     io.if2_pc_vec := if2_ReqVec
@@ -304,26 +310,35 @@ class FrontEnd(implicit p: Parameters) extends Module {
     l1_btb.io.if2_reqPC := if2_ReqVec
     l1_btb.io.if2_reqValid := if2_ReqValid
     
-    // use real predecode result to update RAS
-    // 在 if2 阶段连接 RAS 的位置，原代码：
-    // ras.io.if2_isCall := VecInit(io.if2_predecode.map(_.isCall))(if2_l1_btb_resp.hitIndex)
-    // ras.io.if2_isReturn := VecInit(io.if2_predecode.map(_.isReturn))(if2_l1_btb_resp.hitIndex)
-    // ras.io.if2_pc := if2_ReqVec(if2_l1_btb_resp.hitIndex)
-    // ras.io.if2_pcValid := if2_ReqValid(if2_l1_btb_resp.hitIndex)
+    // process predecode res, get first call/return/branch idx
+    val if2_predecode = WireInit(VecInit(
+        Seq.fill(p(FETCH_WIDTH))(0.U.asTypeOf(new ICacheBranchMetaInfo))
+    ))
 
-    // 替换为：
-    val l1_hit_index = if2_l1_btb_resp.hitIndex
-    val l1_hit_valid = if2_l1_btb_resp.valid
-    val isCall = VecInit(io.if2_predecode.map(_.isCall))(l1_hit_index)
-    val isReturn = VecInit(io.if2_predecode.map(_.isReturn))(l1_hit_index)
-    val if2_pc = if2_ReqVec(l1_hit_index)
-    val if2_pcValid = if2_ReqValid(l1_hit_index)
+    if2_predecode := Mux(io.if2_icache_hit, io.if2_predecode, 
+        VecInit(
+            Seq.fill(p(FETCH_WIDTH))(0.U.asTypeOf(new ICacheBranchMetaInfo))
+        )
+    )
 
-    ras.io.if2_isCall   := l1_hit_valid && isCall && !if2_stall
-    ras.io.if2_isReturn := l1_hit_valid && isReturn && !if2_stall
-    ras.io.if2_pc       := if2_pc
-    ras.io.if2_pcValid  := l1_hit_valid && if2_pcValid && !if2_stall
+    val if2_pd_call   = VecInit(if2_predecode.zip(if2_ReqValid).map { case (p, v) => p.isCall   && v })
+    val if2_pd_return = VecInit(if2_predecode.zip(if2_ReqValid).map { case (p, v) => p.isReturn && v })
+    val if2_pd_condJump = VecInit(if2_predecode.zip(if2_ReqValid).map { 
+        case (p, v) => !p.isUnconditionalBranch && v 
+    })
+    
+    val if2_hasCall   = if2_pd_call.asUInt.orR
+    val if2_hasReturn = if2_pd_return.asUInt.orR
+    val if2_hasCondJump = if2_pd_condJump.asUInt.orR
 
+    val if2_callIdx   = PriorityEncoder(if2_pd_call)
+    val if2_returnIdx = PriorityEncoder(if2_pd_return)
+    val if2_firstCondJumpIdx = PriorityEncoder(if2_pd_condJump)
+
+    val if2_minRASIdx = WireInit(0.U(log2Ceil(p(FETCH_WIDTH)).W))
+    val if2_callOrRet = VecInit((0 until p(FETCH_WIDTH)).map(i => if2_pd_call(i) || if2_pd_return(i)))
+    if2_minRASIdx := PriorityEncoder(if2_callOrRet)
+    
     // if3 stage
     // judge redirect
     val if3_ReqVec = PipeReg(if2_ReqVec, if3_stall, if3_flush)
@@ -339,27 +354,66 @@ class FrontEnd(implicit p: Parameters) extends Module {
     val if3_icache_hit = PipeReg(if2_icache_hit, if3_stall, if3_flush)
     val if3_l0_btb_resp = PipeReg(if2_l0_btb_resp, if3_stall, if3_flush)
     val if3_pred_resp = PipeReg(if2_pred_resp, if3_stall, if3_flush)
+    val if3_mshr_id = PipeReg(io.if2_mshr_id, if3_stall, if3_flush)
+    val if3_mshr_id_valid = PipeReg(io.if2_mshr_id_valid, if3_stall, if3_flush)
 
     val if3_pa = PipeReg(if2_pa, if3_stall, if3_flush)
 
+    val if3_minRASIdx = PipeReg(if2_minRASIdx, if3_stall, if3_flush)
+    val if3_callIdx   = PipeReg(if2_callIdx, if3_stall, if3_flush)
+    val if3_returnIdx = PipeReg(if2_returnIdx, if3_stall, if3_flush)
+    val if3_firstCondJumpIdx = PipeReg(if2_firstCondJumpIdx, if3_stall, if3_flush)
+
+    val if3_hasCall   = PipeReg(if2_hasCall, if3_stall, if3_flush)
+    val if3_hasReturn = PipeReg(if2_hasReturn, if3_stall, if3_flush)
+    val if3_hasCondJump = PipeReg(if2_hasCondJump, if3_stall, if3_flush)
+
     val predResult = if3_pred_resp(if3_l1_btb_resp.hitIndex).counter(counterBits - 1)
-    val firstValidIndex = PriorityEncoder(if3_ReqValid)
+    val firstValidIndex = WireInit(0.U(log2Ceil(p(FETCH_WIDTH)).W))
+
+    dontTouch(firstValidIndex)
+    firstValidIndex := PriorityEncoder(if3_ReqValid)
 
     val l1_hit = if3_l1_btb_resp.valid
+    val l0_hit = if3_l0_btb_resp.valid
+
     val predValid = if3_pred_resp(if3_l1_btb_resp.hitIndex).valid
     val predTaken = if3_pred_resp(if3_l1_btb_resp.hitIndex).counter(counterBits - 1)
+    
+    // (1) L1 btb hit && predTaken is not uncond branch -> ras not update
+    // (2) L0 btb hit && predTaken && is not uncond branch -> ras not update
 
-    // 最终：L1是否认为taken
-    val l1_taken = l1_hit && predValid && predTaken
+    // call pred right/wrong, cpu always jump to the correct pc, 
+    // so when prev not has branch or prev branch not valid, call will always push to RAS
+    
+    // but when prev branch pred not jump is wrong, ras hold the wrong item, so we need to recover RAS with the
+    // old rasTopPtr [no inc or dec]
+
+    val l1_taken = l1_hit && (predValid && predTaken)
+    val l0_taken = l0_hit && (predValid && predTaken)
+
+    val canRasUpdate = !(
+        (l1_taken && if3_hasCondJump && if3_l1_btb_resp.hitIndex === if3_firstCondJumpIdx) ||
+        (l0_taken && if3_hasCondJump && if3_l0_btb_resp.hitIndex === if3_firstCondJumpIdx)
+    )
+    
+    ras.io.if3_isCall := canRasUpdate && if3_hasCall
+    ras.io.if3_isReturn := canRasUpdate && if3_hasReturn
+    ras.io.if3_pc := if3_ReqVec(if3_minRASIdx)
+    ras.io.if3_pcValid := if3_ReqValid(if3_minRASIdx)
 
     // get if3 l0 btb update infos
+    // l0 btb miss 
+    // current l0 btb not use ras result to update 
     // l0 btb miss, l1 btb hit (pred jump or not jump) 
-    // l0 btb hit but l1 btb miss / pred not jump
+    // l0 btb hit but l1 btb miss
+
     // l0 btb hit l1 btb hit, but content different
     // if l1 btb hit and pred jump, use l1 btb hitIndex to mask behind req invalid
+    // 
     if3_l0_btb_update.valid := 
-        (if3_l0_btb_resp.valid && (!predValid || !predResult)) ||
-        (!if3_l0_btb_resp.valid && predValid) ||
+        (l0_hit && !(predValid && predResult)) ||
+        (!l0_hit && predValid) ||
         (
             if3_l0_btb_resp.valid && predValid && predResult &&
             ((if3_l0_btb_resp.isCall ^ if3_l1_btb_resp.isCall) ||
@@ -367,14 +421,26 @@ class FrontEnd(implicit p: Parameters) extends Module {
             (if3_l0_btb_resp.target =/= if3_l1_btb_resp.target) ||
             (if3_l0_btb_resp.hitIndex =/= if3_l1_btb_resp.hitIndex))
         )
+
+    val l0_hit_pc = WireInit(0.U(p(ADDR_WIDTH).W))
+    l0_hit_pc := if3_ReqVec(if3_l0_btb_resp.hitIndex)
+    dontTouch(l0_hit_pc)
+
     if3_l0_btb_update.pc := if3_ReqVec(if3_l1_btb_resp.hitIndex)
+    dontTouch(if3_l0_btb_update.pc)
+
     if3_l0_btb_update.isCall := if3_l1_btb_resp.isCall
     if3_l0_btb_update.isReturn := if3_l1_btb_resp.isReturn
     if3_l0_btb_update.target := if3_l1_btb_resp.target
 
+    // redirect means what ?
+    // 
+    // judge l1 btb hit && pred no branch
     // l0 btb hit but if3 pred not jump (l1 btb miss || pred not jump)
     // l0 btb miss l1 btb hit && jump
+    // if3_isCall && if3_rasIsCall
     if3_redirect.redirect :=
+        (ras.io.if3_isReturn) ||
         (if3_l0_btb_resp.valid && !l1_taken) ||
         (!if3_l0_btb_resp.valid && l1_taken) ||
         (
@@ -388,38 +454,40 @@ class FrontEnd(implicit p: Parameters) extends Module {
     // target
     val seqTarget = if3_ReqVec(firstValidIndex) + 4.U
 
-    val l0_fallthrough =
-        if3_ReqVec(if3_l0_btb_resp.hitIndex) + 4.U
+    val l0_fallthrough = l0_hit_pc + 4.U
 
-    if3_redirect.target := Mux(l1_taken && if3_ReqValid(if3_l1_btb_resp.hitIndex),
-        Mux(if3_l1_btb_resp.isReturn, if3_rasTop, if3_l1_btb_resp.target),
-        Mux(if3_l0_btb_resp.valid && if3_ReqValid(if3_l0_btb_resp.hitIndex),
-            l0_fallthrough,
-            seqTarget
-        )
-    )
+    val use_l0_pred = WireInit(false.B)
+
+    use_l0_pred := if3_l0_btb_resp.valid && if3_ReqValid(if3_l0_btb_resp.hitIndex)
+
+    when(l1_taken) {
+        if3_redirect.target := if3_l1_btb_resp.target
+    }
+    .elsewhen(if3_l1_Call) {
+        if3_redirect.target := if3_ReqVec(if3_firstCall) + 4.U
+    }
+    .otherwise {
+        if3_redirect.target := Mux(use_l0_pred, l0_fallthrough, seqTarget)
+    }
 
     // pc（redirect来源指令）
-    if3_redirect.pc := Mux(l1_taken && if3_ReqValid(if3_l1_btb_resp.hitIndex),
-        if3_ReqVec(if3_l1_btb_resp.hitIndex),
-        Mux(if3_l0_btb_resp.valid && if3_ReqValid(if3_l0_btb_resp.hitIndex),
-            if3_ReqVec(if3_l0_btb_resp.hitIndex),
-            if3_ReqVec(firstValidIndex)
+    if3_redirect.pc := Mux(
+        (if3_rasIsReturn && if3_rasTopPtr =/= 0.U), 
+        if3_ReqVec(if3_minRASIdx), 
+        Mux(
+            l1_taken, 
+            if3_ReqVec(if3_l1_btb_resp.hitIndex), 
+            Mux(
+                use_l0_pred, 
+                if3_ReqVec(if3_l0_btb_resp.hitIndex), 
+                if3_ReqVec(firstValidIndex)
+            )
         )
     )
 
     // l0 btb hit but if3 not jump, false, not a branch
-    if3_redirect.isCall := Mux(
-        predResult && predValid,
-        if3_l1_btb_resp.isCall,
-        false.B
-    )
-
-    if3_redirect.isReturn := Mux(
-        predResult && predValid,
-        if3_l1_btb_resp.isReturn,
-        false.B
-    )
+    if3_redirect.isCall := false.B
+    if3_redirect.isReturn := false.B
 
     // l1 btb hit / not hit reset rasTop to origin
     if3_redirect.rasTopPtr := if3_rasTopPtr
@@ -434,7 +502,9 @@ class FrontEnd(implicit p: Parameters) extends Module {
 
     for(i <- 0 until p(FETCH_WIDTH)) {
         when(
-            (if3_l1_btb_resp.valid && predValid && predResult && if3_l1_btb_resp.hitIndex < i.U) ||
+            (if3_rasIsCall && if3_minRASIdx < i.U) ||
+            (if3_rasIsReturn && if3_minRASIdx < i.U) ||
+            (l1_taken && if3_l1_btb_resp.hitIndex < i.U) ||
             (if3_l0_btb_resp.valid && if3_l0_btb_resp.hitIndex < i.U)
         ) {
             if3_ReqValid_o(i) := false.B
@@ -449,6 +519,8 @@ class FrontEnd(implicit p: Parameters) extends Module {
     ))
 
     val if4_if3_redirect = PipeReg(if3_redirect, if4_stall, flush)
+    val if4_flush = flush
+
     val if4_l0_btb_resp = PipeReg(if3_l0_btb_resp, if4_stall, flush)
     val if4_l1_btb_resp = PipeReg(if3_l1_btb_resp, if4_stall, flush)
 
@@ -458,6 +530,9 @@ class FrontEnd(implicit p: Parameters) extends Module {
     val if4_insts = PipeReg(if3_insts, if4_stall, flush)
     val if4_icache_hit = PipeReg(if3_icache_hit, if4_stall, flush)
     val if4_rasTopPtr = PipeReg(if3_rasTopPtr, if4_stall, flush)
+
+    val if4_mshr_id = PipeReg(if3_mshr_id, if4_stall, flush)
+    val if4_mshr_id_valid = PipeReg(if3_mshr_id_valid, if4_stall, flush)
 
     val if4_noRedirectIsCall = Mux(if4_l0_btb_resp.valid, if4_l0_btb_resp.isCall, false.B)
     val if4_noRedirectIsReturn = Mux(if4_l0_btb_resp.valid, if4_l0_btb_resp.isReturn, false.B)
@@ -491,11 +566,15 @@ class FrontEnd(implicit p: Parameters) extends Module {
     inst_buffer.io.if4_inst_i := if4_insts
     inst_buffer.io.if4_branch_result_i := if4_branch_results
     inst_buffer.io.if4_pa_i := if4_pa
+    inst_buffer.io.if4_mshr_id_i := if4_mshr_id
+    inst_buffer.io.if4_mshr_id_valid_i := if4_mshr_id_valid
     inst_buffer.io.if4_icache_hit_i := if4_icache_hit
 
-    inst_buffer.io.refill_valid_i := io.icache_refill_valid
-    inst_buffer.io.refill_pa_i := io.icache_refill_pa
-    inst_buffer.io.refill_insts_i := io.icache_refill_data
+    inst_buffer.io.refill_valid_i := io.if5_icache_refill_resp.valid
+    inst_buffer.io.refill_pa_i := io.if5_icache_refill_resp.pa
+    inst_buffer.io.refill_insts_i := io.if5_icache_refill_resp.data
+    inst_buffer.io.refill_mshr_id_i := io.if5_mshr_id
+    inst_buffer.io.refill_mshr_id_valid_i := io.if5_mshr_id_valid
 
     // if4 stage deq, if5 get deq item
     io.if5_inst := inst_buffer.io.if5_inst_o
@@ -507,7 +586,6 @@ class FrontEnd(implicit p: Parameters) extends Module {
     val if4_l1_btb_hit = PipeReg(if3_l1_btb_hit, if4_stall, flush)
     val if5_l1_btb_hit = PipeReg(if4_l1_btb_hit, io.stall_from_backpipe, flush)
 
-    val if3_predecode = PipeReg(io.if2_predecode, if3_stall, if3_flush)
     val if4_predecode = PipeReg(if3_predecode, if4_stall, flush)
     val if5_predecode = PipeReg(if4_predecode, io.stall_from_backpipe, flush)
 
@@ -527,4 +605,7 @@ class FrontEnd(implicit p: Parameters) extends Module {
         }
         l1btbhitCount := l1btbhitCount + PopCount(l1_btb_hit_mask)
     }
+
+    io.pushCount := ras.io.pushCount
+    io.popCount := ras.io.popCount
 }
