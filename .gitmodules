@@ -1,2 +1,4 @@
-
-
+[submodule "spike"]
+	path = tools/spike
+	url = https://github.com/ljk98116/spike.git
+	branch = ljk/spike_dpi
