@@ -18,10 +18,12 @@ class IF3RedirectInfo(implicit p: Parameters) extends Bundle {
 
 class BranchPredInfo(implicit p: Parameters) extends Bundle with HasValid {
     val valid = Bool()
-    val isCall = Bool();
-    val isReturn = Bool();
+    val isCall = Bool()
+    val isReturn = Bool()
+    val isCond = Bool()
     val target = UInt(p(ADDR_WIDTH).W)
     val counter = UInt(2.W)
+    val taken = Bool()
 
     val BPUPredictorGlobalHistoryBits = GetBPUPredictorGlobalHistoryBits
     def GetBPUPredictorGlobalHistoryBits: Int = {

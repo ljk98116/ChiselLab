@@ -79,7 +79,9 @@ class RAS(implicit p: Parameters) extends Module {
   // 根据选中事件计算新栈顶指针、写数据、写地址、是否写内存
     // 计算新栈顶指针
     val newPtr = MuxCase(rasTopPtr, Seq(
-        (selRedirectCall || selRedirectReturn) -> io.redirectRasTopPtr,
+        selRedirectCall  -> incPtr(io.redirectRasTopPtr),
+        selRedirectReturn -> decPtr(io.redirectRasTopPtr),
+        io.redirectValid -> io.redirectRasTopPtr,
         selif3Call -> incPtr(rasTopPtr),
         selif3Return -> decPtr(rasTopPtr)
     ))
@@ -104,18 +106,13 @@ class RAS(implicit p: Parameters) extends Module {
         rasMem.write(writeAddr, writeData)
     }
 
-    // 更新栈顶指针
-    when(selRedirectCall || selRedirectReturn || selif3Call || selif3Return) {
-        rasTopPtr := newPtr
-    }
-
     // 写内存（仅调用时）
     when(doWrite) {
         rasMem.write(writeAddr, writeData)
     }
 
     // 更新栈顶指针（任一事件发生时）
-    when(selRedirectCall || selRedirectReturn || selif3Call || selif3Return) {
+    when(selRedirectCall || selRedirectReturn || selif3Call || selif3Return || io.redirectValid) {
         rasTopPtr := newPtr
     }
 
@@ -127,8 +124,8 @@ class RAS(implicit p: Parameters) extends Module {
     val pushCnt = RegInit(0.U(32.W))
     val popCnt  = RegInit(0.U(32.W))
 
-    when(io.redirectValid && io.redirectRasTopPtr =/= rasTopPtr) {
-        printf(p"""[RAS-RESTORE] oldPtr=${rasTopPtr} newPtr=${io.redirectRasTopPtr}\n""")
+    when(io.redirectValid || io.redirectIsCall || io.redirectIsReturn) {
+        printf(p"""[RAS-RESTORE] oldPtr=${rasTopPtr} newPtr=${newPtr}\n""")
     }
 
     when(io.if3_pcValid && io.if3_isCall) {

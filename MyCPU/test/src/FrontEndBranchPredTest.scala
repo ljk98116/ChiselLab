@@ -224,6 +224,66 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
     println(s"[validate] trace OK，共执行 $steps 步")
   }
 
+  "Golden CPU sanity" in {
+    val trace = buildTrace()
+    val map   = trace.map(i => i.pc -> i).toMap
+    val ENTRY = 0x80000000L
+
+    val ras        = scala.collection.mutable.Stack[Long]()
+    val visitCount = scala.collection.mutable.Map[Long, Int]().withDefaultValue(0)
+    var ghr        = 0L
+    var pc         = ENTRY
+    var steps      = 0
+    var pushCnt    = 0
+    var popCnt     = 0
+    val MAX        = 5000
+    var done       = false
+    var errorMsg   = ""
+
+    while (steps < MAX && !done) {
+      map.get(pc) match {
+        case None =>
+          errorMsg = f"离开 trace: pc=0x$pc%08x step=$steps"
+          done = true
+        case Some(inst) =>
+          val c = visitCount(pc); visitCount(pc) = c + 1
+
+          var taken = inst.takenFn.map(f => f(c)).getOrElse(inst.taken)
+          var next  = pc + 4L
+
+          if (inst.isCall) {
+            ras.push(pc + 4L); pushCnt += 1
+            next = inst.target; taken = true
+          } else if (inst.isReturn) {
+            if (ras.nonEmpty) {
+              next = ras.pop(); popCnt += 1; taken = true
+            } else {
+              next = pc + 4L; taken = false
+            }
+          } else if (inst.isBranch) {
+            next = if (taken) inst.target else pc + 4L
+          }
+          if (inst.isBranch) ghr = (ghr >> 1) | (if (taken) (1L << 19) else 0L)
+
+          // halt 检测：pc 不前进
+          // golden CPU 里的 halt 检测
+          if (inst.isBranch && !inst.isCond && next == pc) {
+            done = true
+          } else {
+            pc = next
+          }
+          steps += 1
+      }
+    }
+
+    println(f"[golden] 最终: steps=$steps push=$pushCnt pop=$popCnt RAS.size=${ras.size}")
+    println(f"[golden] 最后 pc=0x$pc%08x")
+
+    assert(errorMsg.isEmpty, errorMsg)
+    assert(ras.isEmpty, s"golden RAS 不空，栈里还有 ${ras.size} 项")
+    assert(pushCnt == popCnt, s"push=$pushCnt != pop=$popCnt")
+  }
+    
   // ─────────────────────────────────────────────────────────
   //  测试主体
   // ─────────────────────────────────────────────────────────
@@ -234,39 +294,41 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
     val instrMap = trace.map(i => i.pc -> i).toMap
     def getInstr(pc: Long): Instr = instrMap.getOrElse(pc, Instr(pc, tag = "unknown"))
 
+    // 加到 FrontEndBranchPredTest 里，作为独立 test
+
     test(new RAS) { dut =>
       // 初始栈空，rasTopPtr=0
       dut.io.redirectValid.poke(false.B)
-      dut.io.if2_isCall.poke(false.B)
-      dut.io.if2_isReturn.poke(false.B)
-      dut.io.if2_pcValid.poke(false.B)
+      dut.io.if3_isCall.poke(false.B)
+      dut.io.if3_isReturn.poke(false.B)
+      dut.io.if3_pcValid.poke(false.B)
       dut.clock.step()
 
       // push 0x1004
-      dut.io.if2_isCall.poke(true.B)
-      dut.io.if2_pc.poke(0x1000L.U)
-      dut.io.if2_pcValid.poke(true.B)
+      dut.io.if3_isCall.poke(true.B)
+      dut.io.if3_pc.poke(0x1000L.U)
+      dut.io.if3_pcValid.poke(true.B)
       dut.clock.step()
       println(s"after push: ptr=${dut.io.rasTopPtr.peek()}, top=0x${dut.io.rasTop.peek().litValue.longValue.toHexString}")
       // 期望：ptr=1
 
-      dut.io.if2_isCall.poke(false.B)
-      dut.io.if2_pcValid.poke(false.B)
+      dut.io.if3_isCall.poke(false.B)
+      dut.io.if3_pcValid.poke(false.B)
 
       // push 0x2004
-      dut.io.if2_isCall.poke(true.B)
-      dut.io.if2_pc.poke(0x2000L.U)
-      dut.io.if2_pcValid.poke(true.B)
+      dut.io.if3_isCall.poke(true.B)
+      dut.io.if3_pc.poke(0x2000L.U)
+      dut.io.if3_pcValid.poke(true.B)
       dut.clock.step()
       println(s"after push2: ptr=${dut.io.rasTopPtr.peek()}, top=0x${dut.io.rasTop.peek().litValue.longValue.toHexString}")
       // 期望：ptr=2, top=0x2004
 
-      dut.io.if2_isCall.poke(false.B)
-      dut.io.if2_pcValid.poke(false.B)
+      dut.io.if3_isCall.poke(false.B)
+      dut.io.if3_pcValid.poke(false.B)
 
       // pop
-      dut.io.if2_isReturn.poke(true.B)
-      dut.io.if2_pcValid.poke(true.B)
+      dut.io.if3_isReturn.poke(true.B)
+      dut.io.if3_pcValid.poke(true.B)
       dut.clock.step()
       println(s"after pop: ptr=${dut.io.rasTopPtr.peek()}, top=0x${dut.io.rasTop.peek().litValue.longValue.toHexString}")
       // 期望：ptr=1, top=0x1004
@@ -352,6 +414,7 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
         dut.io.if5_mshr_id_valid.poke(false.B)
         dut.io.if2_icache_hit.poke(true.B)
 
+        val redirectInPacket = false
         // ── if2 预解码 ──
         for (i <- 0 until fetchWidth) {
           if (dut.io.if2_valid_vec(i).peek().litToBoolean) {
@@ -398,6 +461,7 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
           dut.io.wb1_predictor_update(i).misPred.poke(false.B)
           dut.io.wb1_predictor_update(i).pc.poke(0.U)
           dut.io.wb1_predictor_update(i).taken.poke(false.B)
+          dut.io.wb1_predictor_update(i).isCond.poke(false.B)
 
           dut.io.wb1_l1_btb_update(i).valid.poke(false.B)
           dut.io.wb1_l1_btb_update(i).pc.poke(0.U)
@@ -412,11 +476,12 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
           val if5_pc     = if5_pcs(i).litValue.longValue
 
           val predTarget = if5_preds(i).target.litValue.longValue
-          val predTaken  = if5_preds(i).counter.litValue.longValue >= 2
+          val predTaken  = if5_preds(i).taken.litToBoolean
           val rasTopPtr  = if5_preds(i).rasTopPtr.litValue.longValue
           val if5_valid = if5_valids(i).litToBoolean
+          val if5_condJump = if5_preds(i).isCond.litToBoolean
 
-          if(if5_valid) {
+          if(if5_valid && !commit_redirect) {
             assert(((if5_pc >> 2) & 3) == i, s"error at 0x%{$if5_pc}")
             val (realTaken, realTarget, realIsCall, realIsReturn, realIsBranch, tag) =
               golden.process(if5_pc)
@@ -426,7 +491,7 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
                           (getInstr(if5_pc).tag == "unknown")
 
             val inst = getInstr(if5_pc)
-
+            // println(f"[TEST-IF2]        isCall=${inst.isCall} isReturn=${inst.isReturn}")
             if (realIsReturn) {
               rasTotal += 1
               if (!misPred) rasCorrectTotal += 1
@@ -450,6 +515,7 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
             dut.io.wb1_predictor_update(i).misPred.poke(misPred.B)
             dut.io.wb1_predictor_update(i).pc.poke(if5_pc.U)
             dut.io.wb1_predictor_update(i).taken.poke(realTaken.B)
+            dut.io.wb1_predictor_update(i).isCond.poke(if5_condJump.B)
 
             dut.io.wb1_l1_btb_update(i).valid.poke(realIsBranch.B)
             dut.io.wb1_l1_btb_update(i).pc.poke(if5_pc.U)
@@ -466,11 +532,9 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
               dut.io.commit_redirect.rasTopPtr.poke(rasTopPtr.U)
               commit_redirect = true
             }
-            if (branchTotal <= 5) {
-              println(f"[pred] pc=0x$if5_pc%08x predT=$predTaken realT=$realTaken " +
-                      f"predTgt=0x$predTarget%08x realTgt=0x$realTarget%08x " +
-                      f"ctr=${if5_preds(i).counter.litValue.longValue} misPred=$misPred tag=$tag")
-            }
+            println(f"[pred] pc=0x$if5_pc%08x predT=$predTaken realT=$realTaken " +
+                    f"predTgt=0x$predTarget%08x realTgt=0x$realTarget%08x " +
+                    f"ctr=${if5_preds(i).counter.litValue.longValue} misPred=$misPred tag=$tag")
           }
           else {
             // ── 反馈给 DUT ──
@@ -481,6 +545,7 @@ class FrontEndBranchPredTest extends AnyFreeSpec with ChiselScalatestTester {
             dut.io.wb1_predictor_update(i).misPred.poke(false.B)
             dut.io.wb1_predictor_update(i).pc.poke(if5_pc.U)
             dut.io.wb1_predictor_update(i).taken.poke(false.B)
+            dut.io.wb1_predictor_update(i).isCond.poke(false.B)
 
             dut.io.wb1_l1_btb_update(i).valid.poke(false.B)
             dut.io.wb1_l1_btb_update(i).pc.poke(if5_pc.U)

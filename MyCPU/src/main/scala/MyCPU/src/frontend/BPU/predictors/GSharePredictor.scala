@@ -182,7 +182,6 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
         //     index=${if0_phtReqIndex(i)}
         //     """)
         // }
-
         wb3_bankId_vec(i)         := wb3_bankId
         wb3_bankRow_vec(i)        := wb3_bankRow
         wb3_nextPhtResult_vec(i)  := wb3_next
@@ -201,21 +200,25 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
         val selIdx = PriorityEncoder(hits)
 
         when(hasHit) {
-            phtBanks(b).write(wb3_bankRow_vec(selIdx), ~(0.U), wb3_nextPhtResult_vec(selIdx))
+            phtBanks(b).write(wb3_bankRow_vec(selIdx), ~(0.U)(counterBits.W), wb3_nextPhtResult_vec(selIdx))
         }
-
+        when(hasHit && wb3_valid_vec(selIdx)) {
+            printf(p"[PHT-WR] bank=$b row=${wb3_bankRow_vec(selIdx)} val=${wb3_nextPhtResult_vec(selIdx)} pc=0x${wb3_update(selIdx).pc}%x\n")
+        }
     }
 
 
     // update GHR
     // valid x x x x
     // taken x x x x
-    val wb2_ghr_shift = PopCount(wb2_update.map(_.valid))
+    val wb2_validCondVec = VecInit(wb2_update.map(u => u.valid && u.isCond))
+    val wb2_ghr_shift = PopCount(wb2_validCondVec)
 
     // target loc -> origin array mapping
 
     val wb2_takenVec = Wire(Vec(fetchWidth, Bool()))
     val wb2_validVec = VecInit(wb2_update.map(_.valid))
+    val wb2_condVec = VecInit(wb2_update.map(_.isCond))
 
     for (i <- 0 until fetchWidth) {
         wb2_takenVec(i) := wb2_update(i).taken
@@ -225,7 +228,7 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
     val wb2_prefix = Wire(Vec(fetchWidth, UInt(log2Ceil(fetchWidth + 1).W)))
     wb2_prefix(0) := 0.U
     for (i <- 1 until fetchWidth) {
-        wb2_prefix(i) := wb2_prefix(i-1) + wb2_validVec(i-1)
+        wb2_prefix(i) := wb2_prefix(i-1) + (wb2_validVec(i-1) && wb2_condVec(i-1))
     }
 
     val wb2_mask = WireInit(0.U((fetchWidth + 1).W))
@@ -275,5 +278,6 @@ class GSharePredictor(implicit p: Parameters) extends Predictor {
     .elsewhen(!io.if0_stall) {
         ghist_spec := (if2_ghist >> if2_branchCount) | (if2_packedTaken(fetchWidth - 1) << if2_shiftAmt)
     }
+
 
 }

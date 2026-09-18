@@ -45,6 +45,7 @@ class PredictorUpdateInfo(implicit p: Parameters) extends Bundle with HasValid {
     val counter = UInt(2.W)
     val taken = Bool()
     val misPred = Bool()
+    val isCond = Bool()
 
     val BPUPredictorGlobalHistoryBits = GetBPUPredictorGlobalHistoryBits
     def GetBPUPredictorGlobalHistoryBits: Int = {

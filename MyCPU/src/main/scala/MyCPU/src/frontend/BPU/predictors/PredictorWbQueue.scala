@@ -58,8 +58,15 @@ class PredictorWbQueue(size: Int)(implicit p: Parameters) extends Module {
         val wb2_enq = RegNext(io.enq)
 
         for(i <- 0 until p(FETCH_WIDTH)) {
-            skidBuffers(b).io.enq(i) := wb2_enq(wb2_bankHitPrefixSum(i))
-            skidBuffers(b).io.enqValid(i) := wb2_enq(wb2_bankHitPrefixSum(i)).valid
+            skidBuffers(b).io.enq(i) := 0.U.asTypeOf(new PredictorUpdateInfo)
+            skidBuffers(b).io.enqValid(i) := false.B
+        }
+        
+        for(i <- 0 until p(FETCH_WIDTH)) {
+            skidBuffers(b).io.enq(wb2_bankHitPrefixSum(i)) := wb2_enq(i)
+            skidBuffers(b).io.enqValid(wb2_bankHitPrefixSum(i)) := 
+                wb2_enq(i).valid && 
+                (wb2_enq(i).pc(bankBits + offsetBits - 1, offsetBits) === b.U)
         }
 
         skidBuffers(b).io.flush := io.flush

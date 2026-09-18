@@ -81,7 +81,7 @@ class L1BTB(implicit p: Parameters) extends Module {
 
     val if1_targetVec = WireInit(VecInit(
         Seq.fill(bankNum)(VecInit(
-            Seq.fill(wayNum)(0.U((p(ADDR_WIDTH) / 4).W))
+            Seq.fill(wayNum)(0.U(p(ADDR_WIDTH).W))
         ))
     ))
 
