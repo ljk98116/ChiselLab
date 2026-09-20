@@ -35,7 +35,7 @@ object Elaborate extends App {
     //     firtoolOptions
     // )
     circt.stage.ChiselStage.emitSystemVerilogFile(
-        new FrontEnd,
+        new AXI4Crossbar(1, 2),
         Array("--output-annotation-file", "/home/ljk/Arch/ChiselLab/MyCPUAnno.json") ++ args,
         firtoolOptions
     )

@@ -6,6 +6,7 @@ import org.chipsalliance.cde.config._
 
 import MyCPU.config._
 import MyCPU.io._
+import MyCPU.utils._
 
 class AXI4Sram (
     depth: Int,
@@ -17,7 +18,7 @@ class AXI4Sram (
         val axi4_slave = new AXI4(addrWidth, dataWidth, idWidth)
     })
 
-    val mem = SyncReadMem(depth, UInt(dataWidth.W))
+    val mem = new LargeSyncBank(clock, reset, depth, UInt(dataWidth.W), "dut_memory")
 
     val writeAddr = Reg(UInt(addrWidth.W))
     val writeLen  = Reg(UInt(8.W))
@@ -48,6 +49,7 @@ class AXI4Sram (
 
         mem.write(
             writeAddr >> log2Ceil(dataWidth/8),
+            ~(0.U)(dataWidth.W),
             io.axi4_slave.w.bits.data
         )
         writeAddr := writeAddr + beatBytes
@@ -72,10 +74,10 @@ class AXI4Sram (
 
     // R
     val rdata = mem.read(
-        readAddr >> log2Ceil(dataWidth/8),
-        io.axi4_slave.r.ready
+        readAddr >> log2Ceil(dataWidth/8)
     )
-
+    
+    io.axi4_slave.r.ready := true.B
     io.axi4_slave.r.valid := true.B
 
     io.axi4_slave.r.bits.id := readId

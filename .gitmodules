@@ -2,3 +2,6 @@
 	path = tools/spike
 	url = https://github.com/ljk98116/spike.git
 	branch = ljk/spike_dpi
+[submodule "riscv-coremark"]
+	path = apps/riscv-coremark
+	url = https://github.com/riscv-boom/riscv-coremark.git

@@ -9,7 +9,7 @@ import MyCPU.io._
 import MyCPU.utils._
 import MyCPU.cache._
 
-class Backend(implicit p: Parameters) extends Module {
+class BackEnd(implicit p: Parameters) extends Module {
     val io = IO(new Bundle {
         val flush = Input(Bool())
         val ldu_uops = Input(Vec(p(FETCH_WIDTH), new uOp))

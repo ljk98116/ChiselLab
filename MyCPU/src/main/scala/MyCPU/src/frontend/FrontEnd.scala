@@ -39,6 +39,10 @@ class FrontEnd(implicit p: Parameters) extends Module {
         val if1_itlb_resp = Input(Vec(p(FETCH_WIDTH), new ITLBRespInfo))
         // to icache, use part of page offset as index
         val if0_icache_req = Output(new ICacheReadReq)
+        val if1_stall = Output(Bool())
+        val if2_stall = Output(Bool())
+        val if1_flush = Output(Bool())
+        val if2_flush = Output(Bool())
         // from icache
         val if2_insts = Input(Vec(p(FETCH_WIDTH), UInt(p(DATA_WIDTH).W)))
         val if2_icache_hit = Input(Bool())
@@ -100,6 +104,9 @@ class FrontEnd(implicit p: Parameters) extends Module {
     val if2_flush = flush || if3_redirect.redirect
     val if3_flush = flush
 
+    io.if1_flush := if1_flush
+    io.if2_flush := if2_flush
+    
     // commit_redirect because of branch mispred ?
     // if0 stall 4 period
     val misPredPenaltyCounter = RegInit(0.U(3.W))
@@ -159,6 +166,9 @@ class FrontEnd(implicit p: Parameters) extends Module {
     l1_btb.io.if1_flush := if1_flush
     l1_btb.io.if2_flush := if2_flush    
     
+    io.if1_stall := if1_stall
+    io.if2_stall := if2_stall
+
     // predictor use l0 btb hit to pred if1 GHRSpec
     predictor.io.commit_flush := io.commit_redirect.flush
     predictor.io.if2_flush := io.commit_redirect.flush | if3_redirect.redirect

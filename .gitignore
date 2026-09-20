@@ -32,3 +32,5 @@ emulator/src/*.d
 emulator/src/*.o
 emulator/src/*.d.tmp
 emulator/emu_main
+apps/emu_main
+apps/libdpi.so
