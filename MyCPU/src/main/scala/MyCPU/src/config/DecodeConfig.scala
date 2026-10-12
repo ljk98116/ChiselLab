@@ -45,6 +45,7 @@ object OpcodeVal {
     val CSR = "b1110011".U
 
     val FENCEI = "b0001111".U
+    val MULW = "b0111011".U
 }
 
 object Funct3Val {

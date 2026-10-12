@@ -43,7 +43,7 @@ class StoreWbQueue(size: Int)(implicit p: Parameters) extends Module {
         val mem5_stu_deqs = Output(Vec(p(STU_NUM), new StoreWbQueueItem))
         val dcache_refill_resp = Input(new DCacheRefillResp)
         val dcache_way_refill_resp = Input(new ReplacePolicyRefillRespInfo)
-        val mem5_stu_wb_stall = Output(Bool())
+        // val mem5_stu_wb_stall = Output(Bool())
     })
 
     val StoreBaseInfoBanks = Seq.fill(bankNum)(
@@ -138,10 +138,13 @@ class StoreWbQueue(size: Int)(implicit p: Parameters) extends Module {
             io.mem5_stu_deqs(b).bankId := StoreBaseInfoBanks(b)(headPtr).bankId
             io.mem5_stu_deqs(b).hitWay := StoreCacheInfoBanks(b)(headPtr).hitWay
         }
+        .otherwise {
+            io.mem5_stu_deqs(b) := 0.U.asTypeOf(new StoreWbQueueItem)
+        }
     }
 
     headPtr := headPtr + canDeq.asUInt
     tailPtr := Mux(canEnq, tailPtr + enqCount, tailPtr)
 
-    io.mem5_stu_wb_stall := !canDeq
+    // io.mem5_stu_wb_stall := !canDeq
 }

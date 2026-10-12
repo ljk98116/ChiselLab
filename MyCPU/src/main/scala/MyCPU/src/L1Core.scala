@@ -13,7 +13,10 @@ import org.chipsalliance.cde.config._
 import MyCPU.utils._
 
 // including L1 Cache and crossbar
-class MyCPU(implicit p: Parameters) extends Module {
+// to do: processor state broadcast to prev stages
+// processor state broadcast through wire use piperegs per 4 cycles
+// [4 x percycle delay] pipe processor statejj
+class L1Core(implicit p: Parameters) extends Module {
   val io = IO(new Bundle {
     val axi = new AXI4(p(ADDR_WIDTH), p(DATA_WIDTH), 4)
   })
@@ -28,8 +31,8 @@ class MyCPU(implicit p: Parameters) extends Module {
   val dcache = Module(new DCache)
   val dtlb = Module(new DTLB(64))
 
-  val prf = Module(new PRF)
-  val rob = Module(new ROB)
+  val middle_end_broadcaster = Module(new RedirectBroadcaster)
+  val front_end_broadcaster = Module(new RedirectBroadcaster)
 
   // to do: axi crossbar
   val crossbar = Module(new AXI4Crossbar(1, 2))
@@ -78,28 +81,45 @@ class MyCPU(implicit p: Parameters) extends Module {
 
   // to do: jal redirect from decode
 
-  // middleend <> prf
-  middleEnd.io.busyTables := prf.io.busyTable
-  prf.io.busyTableCheckPoint := middleEnd.io.checkPointInfo
-
-  // middleend <> rob
-  rob.io.dispatch1_uops := middleEnd.io.inorder_uops
-  rob.io.inorder_locs := middleEnd.io.inorder_locs
-
   // middleend <> backend
   backEnd.io.ldu_uops := middleEnd.io.load_uops
   backEnd.io.stu_uops := middleEnd.io.store_uops
   backEnd.io.alu_uops := middleEnd.io.alu_uops
+  backEnd.io.mult_uops := middleEnd.io.mult_uops
+  backEnd.io.div_uops := middleEnd.io.div_uops
+  backEnd.io.rem_uops := middleEnd.io.rem_uops
   backEnd.io.sys_uops := middleEnd.io.sys_uops
 
+  backEnd.io.freeRegIdBufferResp := middleEnd.io.freeRegIdBufferResp
+  backEnd.io.busyTableCheckPoint := middleEnd.io.checkPointInfo
+  backEnd.io.dispatch1_uops := middleEnd.io.inorder_uops
+  
+  middleEnd.io.busyTables := backEnd.io.busyTableCheckPoints
+  middleEnd.io.commit_regid_write_back := backEnd.io.freeRegIdBufferUpdate
+  middleEnd.io.commit_robId_write_back := backEnd.io.freeRobIdBufferUpdate
+  middleEnd.io.inorder_locs := backEnd.io.inorder_locs
+
   middleEnd.io.stall_from_backpipe := backEnd.io.issue0_stall
+  middleEnd.io.loadRAWHarvard <> backEnd.io.load_raw_harvards
+
+  // backend <> dcache
+
+  // backend <> dtlb
+
+  // dcache <> dcache wb queue
+  
+
+  // dcache <> crossbar
+  dcache.io.axi4_master.ar <> crossbar.io.slave_axi4s(1).ar
+  dcache.io.axi4_master.r <> crossbar.io.slave_axi4s(1).r
+  dcache.io.axi4_master.aw <> crossbar.io.slave_axi4s(1).aw
+  dcache.io.axi4_master.w <> crossbar.io.slave_axi4s(1).w
+  dcache.io.axi4_master.b <> crossbar.io.slave_axi4s(1).b
 
   // crossbar <> io
-  crossbar.io.master_axi4s(0).ar <> io.axi.ar
-  crossbar.io.master_axi4s(0).r <> io.axi.r
-  crossbar.io.master_axi4s(0).aw <> io.axi.aw
-  crossbar.io.master_axi4s(0).w <> io.axi.w
-  crossbar.io.master_axi4s(0).b <> io.axi.b
-
-  
+  io.axi.ar <> crossbar.io.master_axi4s(0).ar
+  io.axi.r <> crossbar.io.master_axi4s(0).r
+  io.axi.aw <> crossbar.io.master_axi4s(0).aw
+  io.axi.w <> crossbar.io.master_axi4s(0).w
+  io.axi.b <> crossbar.io.master_axi4s(0).b
 }

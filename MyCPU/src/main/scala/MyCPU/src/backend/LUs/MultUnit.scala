@@ -81,8 +81,8 @@ class MultUnit(implicit p: Parameters) extends Module {
         val multReady = Output(Bool())      
     })
     // at most 17 68 bits number, now use 18 datas
-    val adderNum = ((p(DATA_WIDTH) + 2) / 2 + 3 - 1) / 3
-    val boothNum = ((p(DATA_WIDTH) + 2) / 2 + 3 - 1) / 3 * 3
+    val adderNum = ((32 + 2) / 2 + 3 - 1) / 3
+    val boothNum = ((32 + 2) / 2 + 3 - 1) / 3 * 3
 
     // decode Funct3
     val sign_ext_d1 = WireInit(false.B)
@@ -92,50 +92,50 @@ class MultUnit(implicit p: Parameters) extends Module {
     sign_ext_d2 := !io.mult_input_info.funct3(1) // MUL/MULH
 
     // ext d1 and d2
-    val sign_ext_data1 = RegInit(0.U(((p(DATA_WIDTH) + 2) * 2).W))
-    val sign_ext_data2 = RegInit(0.U((p(DATA_WIDTH) + 2).W))
+    val sign_ext_data1 = RegInit(0.U(((32 + 2) * 2).W))
+    val sign_ext_data2 = RegInit(0.U((32 + 2).W))
 
     val cycleCounter = RegInit(0.U(4.W))
     // judge and ext data
     sign_ext_data1 := 
         Cat(
-            Fill(p(DATA_WIDTH) + 3, sign_ext_d1 && io.mult_input_info.data1(p(DATA_WIDTH) - 1)),
+            Fill(32 + 3, sign_ext_d1 && io.mult_input_info.data1(32 - 1)),
             io.mult_input_info.data1,
             false.B
         )
     sign_ext_data2 := 
         Cat(
-            sign_ext_d2 && io.mult_input_info.data2(p(DATA_WIDTH) - 1), 
+            sign_ext_d2 && io.mult_input_info.data2(32 - 1), 
             io.mult_input_info.data2, 
             false.B
         )
 
     // 17 68bits number
     val boothP = Seq.fill(boothNum)(
-        RegInit(0.U(((p(DATA_WIDTH) + 2) * 2).W))
+        RegInit(0.U(((32 + 2) * 2).W))
     )
 
     // 17 68bits numbers, 17bits c
     // left shift X 2 bits each iter
     // cycle 0 get 17 68bits numbers, 17 bits carry
-    val booth2BitModules = Seq.fill((p(DATA_WIDTH) + 2) / 2 + 1)(
-        Module(new BoothMult2Bits((p(DATA_WIDTH) + 2) * 2))
+    val booth2BitModules = Seq.fill((32 + 2) / 2 + 1)(
+        Module(new BoothMult2Bits((32 + 2) * 2))
     )
 
     // cycle1: get boothP and boothC
-    for(i <- 0 until(p(DATA_WIDTH) + 2, 2)) {
+    for(i <- 0 until(32 + 2, 2)) {
         val realIdx = i + 1
 
         booth2BitModules(i / 2).io.en := io.mult_input_info.valid && cycleCounter === 1.U
-        booth2BitModules(i / 2).io.x := Cat(sign_ext_data1((p(DATA_WIDTH) + 2) * 2 - 1 - i, 0), 0.U(i.W))  // sign_ext_data1 << i.U
+        booth2BitModules(i / 2).io.x := Cat(sign_ext_data1((32 + 2) * 2 - 1 - i, 0), 0.U(i.W))  // sign_ext_data1 << i.U
         
         booth2BitModules(i / 2).io.y_sub := sign_ext_data2(realIdx - 1)
         booth2BitModules(i / 2).io.y := sign_ext_data2(realIdx)
-        if(realIdx + 1 < p(DATA_WIDTH) + 2) {
+        if(realIdx + 1 < 32 + 2) {
             booth2BitModules(i / 2).io.y_add := sign_ext_data2(realIdx + 1)
         }
         else {
-            booth2BitModules(i / 2).io.y_add := sign_ext_data2(p(DATA_WIDTH) + 1)
+            booth2BitModules(i / 2).io.y_add := sign_ext_data2(32 + 1)
         }
     }
 
@@ -160,7 +160,7 @@ class MultUnit(implicit p: Parameters) extends Module {
     cycleCounter := Mux(io.multReady, 0.U, cycleCounter + io.mult_input_info.valid.asUInt)
     
     val CSA3Adders = Seq.fill(adderNum)(
-        Module(new CSA3((p(DATA_WIDTH) + 2) * 2))
+        Module(new CSA3((32 + 2) * 2))
     )
 
     for(i <- 0 until adderNum) {
@@ -198,17 +198,22 @@ class MultUnit(implicit p: Parameters) extends Module {
         }
     }
 
-    val result = WireInit(0.U(((p(DATA_WIDTH) + 2) * 2).W))
+    val result = WireInit(0.U(((32 + 2) * 2).W))
 
     result := boothP(0) + boothP(1)
 
-    val hi = WireInit(0.U(p(DATA_WIDTH).W))
-    val lo = WireInit(0.U(p(DATA_WIDTH).W))
+    val hi = WireInit(0.U(32.W))
+    val lo = WireInit(0.U(32.W))
 
     hi := result(64, 33)
     lo := result(32, 1)
 
-    io.result := Mux(io.mult_input_info.funct3 === 0.U, lo, hi)
+    when(io.mult_input_info.isW) {
+        io.result := Cat(Fill(32, lo(31)), lo)
+    }
+    .otherwise {
+        io.result := Mux(io.mult_input_info.funct3 === 0.U, lo, hi)        
+    }
 
     io.multReady := cycleCounter === 9.U
 }

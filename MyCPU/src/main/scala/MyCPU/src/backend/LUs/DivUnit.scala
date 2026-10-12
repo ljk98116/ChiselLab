@@ -21,22 +21,20 @@ class DivUnit(implicit p: Parameters) extends Module {
         val divReady = Output(Bool())      
     })
 
-    val isREM = RegNext(io.div_input_info.funct3(1))
-    val isDIV = RegNext(!io.div_input_info.funct3(1))
     val isSigned = RegNext(!io.div_input_info.funct3(0))
 
     val divResultIsMinus = RegInit(false.B)
     val remResultIsMinus = RegInit(false.B)
 
     // at most 34 periods
-    val cycleCounter = RegInit(0.U((log2Ceil(p(DATA_WIDTH) + 1)).W))
+    val cycleCounter = RegInit(0.U((log2Ceil(32 + 1)).W))
 
     // all bits preset to 1
-    val divEnd = RegInit(~(0.U)((p(DATA_WIDTH) * 2).W))
-    val divisor = RegInit(~(0.U)((p(DATA_WIDTH) + 1).W))
+    val divEnd = RegInit(~(0.U)((32 * 2).W))
+    val divisor = RegInit(~(0.U)((32 + 1).W))
 
-    val divResult = RegInit(0.U(p(DATA_WIDTH).W))
-    val remResult = WireInit(0.U(p(DATA_WIDTH).W))
+    val divResult = RegInit(0.U(32.W))
+    val remResult = WireInit(0.U(32.W))
 
     // Final signed correction used to be on the output:
     //   Mux(sign, ~RegNext(result) + 1.U, RegNext(result))
@@ -44,12 +42,12 @@ class DivUnit(implicit p: Parameters) extends Module {
     // two's-complement correction into low/high halves and register the final outputs.
     // The divider gets one extra correction cycle, but the critical incrementer width is
     // reduced from DATA_WIDTH to roughly DATA_WIDTH/2 and the IO path is flop-to-output.
-    require(p(DATA_WIDTH) >= 2 && p(DATA_WIDTH) % 2 == 0)
-    private val loWidth = p(DATA_WIDTH) / 2
-    private val hiWidth = p(DATA_WIDTH) - loWidth
+    require(32 >= 2 && 32 % 2 == 0)
+    private val loWidth = 32 / 2
+    private val hiWidth = 32 - loWidth
 
-    val divResultOut = RegInit(0.U(p(DATA_WIDTH).W))
-    val remResultOut = RegInit(0.U(p(DATA_WIDTH).W))
+    val divResultOut = RegInit(0.U(32.W))
+    val remResultOut = RegInit(0.U(32.W))
     val divRawHiReg = RegInit(0.U(hiWidth.W))
     val remRawHiReg = RegInit(0.U(hiWidth.W))
     val divLoCorrectedReg = RegInit(0.U(loWidth.W))
@@ -59,11 +57,11 @@ class DivUnit(implicit p: Parameters) extends Module {
     val divCorrectSignReg = RegInit(false.B)
     val remCorrectSignReg = RegInit(false.B)
 
-    val subResult = WireInit(0.U((p(DATA_WIDTH) + 1).W))
+    val subResult = WireInit(0.U((32 + 1).W))
     val isSubMinus = WireInit(false.B)
 
-    val op1 = RegInit(0.U(p(DATA_WIDTH).W))
-    val op2 = RegInit(0.U(p(DATA_WIDTH).W))
+    val op1 = RegInit(0.U(32.W))
+    val op2 = RegInit(0.U(32.W))
 
     op1 := io.div_input_info.data1
     op2 := io.div_input_info.data2
@@ -80,12 +78,12 @@ class DivUnit(implicit p: Parameters) extends Module {
     val abs1NegReg = RegInit(false.B)
     val abs2NegReg = RegInit(false.B)
 
-    val op1Neg = isSigned & op1(p(DATA_WIDTH) - 1)
-    val op2Neg = isSigned & op2(p(DATA_WIDTH) - 1)
+    val op1Neg = isSigned & op1(32 - 1)
+    val op2Neg = isSigned & op2(32 - 1)
     val op1Lo = op1(loWidth - 1, 0)
     val op2Lo = op2(loWidth - 1, 0)
-    val op1Hi = op1(p(DATA_WIDTH) - 1, loWidth)
-    val op2Hi = op2(p(DATA_WIDTH) - 1, loWidth)
+    val op1Hi = op1(32 - 1, loWidth)
+    val op2Hi = op2(32 - 1, loWidth)
     val abs1NegLo = (~op1Lo).asUInt + 1.U
     val abs2NegLo = (~op2Lo).asUInt + 1.U
 
@@ -103,16 +101,16 @@ class DivUnit(implicit p: Parameters) extends Module {
     val abs1 = Cat(Mux(abs1NegReg, abs1NegHi(hiWidth - 1, 0), abs1RawHiReg), abs1LoReg)
     val abs2 = Cat(Mux(abs2NegReg, abs2NegHi(hiWidth - 1, 0), abs2RawHiReg), abs2LoReg)
 
-    val zero_ext_abs1 = Cat(Fill(p(DATA_WIDTH), false.B), abs1)
+    val zero_ext_abs1 = Cat(Fill(32, false.B), abs1)
     val zero_ext_abs2 = Cat(false.B, abs2)
 
     // RISC-V DIV-by-zero quotient is all ones for both signed and unsigned DIV,
     // so do not sign-correct the quotient when divisor is zero.
     divResultIsMinus := isSigned & (op2 =/= 0.U) & (
-        op1(p(DATA_WIDTH) - 1) ^ op2(p(DATA_WIDTH) - 1)
+        op1(32 - 1) ^ op2(32 - 1)
     )
 
-    remResultIsMinus := isSigned & op1(p(DATA_WIDTH) - 1)
+    remResultIsMinus := isSigned & op1(32 - 1)
 
     val divIterDone = cycleCounter === 35.U
     val correctHiCycle = cycleCounter === 36.U
@@ -125,11 +123,11 @@ class DivUnit(implicit p: Parameters) extends Module {
         cycleCounter + io.div_input_info.valid.asUInt
     )
 
-    isSubMinus := divEnd(p(DATA_WIDTH) * 2 - 1, p(DATA_WIDTH) - 1) < divisor
+    isSubMinus := divEnd(32 * 2 - 1, 32 - 1) < divisor
 
     // no need to use +, because cycleCounter rising
     when(!isSubMinus && !io.divReady) {
-        divResult := divResult | (1.U << ((p(DATA_WIDTH) + 2).U - cycleCounter))
+        divResult := divResult | (1.U << ((32 + 2).U - cycleCounter))
     }.otherwise {
         divResult := Mux(io.divReady, 0.U, divResult)
     }
@@ -137,16 +135,16 @@ class DivUnit(implicit p: Parameters) extends Module {
     // do sub
     subResult := Mux(
         isSubMinus, 
-        divEnd(p(DATA_WIDTH) * 2 - 1, p(DATA_WIDTH) - 1), 
-        divEnd(p(DATA_WIDTH) * 2 - 1, p(DATA_WIDTH) - 1) - divisor
+        divEnd(32 * 2 - 1, 32 - 1), 
+        divEnd(32 * 2 - 1, 32 - 1) - divisor
     )
 
-    remResult := divEnd(p(DATA_WIDTH) * 2 - 1, p(DATA_WIDTH))
+    remResult := divEnd(32 * 2 - 1, 32)
 
     divEnd := Mux(
         cycleCounter === 2.U,
         zero_ext_abs1,
-        Cat(subResult(p(DATA_WIDTH)-1, 0), divEnd(p(DATA_WIDTH)-2, 0), false.B)
+        Cat(subResult(32-1, 0), divEnd(32-2, 0), false.B)
     )
 
     divisor := Mux(cycleCounter === 2.U, zero_ext_abs2, divisor)
@@ -156,9 +154,9 @@ class DivUnit(implicit p: Parameters) extends Module {
     // following ready cycle.  Correct the low half first and save the carry into the
     // high-half increment; correct the high half in the next cycle.
     val divRawLo = divResult(loWidth - 1, 0)
-    val divRawHi = divResult(p(DATA_WIDTH) - 1, loWidth)
+    val divRawHi = divResult(32 - 1, loWidth)
     val remRawLo = remResult(loWidth - 1, 0)
-    val remRawHi = remResult(p(DATA_WIDTH) - 1, loWidth)
+    val remRawHi = remResult(32 - 1, loWidth)
 
     val divNegLo = (~divRawLo).asUInt + 1.U
     val remNegLo = (~remRawLo).asUInt + 1.U
@@ -189,58 +187,15 @@ class DivUnit(implicit p: Parameters) extends Module {
         )
     }
 
-    io.divResult := divResultOut
-    io.remResult := remResultOut
-}
-
-// to do: pipelined div
-class DivUnitPipeLine(pipeLen: Int)(implicit p: Parameters) extends Module {
-    val io = IO(new Bundle {
-        val flush = Input(Bool())
-        val stall_from_backpipe = Input(Bool())
-        val div_input_info = Input(new DivUnitInputInfo)
-        val divResult = Output(UInt(p(DATA_WIDTH).W))
-        val remResult = Output(UInt(p(DATA_WIDTH).W))
-        val divResValid = Output(Bool())      
-    })
-
-    require(pipeLen == 33 || pipeLen == 34)
-
-    // 1st stage prepare op datas
-    val abs1 = WireInit(0.U(p(DATA_WIDTH).W))
-    val abs2 = WireInit(0.U(p(DATA_WIDTH).W))
-
-    val isREM = io.div_input_info.funct3(1)
-    val isDIV = !io.div_input_info.funct3(1)
-    val isSigned = !io.div_input_info.funct3(0)
-
-    abs1 := Mux(
-        isSigned & io.div_input_info.data1(p(DATA_WIDTH) - 1),
-        ~(io.div_input_info.data1(p(DATA_WIDTH) - 1, 0)) + 1.U,
-        io.div_input_info.data1
+    io.divResult := Mux(
+        io.div_input_info.isW, 
+        Cat(Fill(32, divResultOut(31)), divResultOut), 
+        divResultOut
     )
 
-    abs2 := Mux(
-        isSigned & io.div_input_info.data2(p(DATA_WIDTH) - 1),
-        ~(io.div_input_info.data2(p(DATA_WIDTH) - 1, 0)) + 1.U,
-        io.div_input_info.data2
+    io.remResult := Mux(
+        io.div_input_info.isW, 
+        Cat(Fill(32, remResultOut(31)), remResultOut), 
+        remResultOut
     )
-
-    val zero_ext_abs1 = RegInit(0.U((p(DATA_WIDTH) * 2).W))
-    zero_ext_abs1 := Cat(
-        Fill(p(DATA_WIDTH), false.B), abs1
-    )
-
-    val zero_ext_abs2 = RegInit(0.U((p(DATA_WIDTH) + 1).W))
-    zero_ext_abs2 := Cat(false.B, abs2)
-
-    val divisor_pipeLine = Seq.fill(pipeLen)(
-        RegInit(~(0.U)((p(DATA_WIDTH) + 1).W))
-    )
-
-    val dividend_pipeLine = Seq.fill(pipeLen)(
-        RegInit(~(0.U)((p(DATA_WIDTH) * 2).W))
-    )
-
-    
 }

@@ -92,6 +92,7 @@ class StoreBuffer(size: Int)(implicit p: Parameters) extends Module {
         val idx = headPtr + i.U
         val bankId = idx(bankBits - 1, 0)
         val bankRow = idx(ptrWidth - 1, bankBits)
+        io.storeBufferDeqs(i) := 0.U.asTypeOf(new AGUResult)
         for(b <- 0 until bankNum) {
             when(b.U === bankId && banks(b)(bankRow).valid && canDeq) {
                 io.storeBufferDeqs(i) := banks(b)(bankRow)
@@ -140,6 +141,9 @@ class StoreBuffer(size: Int)(implicit p: Parameters) extends Module {
             Seq.fill(size)(false.B)
         ))
 
+        val belowTailMaskSeq = Seq.fill(size)(WireInit(false.B))
+        val aboveTailMaskSeq = Seq.fill(size)(WireInit(false.B))
+        
         val hasAboveHit = WireInit(false.B)
         val hasBelowHit = WireInit(false.B)
 
@@ -168,18 +172,18 @@ class StoreBuffer(size: Int)(implicit p: Parameters) extends Module {
                 io.mem1_ldu_results(j).addr(p(DATA_WIDTH) - 1, p(FETCH_OFFSET)) === 
                     item.addr(p(DATA_WIDTH) - 1, p(FETCH_OFFSET))
 
-            belowTailMask(i) := originMask(i) && (i.U < tailPtr) && 
+            belowTailMaskSeq(i) := originMask(i) && (i.U < tailPtr) && 
             (
                 (headPtr <= tailPtr && i.U >= headPtr) || headPtr > tailPtr
             )
-            aboveTailMask(i) := originMask(i) && !(i.U < tailPtr) &&
+            aboveTailMaskSeq(i) := originMask(i) && !(i.U < tailPtr) &&
             (
                 (headPtr > tailPtr && i.U >= headPtr) || headPtr <= tailPtr
             )
         }
 
-        aboveTailMask := aboveTailMask.reverse // reverse above
-        belowTailMask := belowTailMask.reverse
+        aboveTailMask := aboveTailMaskSeq.reverse // reverse above
+        belowTailMask := belowTailMaskSeq.reverse
 
         hasAboveHit := aboveTailMask.asUInt.orR
         hasBelowHit := belowTailMask.asUInt.orR

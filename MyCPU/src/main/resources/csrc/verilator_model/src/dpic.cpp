@@ -15,25 +15,6 @@ std::unordered_map<size_t, unsigned long long> rats[MAX_HART_ID + 1];
 std::unordered_map<std::string, std::vector<unsigned long long> > srams[MAX_HART_ID + 1];
 std::unordered_map<std::string, std::vector<unsigned long long> > lut_rams[MAX_HART_ID + 1];
 
-extern "C" void update_sram(int hart_id, const char *name, unsigned long long addr, unsigned long long mask, unsigned long long content) {
-  try {
-    assert(hart_id < MAX_HART_ID);
-    srams[hart_id][std::string(name)][addr] = (srams[hart_id][std::string(name)][addr] & ~mask) | (content & mask);
-  }
-  catch(std::exception& e) {
-    printf("update %dth sram failed at %s with addr 0x%llx, because %s\n", hart_id, name, addr, e.what());
-  }
-}
-
-extern "C" void update_lutram(int hart_id, const char *name, unsigned long long addr, unsigned long long mask, unsigned long long content) {
-  try {
-    lut_rams[hart_id][std::string(name)][addr] = (lut_rams[hart_id][std::string(name)][addr] & ~mask) | (content & mask);
-  }
-  catch(std::exception& e) {
-    printf("update %dth lutram failed at %s with addr 0x%llx, because %s\n", hart_id, name, addr, e.what());
-  }    
-}
-
 // save commit pcs and notify emulator to do final diff check
 extern "C" void commit(int hart_id, unsigned long long pcs[], int num) {
   for(int i=0;i<num;++i) {

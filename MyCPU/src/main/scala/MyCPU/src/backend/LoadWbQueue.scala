@@ -46,7 +46,7 @@ class LoadWbQueue(size: Int)(implicit p: Parameters) extends Module {
         val mem5_ldu_deqs = Output(Vec(p(LDU_NUM), new LoadWbQueueItem))
         val dcache_refill_resp = Input(new DCacheRefillResp)
         val dcache_way_refill_resp = Input(new ReplacePolicyRefillRespInfo)
-        val mem5_ldu_wb_stall = Output(Bool())
+        // val mem5_ldu_wb_stall = Output(Bool())
     })
 
     val loadBaseInfoBanks = Seq.fill(bankNum)(
@@ -144,12 +144,14 @@ class LoadWbQueue(size: Int)(implicit p: Parameters) extends Module {
             io.mem5_ldu_deqs(b).HasRd := loadBaseInfoBanks(b)(headPtr).HasRd
             io.mem5_ldu_deqs(b).pd := loadBaseInfoBanks(b)(headPtr).pd
             io.mem5_ldu_deqs(b).is_sign_ext := loadBaseInfoBanks(b)(headPtr).is_sign_ext
+        }.otherwise {
+            io.mem5_ldu_deqs(b) := 0.U.asTypeOf(new LoadWbQueueItem)
         }
     }
 
     headPtr := headPtr + canDeq.asUInt
     tailPtr := Mux(canEnq, tailPtr + enqCount, tailPtr)
 
-    io.mem5_ldu_wb_stall := !canDeq
+    // io.mem5_ldu_wb_stall := !canDeq
 }
 

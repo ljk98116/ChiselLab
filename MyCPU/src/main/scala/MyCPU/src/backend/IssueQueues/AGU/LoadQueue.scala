@@ -19,7 +19,7 @@ class LoadQueue(implicit p: Parameters) extends Module {
   val wakeUpPortNum = WakeUpQueuePortNum(p)
   val io = IO(new Bundle {
     val flush = Input(Bool())
-    val stall_from_backpipe = Input(Bool())
+    val stalls = Input(Vec(p(LDU_NUM), Bool()))
     val ldu_uops = Input(Vec(p(FETCH_WIDTH), new uOp))
     val issue0_stall = Output(Bool())
     val busytableVec = Input(UInt((1 << p(PREG_WIDTH)).W))
@@ -36,7 +36,7 @@ class LoadQueue(implicit p: Parameters) extends Module {
   val allocResps = freeIdBuffer.io.allocResp
   freeIdBuffer.io.allocReq := allocReqs
   freeIdBuffer.io.flush := io.flush
-  freeIdBuffer.io.stall_from_backpipe := io.stall_from_backpipe
+  freeIdBuffer.io.stalls := io.stalls
 
   class BufferItem extends Bundle with HasValid {
     val uOp = new uOp
@@ -156,7 +156,7 @@ class LoadQueue(implicit p: Parameters) extends Module {
                     entryRam(b)(i).HasRs2 && !entryRam(b)(i).rdy2) && 
                   entryRam(b)(i).LDSpecExec.asUInt.andR
       val olderReady = (ageMats(b)(i) & VecInit(entryRam(b).map(_.valid)).asUInt).orR
-      canIssueVec(i) := ready && !olderReady
+      canIssueVec(i) := ready && !olderReady && !io.stalls(b)
     }
 
     val issueIdx = PriorityEncoder(canIssueVec)
@@ -173,7 +173,7 @@ class LoadQueue(implicit p: Parameters) extends Module {
     // Update age matrix
     // -------------------------
     for (i <- 0 until perBankSize) {
-      val update = (i.U === enqLocs(b)(ptrWidth-1, bankBits) && enqUops(b).valid) || canIssueVec(i)
+      val update = (i.U === enqLocs(b)(ptrWidth-1, bankBits) && enqUops(b).valid) || (canIssueVec(i) && !io.stalls(b))
       when(update) {
         ageMats(b)(i) := 0.U
         for (j <- 0 until perBankSize) {

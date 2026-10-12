@@ -18,7 +18,7 @@ class StoreQueue(implicit p: Parameters) extends Module {
   val wakeUpPortNum = WakeUpQueuePortNum(p)
   val io = IO(new Bundle {
     val flush = Input(Bool())
-    val stall_from_backpipe = Input(Bool())
+    val stalls = Input(Vec(p(STU_NUM), Bool()))
     val store_uops = Input(Vec(p(FETCH_WIDTH), new uOp))
     val busyTableVec = Input(UInt((1 << p(PREG_WIDTH)).W))
     val wakeup_signals = Input(Vec(wakeUpPortNum, new WakeUpQueueEntry))
@@ -36,7 +36,9 @@ class StoreQueue(implicit p: Parameters) extends Module {
 
   val head = RegInit(0.U(ptrWidth.W))
   val tail = RegInit(0.U(ptrWidth.W))
-
+  val canIssueVec = WireInit(VecInit(
+    Seq.fill(p(STU_NUM))(false.B)
+  ))
   // head/tail stall
   io.issue0_stall := (tail + 1.U) === head
 
@@ -46,10 +48,9 @@ class StoreQueue(implicit p: Parameters) extends Module {
     val headBankId = rd_idx(bankBits - 1, 0)
     val headBankRow = rd_idx(ptrWidth - 1, bankBits)
 
-    val entry = banks(b)(headBankRow)
-
-    io.issueItems(b) := entry
-    io.issueItems(b).valid := entry.valid && (b.U === headBankId) && entry.rdy1 && entry.rdy2 && entry.atRobHead
+    io.issueItems(b) := banks(b)(headBankRow)
+    canIssueVec(b) := banks(b)(headBankRow).valid && (b.U === headBankId) && banks(b)(headBankRow).rdy1 && 
+      banks(b)(headBankRow).rdy2 && banks(b)(headBankRow).atRobHead && ! io.stalls(b)
   }
 
   val numIssue = PopCount(io.issueItems.map(_.valid))
@@ -74,52 +75,48 @@ class StoreQueue(implicit p: Parameters) extends Module {
       val b = idx(bankBits - 1, 0)
       val row = idx(ptrWidth - 1, bankBits)
 
-      val entry = WireInit(0.U.asTypeOf(new STUIQEntry))
-      entry := banks(b)(row)
-
       // update fields
-      entry.HasRd := io.store_uops(w).HasRd
-      entry.HasRs1 := io.store_uops(w).HasRs1
-      entry.HasRs2 := io.store_uops(w).HasRs2
-      entry.LDSpecExec := io.store_uops(w).LDSpecExec
-      entry.branchPredInfo := io.store_uops(w).branchPredInfo
-      entry.funct3 := io.store_uops(w).funct3
-      entry.funct7 := io.store_uops(w).funct7
-      entry.imm := io.store_uops(w).imm
-      entry.old_pd := io.store_uops(w).old_pd
-      entry.opcode := io.store_uops(w).opcode
-      entry.pc := io.store_uops(w).pc
-      entry.pd := io.store_uops(w).pd
-      entry.ps1 := io.store_uops(w).ps1
-      entry.ps2 := io.store_uops(w).ps2
-      entry.rd := io.store_uops(w).rd
-      entry.rob_id := io.store_uops(w).rob_id
-      entry.rs1 := io.store_uops(w).rs1
-      entry.rs2 := io.store_uops(w).rs2
+      banks(b)(row).HasRd := io.store_uops(w).HasRd
+      banks(b)(row).HasRs1 := io.store_uops(w).HasRs1
+      banks(b)(row).HasRs2 := io.store_uops(w).HasRs2
+      banks(b)(row).LDSpecExec := io.store_uops(w).LDSpecExec
+      banks(b)(row).branchPredInfo := io.store_uops(w).branchPredInfo
+      banks(b)(row).funct3 := io.store_uops(w).funct3
+      banks(b)(row).funct7 := io.store_uops(w).funct7
+      banks(b)(row).imm := io.store_uops(w).imm
+      banks(b)(row).old_pd := io.store_uops(w).old_pd
+      banks(b)(row).opcode := io.store_uops(w).opcode
+      banks(b)(row).pc := io.store_uops(w).pc
+      banks(b)(row).pd := io.store_uops(w).pd
+      banks(b)(row).ps1 := io.store_uops(w).ps1
+      banks(b)(row).ps2 := io.store_uops(w).ps2
+      banks(b)(row).rd := io.store_uops(w).rd
+      banks(b)(row).rob_id := io.store_uops(w).rob_id
+      banks(b)(row).rs1 := io.store_uops(w).rs1
+      banks(b)(row).rs2 := io.store_uops(w).rs2
 
       // ready signals
-      entry.rdy1 := !io.busyTableVec(io.store_uops(w).ps1) || aluWakeup_ps1(idx)
-      entry.rdy2 := !io.busyTableVec(io.store_uops(w).ps2) || aluWakeup_ps2(idx)
+      banks(b)(row).rdy1 := !io.busyTableVec(io.store_uops(w).ps1) || aluWakeup_ps1(idx)
+      banks(b)(row).rdy2 := !io.busyTableVec(io.store_uops(w).ps2) || aluWakeup_ps2(idx)
 
       // at ROB head
       val atRobHead = Wire(Bool())
-      atRobHead := VecInit(io.robEnable.map(r => r.valid && r.robLoc === entry.robLoc)).asUInt.orR
-      entry.atRobHead := atRobHead
+      atRobHead := VecInit(io.robEnable.map(r => r.valid && r.robLoc === banks(b)(row).robLoc)).asUInt.orR
+      banks(b)(row).atRobHead := atRobHead
 
-      entry.valid := true.B
+      banks(b)(row).valid := true.B
     }
   }
 
   // --- Update existing entries ---
   for (b <- 0 until p(STU_NUM)) {
     for (i <- 0 until perBankSize) {
-      val entry = banks(b)(i)
       // Skip newly enqueued entries
-      when(!entry.valid || entry.rdy1 && entry.rdy2) {
-        entry.rdy1 := entry.rdy1 || !io.busyTableVec(entry.ps1) || aluWakeup_ps1((i * p(STU_NUM) + b).U)
-        entry.rdy2 := entry.rdy2 || !io.busyTableVec(entry.ps2) || aluWakeup_ps2((i * p(STU_NUM) + b).U)
-        val atRobHead = VecInit(io.robEnable.map(r => r.valid && r.robLoc === entry.robLoc)).asUInt.orR
-        entry.atRobHead := entry.atRobHead || atRobHead
+      when(!banks(b)(i).valid || banks(b)(i).rdy1 && banks(b)(i).rdy2) {
+        banks(b)(i).rdy1 := banks(b)(i).rdy1 || !io.busyTableVec(banks(b)(i).ps1) || aluWakeup_ps1((i * p(STU_NUM) + b).U)
+        banks(b)(i).rdy2 := banks(b)(i).rdy2 || !io.busyTableVec(banks(b)(i).ps2) || aluWakeup_ps2((i * p(STU_NUM) + b).U)
+        val atRobHead = VecInit(io.robEnable.map(r => r.valid && r.robLoc === banks(b)(i).robLoc)).asUInt.orR
+        banks(b)(i).atRobHead := banks(b)(i).atRobHead || atRobHead
       }
     }
   }

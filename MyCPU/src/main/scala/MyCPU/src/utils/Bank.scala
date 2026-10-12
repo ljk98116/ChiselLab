@@ -16,7 +16,8 @@ class LargeBank[T <: Data](clock: Clock, reset: Reset, depth: Int, gen: T, name:
     val impl = Module(new LUTRAMImpl(depth, gen, name))
     // default connect
     impl.io.en := true.B
-    impl.io.addr := 0.U
+    impl.io.raddr := 0.U
+    impl.io.waddr := 0.U
     impl.io.wen := false.B
     impl.io.wdata := 0.U
     impl.io.mask := 0.U
@@ -24,13 +25,13 @@ class LargeBank[T <: Data](clock: Clock, reset: Reset, depth: Int, gen: T, name:
     impl.reset := reset
 
     def read(addr: UInt): UInt = {
-        impl.io.addr := addr
+        impl.io.raddr := addr
         impl.io.mask := ~0.U(data_width.W)
         return impl.io.rdata
     }
 
     def write(addr: UInt, wmask: UInt, wdata: UInt): Unit = {
-        impl.io.addr := addr
+        impl.io.waddr := addr
         impl.io.wen := true.B
         impl.io.mask := wmask
         impl.io.wdata := wdata
@@ -41,7 +42,8 @@ class LargeSyncBank[T <: Data](clock: Clock, reset: Reset, depth: Int, gen: T, n
     val impl = Module(new SRAMImpl(depth, gen, name))
     // default connect
     impl.io.en := true.B
-    impl.io.addr := 0.U
+    impl.io.raddr := 0.U
+    impl.io.waddr := 0.U
     impl.io.wen := false.B
     impl.io.wdata := 0.U
     impl.io.mask := 0.U
@@ -49,13 +51,13 @@ class LargeSyncBank[T <: Data](clock: Clock, reset: Reset, depth: Int, gen: T, n
     impl.reset := reset
     
     def read(addr: UInt): UInt = {
-        impl.io.addr := addr
+        impl.io.raddr := addr
         impl.io.mask := ~(0.U)(data_width.W)
         return impl.io.rdata
     }
 
     def write(addr: UInt, wmask: UInt, wdata: UInt): Unit = {
-        impl.io.addr := addr
+        impl.io.waddr := addr
         impl.io.wen := true.B
         impl.io.mask := wmask
         impl.io.wdata := wdata

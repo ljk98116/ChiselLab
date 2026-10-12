@@ -201,7 +201,7 @@ class LoadBuffer(size: Int)(implicit p: Parameters) extends Module {
             banks(bankId)(bankRow).aguResult := mem0_ldu_enqs(bankId)
             // ageMat[j][i] = 1
             for(j <- 0 until perBankSize) {
-                ageMats(bankId)(j) := ageMats(bankId)(j) | (1 << i).U
+                ageMats(bankId)(j) := ageMats(bankId)(j) | (1 << bankRowInt).U
             }
         }.elsewhen(io.flush) {
             banks(bankId)(bankRow).aguResult := 0.U.asTypeOf(new AGUResult)

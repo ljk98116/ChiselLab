@@ -10,7 +10,6 @@ import MyCPU.utils._
 // alu wakeup at regread stage
 // issue enq prepare
 // enq + select
-
 class ALUIQ(implicit p: Parameters) extends Module {
   val totalSize = p(ALUIQ_SIZE)
   val perBankSize = totalSize / p(ALU_NUM)
@@ -22,7 +21,7 @@ class ALUIQ(implicit p: Parameters) extends Module {
 
   val io = IO(new Bundle {
     val flush = Input(Bool())
-    val stall_from_backpipe = Input(Bool())
+    val stalls = Input(Vec(p(ALU_NUM), Bool()))
     val alu_uops = Input(Vec(p(FETCH_WIDTH), new uOp))
     val issue0_stall = Output(Bool())
     val wakeup_signals = Input(Vec(wakeUpPortNum, new WakeUpQueueEntry))
@@ -37,7 +36,7 @@ class ALUIQ(implicit p: Parameters) extends Module {
   val allocResps = freeIdBuffer.io.allocResp
   freeIdBuffer.io.allocReq := allocReqs
   freeIdBuffer.io.flush := io.flush
-  freeIdBuffer.io.stall_from_backpipe := io.stall_from_backpipe
+  freeIdBuffer.io.stalls := io.stalls
 
   // Skid buffers for each bank
   class BufferItem extends Bundle with HasValid {
@@ -172,7 +171,8 @@ class ALUIQ(implicit p: Parameters) extends Module {
     }
 
     val issueIdx = PriorityEncoder(canIssueVec)
-    val issueEnable = canIssueVec.asUInt.orR
+    // when stall is high, not issue
+    val issueEnable = canIssueVec.asUInt.orR && !io.stalls(b)
     io.aluiq_o(b) := Mux(issueEnable, entryRam(b)(issueIdx), 0.U.asTypeOf(new ALUIQEntry))
 
     // -------------------------
@@ -185,7 +185,7 @@ class ALUIQ(implicit p: Parameters) extends Module {
     // Update age matrix
     // -------------------------
     for (i <- 0 until perBankSize) {
-      val update = (i.U === enqLocs(b)(ptrWidth-1, bankBits) && enqUops(b).valid) || canIssueVec(i)
+      val update = (i.U === enqLocs(b)(ptrWidth-1, bankBits) && enqUops(b).valid) || (canIssueVec(i) && !io.stalls(b))
       when(update) {
         ageMats(b)(i) := 0.U
         for (j <- 0 until perBankSize) {

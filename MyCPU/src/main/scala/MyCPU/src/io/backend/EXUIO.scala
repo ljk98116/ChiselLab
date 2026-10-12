@@ -14,6 +14,11 @@ class PRFWriteReq(implicit p: Parameters) extends Bundle with HasValid {
     val pd = UInt(p(PREG_WIDTH).W)
 }
 
+class PRFReadReq(implicit p: Parameters) extends Bundle with HasValid {
+    val valid = Bool()
+    val pd = UInt(p(PREG_WIDTH).W)
+}
+
 class ALUResult(implicit p: Parameters) extends Bundle with HasValid {
     val valid = Bool()
     val HasRd = Bool()
@@ -21,6 +26,8 @@ class ALUResult(implicit p: Parameters) extends Bundle with HasValid {
     val pd = UInt(p(PREG_WIDTH).W)
     val robLoc = UInt(p(ROBID_WIDTH).W)
     val branchPredInfo = new BranchPredInfo
+    val hasPredErr = Bool()
+    val realTarget = UInt(p(ADDR_WIDTH).W)
 }
 
 class AGUResult(implicit p: Parameters) extends Bundle with HasValid {
@@ -124,16 +131,17 @@ class BranchUnitInputInfo(implicit p: Parameters) extends Bundle with HasValid {
 }
 
 class MultUnitInputInfo(implicit p: Parameters) extends Bundle with HasValid {
-    val valid = Input(Bool())
-    val funct3 = Input(UInt(3.W)) 
-    val data1 = Input(UInt(p(DATA_WIDTH).W))
-    val data2 = Input(UInt(p(DATA_WIDTH).W))
+    val valid = Bool()
+    val funct3 = UInt(3.W)
+    val data1 = UInt(p(DATA_WIDTH).W)
+    val data2 = UInt(p(DATA_WIDTH).W)
+    val isW = Bool()
 }
 
 class DivUnitInputInfo(implicit p: Parameters) extends Bundle with HasValid {
-    val valid = Input(Bool())
-    val funct3 = Input(UInt(3.W)) 
-
-    val data1 = Input(UInt(p(DATA_WIDTH).W))
-    val data2 = Input(UInt(p(DATA_WIDTH).W))    
+    val valid = Bool()
+    val funct3 = UInt(3.W) 
+    val data1 = UInt(p(DATA_WIDTH).W)
+    val data2 = UInt(p(DATA_WIDTH).W)   
+    val isW = Bool() 
 }

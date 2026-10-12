@@ -19,7 +19,7 @@ class MultIQFreeIdBuffer(implicit p: Parameters) extends Module {
 
     val io = IO(new Bundle {
         val flush = Input(Bool())
-        val stall_from_backpipe = Input(Bool())
+        val stalls = Input(Vec(p(MULT_NUM), Bool()))
         val allocReq = Input(Vec(p(FETCH_WIDTH), Bool()))
         val allocResp = Output(Vec(p(FETCH_WIDTH), UInt(ptrWidth.W)))
         // select stage
@@ -40,7 +40,10 @@ class MultIQFreeIdBuffer(implicit p: Parameters) extends Module {
 
     val readCount = PopCount(io.allocReq)
 
-    val recycle_writeReq = PipeReg(io.writeReq, io.stall_from_backpipe, io.flush)
+    val recycle_writeReq = VecInit((0 until p(MULT_NUM)).map(
+      i => PipeReg(io.writeReq(i), io.stalls(i), io.flush)
+    ))
+
     val writeCount = PopCount(recycle_writeReq.map(_.valid))
 
     val used = tailPtr - headPtr
@@ -105,7 +108,7 @@ class MultIQ(implicit p: Parameters) extends Module {
 
   val io = IO(new Bundle {
     val flush = Input(Bool())
-    val stall_from_backpipe = Input(Bool())
+    val stalls = Input(Vec(p(MULT_NUM), Bool()))
     val alu_uops = Input(Vec(p(FETCH_WIDTH), new uOp))
     val issue0_stall = Output(Bool())
     val wakeup_signals = Input(Vec(wakeUpPortNum, new WakeUpQueueEntry))
@@ -120,7 +123,7 @@ class MultIQ(implicit p: Parameters) extends Module {
   val allocResps = freeIdBuffer.io.allocResp
   freeIdBuffer.io.allocReq := allocReqs
   freeIdBuffer.io.flush := io.flush
-  freeIdBuffer.io.stall_from_backpipe := io.stall_from_backpipe
+  freeIdBuffer.io.stalls := io.stalls
 
   // Skid buffers for each bank
   class BufferItem extends Bundle with HasValid {
@@ -254,7 +257,7 @@ class MultIQ(implicit p: Parameters) extends Module {
     }
 
     val issueIdx = PriorityEncoder(canIssueVec)
-    val issueEnable = canIssueVec.asUInt.orR
+    val issueEnable = canIssueVec.asUInt.orR && !io.stalls(b)
     io.aluiq_o(b) := Mux(issueEnable, entryRam(b)(issueIdx), 0.U.asTypeOf(new ALUIQEntry))
 
     // -------------------------
@@ -267,7 +270,7 @@ class MultIQ(implicit p: Parameters) extends Module {
     // Update age matrix
     // -------------------------
     for (i <- 0 until perBankSize) {
-      val update = (i.U === enqLocs(b)(ptrWidth-1, bankBits) && enqUops(b).valid) || canIssueVec(i)
+      val update = (i.U === enqLocs(b)(ptrWidth-1, bankBits) && enqUops(b).valid) || (canIssueVec(i) && !io.stalls(b))
       when(update) {
         ageMats(b)(i) := 0.U
         for (j <- 0 until perBankSize) {

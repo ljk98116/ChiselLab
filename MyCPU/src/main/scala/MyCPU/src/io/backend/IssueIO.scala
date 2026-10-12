@@ -117,7 +117,7 @@ class WakeUpQueueEntry(implicit p: Parameters) extends Bundle with HasValid {
 }
 
 object WakeUpQueuePortNum {
-    def apply(implicit p: Parameters) = {
+    def apply(p: Parameters) = {
         p(ALU_NUM) + p(MULT_NUM) + p(SYS_ALU_NUM)
     }
 }

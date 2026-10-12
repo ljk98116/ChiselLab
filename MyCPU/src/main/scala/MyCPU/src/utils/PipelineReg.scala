@@ -10,13 +10,21 @@ import MyCPU.frontend.BPU.predictors._
 import org.chipsalliance.cde.config._
 
 object PipeReg {
-    def apply[T <: Data](gen: T, stall: Bool = false.B, flush: Bool = false.B): T = {
-        val pipe  = RegInit(0.U.asTypeOf(gen))
+    def apply[T <: Data](
+        data:  T,
+        stall: Bool = false.B,
+        flush: Bool = false.B
+    ): T = {
+        val reg = RegInit(0.U(data.getWidth.W))
         when(flush) {
-            pipe := 0.U.asTypeOf(gen)
+            reg := 0.U
         }.elsewhen(!stall) {
-            pipe := gen
+            reg := data.asUInt
         }
-        pipe
+
+        // 关键：用 Wire 承接 asTypeOf 的结果，返回可写的 Wire
+        val out = Wire(data.cloneType)
+        out := reg.asTypeOf(data.cloneType)
+        out
     }
 }

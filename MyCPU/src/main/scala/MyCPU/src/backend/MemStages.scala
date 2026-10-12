@@ -21,12 +21,18 @@ class MemStages(implicit p: Parameters) extends Module {
         val flush = Input(Bool())
         val mem0_ld_bankconflict_stalls = Output(Vec(p(LDU_NUM), Bool()))
         val mem0_st_bankconflict_stalls = Output(Vec(p(STU_NUM), Bool()))
-        // to store buffer
+        // to store/load buffer
         val mem0_stu_result = Output(Vec(p(STU_NUM), new AGUResult))
+        val mem0_ldu_result = Output(Vec(p(LDU_NUM), new AGUResult))
+
         val mem0_storeBufferCanEnq = Input(Bool())
+        val mem0_loadBufferCanEnq = Input(Bool())
+
         val mem2_storeBuffer_resps = Input(Vec(p(LDU_NUM), new StoreBufferRespInfo))
         val mem2_ld_stalls = Output(Vec(p(LDU_NUM), Bool()))
+        val mem2_st_stalls = Output(Vec(p(STU_NUM), Bool()))
         val mem1_ld_results = Output(Vec(p(LDU_NUM), new AGUResult))
+        val mem1_st_results = Output(Vec(p(STU_NUM), new AGUResult))
         // to dcache
         val mem0_bank_reqs = Output(Vec(bankNum, new DCacheReq))
         val mem4_ldu_wb_stall = Input(Bool())
@@ -147,6 +153,8 @@ class MemStages(implicit p: Parameters) extends Module {
     ))
 
     io.mem0_stu_result := mem0_stu_result
+    io.mem0_ldu_result := mem0_ldu_result
+
     // mem0 ex result 
     for(i <- 0 until bankNum) {
         if(i < writePortNum) {
@@ -423,6 +431,7 @@ class MemStages(implicit p: Parameters) extends Module {
     io.mem4_ldu_result := mem4_ldu_enqs_o
     io.mem4_stu_result := mem4_stu_enqs_o
     io.mem1_ld_results := mem1_ldu_result
+    io.mem1_st_results := mem1_stu_result
 
     // load result
     for(i <- 0 until p(LDU_NUM)) {
@@ -497,7 +506,7 @@ class MemStages(implicit p: Parameters) extends Module {
                 mem0_bank_hit_mask(b)(i + writePortNum)
             )
         ))
-        mem0_ld_stalls(i) := mem1_ld_stalls(i) || mem0_bank_conflict_stall_mask.asUInt.orR
+        mem0_ld_stalls(i) := mem1_ld_stalls(i) || mem0_bank_conflict_stall_mask.asUInt.orR || !io.mem0_loadBufferCanEnq
     }
 
     io.mem2_ld_stalls := mem2_ld_stalls
@@ -521,6 +530,8 @@ class MemStages(implicit p: Parameters) extends Module {
         ))
         mem0_st_stalls(i) := mem1_st_stalls(i) || mem0_bank_conflict_stall_mask.asUInt.orR || !io.mem0_storeBufferCanEnq
     }
+
+    io.mem2_st_stalls := mem2_st_stalls
 
     for(b <- 0 until bankNum) {
         mem1_bank_stalls(b) := 

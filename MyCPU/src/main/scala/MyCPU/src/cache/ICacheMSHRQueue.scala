@@ -81,6 +81,7 @@ class ICacheMSHRQueue(size: Int)(implicit p: Parameters) extends Module {
         count := count - 1.U
     }
 
-    deq_item := mshr_queue.read(head_ptr)
+    deq_item := mshr_queue.read(head_ptr).asTypeOf(new ICacheMSHREntry)
     io.deq := deq_item
+    
 }

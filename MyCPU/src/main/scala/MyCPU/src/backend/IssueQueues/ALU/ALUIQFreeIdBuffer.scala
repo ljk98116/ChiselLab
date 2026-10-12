@@ -20,7 +20,7 @@ class ALUIQFreeIdBuffer(implicit p: Parameters) extends Module {
 
     val io = IO(new Bundle {
         val flush = Input(Bool())
-        val stall_from_backpipe = Input(Bool())
+        val stalls = Input(Vec(p(ALU_NUM), Bool()))
         val allocReq = Input(Vec(p(FETCH_WIDTH), Bool()))
         val allocResp = Output(Vec(p(FETCH_WIDTH), UInt(ptrWidth.W)))
         // select stage
@@ -41,8 +41,13 @@ class ALUIQFreeIdBuffer(implicit p: Parameters) extends Module {
 
     val readCount = PopCount(io.allocReq)
 
-    val recycle_writeReq = PipeReg(io.writeReq, io.stall_from_backpipe, io.flush)
-    val writeCount = PopCount(recycle_writeReq.map(_.valid))
+    val recycle_writeReq = (0 until p(ALU_NUM)).map(
+        i => PipeReg(io.writeReq(i), io.stalls(i), io.flush)
+    )
+    
+    // when stall happened, bank can not write
+    val recycle_writeReqValidMask = VecInit(recycle_writeReq.map(_.valid)).asUInt & io.stalls.asUInt
+    val writeCount = PopCount(recycle_writeReqValidMask.asBools)
 
     // read
     val readData = WireInit(VecInit(
@@ -86,7 +91,7 @@ class ALUIQFreeIdBuffer(implicit p: Parameters) extends Module {
 
     writePrefixSum(0) := 0.U
     for(i <- 1 until p(ALU_NUM)) {
-        writePrefixSum(i) := writePrefixSum(i-1) + recycle_writeReq(i-1).valid
+        writePrefixSum(i) := writePrefixSum(i-1) + recycle_writeReqValidMask.asBools(i-1)
     }
 
     for(i <- 0 until p(ALU_NUM)) {
@@ -95,7 +100,7 @@ class ALUIQFreeIdBuffer(implicit p: Parameters) extends Module {
         val writeRow = writeIdx(ptrWidth - 1, bankBits)
 
         for(b <- 0 until p(ALU_NUM)) {
-            when((b.U === writeBank) && io.writeReq(i).valid) {
+            when((b.U === writeBank) && io.writeReq(i).valid && !io.stalls(b)) {
                 buffer(b)(writeRow) := io.writeReq(i).id
             }
         }

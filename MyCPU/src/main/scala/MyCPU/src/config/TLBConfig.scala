@@ -56,19 +56,19 @@ class VirtualAddress(implicit p: Parameters) extends Bundle {
     def GetWidth = p(ADDR_WIDTH)
     val bits = UInt(p(ADDR_WIDTH).W)
     def asSv32 = {
-        require(p(ADDR_WIDTH) == 32, "vaddr convert to Sv32 failed")
+        require(p(ADDR_WIDTH) >= 32, "vaddr convert to Sv32 failed")
         bits.asTypeOf(new Sv32VirtualAddress)
     }
     def asSv39 = {
-        require(p(ADDR_WIDTH) == 39, "vaddr convert to Sv39 failed")
+        require(p(ADDR_WIDTH) >= 39, "vaddr convert to Sv39 failed")
         bits.asTypeOf(new Sv39VirtualAddress)
     }
     def asSv48 = {
-        require(p(ADDR_WIDTH) == 48, "vaddr convert to Sv48 failed")
+        require(p(ADDR_WIDTH) >= 48, "vaddr convert to Sv48 failed")
         bits.asTypeOf(new Sv48VirtualAddress)
     }
     def asSv57 = {
-        require(p(ADDR_WIDTH) == 57, "vaddr convert to Sv57 failed")
+        require(p(ADDR_WIDTH) >= 57, "vaddr convert to Sv57 failed")
         bits.asTypeOf(new Sv57VirtualAddress)
     }
     def getVPN: UInt = {

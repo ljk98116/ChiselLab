@@ -21,10 +21,11 @@ class MiddleEnd(implicit p: Parameters) extends Module {
         // commit stage io
         val commit_redirect = Input(new CommitUpdateInfo)
         val stall_from_backpipe = Input(Bool())
-        val commit_refill_write_back = Flipped(DecoupledIO(Vec(p(FETCH_WIDTH), new RATSpecWriteReq)))
-        val commit_spec_write_back = Input(Vec(p(FETCH_WIDTH), new FreeRegIdBufferWriteReq))
-        val commit_spec_robId_write_back = Input(Vec(p(FETCH_WIDTH), new ROBFreeIdWriteReq))
+        val commit_refill_write_back = Flipped(DecoupledIO(Vec((1 << p(AREG_WIDTH)), new RATCommitEntry)))
+        val commit_regid_write_back = Input(Vec(p(FETCH_WIDTH), new FreeRegIdBufferWriteReq))
+        val commit_robId_write_back = Input(Vec(p(FETCH_WIDTH), new ROBFreeIdWriteReq))
         val loadRAWHarvard = Flipped(DecoupledIO(new LoadRAWHarvardInfo))
+        val freeRegIdBufferResp = Output(Vec(p(FETCH_WIDTH), new FreeRegIdBufferReadResp))
         // to prf or others
         val checkPointInfo = Output(new CheckPointInfo)
         // prf io
@@ -36,9 +37,13 @@ class MiddleEnd(implicit p: Parameters) extends Module {
         val load_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
         val store_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
         val alu_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
+        val mult_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
+        val div_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
+        val rem_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
         val sys_uops = Output(Vec(p(FETCH_WIDTH), new uOp)) 
         // to rob[dispatch1]
         val inorder_uops = Output(Vec(p(FETCH_WIDTH), new uOp))
+        // rob tails
         val inorder_locs = Input(Vec(p(FETCH_WIDTH), UInt(p(ROBID_WIDTH).W)))
     })
 
@@ -70,6 +75,7 @@ class MiddleEnd(implicit p: Parameters) extends Module {
 
     freeRegIdBuffer.io.readReq := rename.io.freeRegBufferReadReq
     rename.io.freeRegBufferReadResp := freeRegIdBuffer.io.readResp
+    io.freeRegIdBufferResp := freeRegIdBuffer.io.readResp
 
     ratSpec.io.rs1_rat_read_req := rename.io.rs1_rat_read_req
     rename.io.rs1_rat_read_resp := ratSpec.io.rs1_rat_read_resp
@@ -96,15 +102,19 @@ class MiddleEnd(implicit p: Parameters) extends Module {
     io.store_uops := dispatch.io.store_uops
     io.alu_uops := dispatch.io.alu_uops
     io.sys_uops := dispatch.io.sys_uops
-    io.inorder_uops := dispatch.io.inorder_uops
+    io.mult_uops := dispatch.io.mult_uops
+    io.div_uops := dispatch.io.div_uops
+    io.rem_uops := dispatch.io.rem_uops
     
+    io.inorder_uops := dispatch.io.inorder_uops
+
     dispatch.io.inorder_locs := io.inorder_locs
 
     checkPointQueue.io.flush := flush
     checkPointQueue.io.enq := freeRegIdBuffer.io.currentHeads
 
     freeRegIdBuffer.io.checkpointInfo := checkPointQueue.io.deq
-    freeRegIdBuffer.io.writeReq := io.commit_spec_write_back
+    freeRegIdBuffer.io.writeReq := io.commit_regid_write_back
     freeRegIdBuffer.io.busyTables := io.busyTables
 
     mdp.io.loadRAWHarvardInfo <> io.loadRAWHarvard
@@ -121,7 +131,7 @@ class MiddleEnd(implicit p: Parameters) extends Module {
 
     io.rename1_stall := !robFreeIdBuffer.io.canDeq
     robFreeIdBuffer.io.flush := flush
-    robFreeIdBuffer.io.commitWriteBack := io.commit_spec_robId_write_back
+    robFreeIdBuffer.io.commitWriteBack := io.commit_robId_write_back
     robFreeIdBuffer.io.rename1ReadReq := rename.io.robFreeIdAllocReq
     rename.io.robFreeIdAllocResp := robFreeIdBuffer.io.rename1ReadResp
 

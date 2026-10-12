@@ -54,7 +54,16 @@ class ALU(implicit p: Parameters) extends Module {
     )
     
     io.result.branchPredInfo := io.alu_item.branchPredInfo
-    io.result.branchPredInfo.target := Mux(io.branch_input.valid || io.branch_input.is_jal, brTarget, 0.U)
+    io.result.realTarget := brTarget
+    io.result.hasPredErr := 
+        (io.alu_item.branchPredInfo.taken ^ brJump) ||
+        (brTarget =/= io.alu_item.branchPredInfo.target)
+    
+    io.result.branchPredInfo.target := Mux(
+        io.branch_input.valid || io.branch_input.is_jal, 
+        brTarget, 
+        io.alu_item.branchPredInfo.target
+    )
 
     io.result.valid := io.alu_item.valid
     io.result.HasRd := io.alu_item.HasRd

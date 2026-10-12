@@ -3,7 +3,7 @@
 #            		   dpicpp   -> obj_file
 PROJ=MyCPU
 ARCH=RV64I
-TOP=FrontEnd
+TOP=L1Core
 HOME=/home/ljk/Arch/ChiselLab
 
 ISA_TESTS_DIR=/opt/riscv/target/share/riscv-tests/isa/
@@ -21,10 +21,10 @@ V_SRC = $(shell find $(abspath ./verilog/) -name "*.v")
 SV_SRC = $(shell find $(abspath ./verilog/) -name "*.sv")
 RTL_SRC = $(V_SRC) $(SV_SRC)
 
-CXXSRC = $(shell find $(abspath ./verilator_model/) -name "*.c" -or -name "*.cc" -or -name "*.cpp")
+CXXSRC = $(shell find $(abspath ./$(PROJ)/src/main/resources/csrc/verilator_model/) -name "*.c" -or -name "*.cc" -or -name "*.cpp")
 
 # include path
-INC_PATH = $(HOME)/verilator_model/include /usr/share/verilator/include/ /usr/share/verilator/include/vltstd
+INC_PATH = $(HOME)/$(PROJ)/src/main/resources/csrc/verilator_model/include /usr/share/verilator/include/ /usr/share/verilator/include/vltstd
 
 # CXXFLAG & LDFLAGS
 # only visible function

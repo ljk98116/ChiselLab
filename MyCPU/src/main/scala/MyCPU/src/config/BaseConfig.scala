@@ -15,6 +15,7 @@ case object AREG_WIDTH extends WidthConfig
 case object PREG_WIDTH extends WidthConfig
 case object ROBID_WIDTH extends WidthConfig
 case object FETCH_OFFSET extends WidthConfig
+case object PRF_BANKNUM extends WidthConfig
 
 case object SIM_FLAG extends FlagConfig
 
@@ -71,6 +72,7 @@ class BaseRV32EConfig extends Config(
             case ADDR_WIDTH => 32
             case AREG_WIDTH => 4
             case PREG_WIDTH => here(AREG_WIDTH) + 2
+            case PRF_BANKNUM => 4
             case ROBID_WIDTH => here(AREG_WIDTH) + 2            
             case UseRV32E => true
             case UseRV32I => false
@@ -87,7 +89,8 @@ class BaseRV32IConfig extends Config(
             case ADDR_WIDTH => 32
             case AREG_WIDTH => 5
             case PREG_WIDTH => here(AREG_WIDTH) + 2
-            case ROBID_WIDTH => here(AREG_WIDTH) + 2            
+            case ROBID_WIDTH => here(AREG_WIDTH) + 2
+            case PRF_BANKNUM => 8            
             case UseRV32E => false
             case UseRV32I => true
             case UseRV32IM => false
@@ -103,7 +106,8 @@ class BaseRV32IMConfig extends Config(
             case ADDR_WIDTH => 32
             case AREG_WIDTH => 5
             case PREG_WIDTH => here(AREG_WIDTH) + 2
-            case ROBID_WIDTH => here(AREG_WIDTH) + 2            
+            case ROBID_WIDTH => here(AREG_WIDTH) + 2    
+            case PRF_BANKNUM => 8        
             case UseRV32E => false
             case UseRV32I => false
             case UseRV32IM => true
@@ -118,6 +122,7 @@ class BaseRV64IConfig extends Config(
             case DATA_WIDTH => 64
             case ADDR_WIDTH => 64
             case AREG_WIDTH => 5
+            case PRF_BANKNUM => 8
             case PREG_WIDTH => here(AREG_WIDTH) + 2
             case ROBID_WIDTH => here(AREG_WIDTH) + 2            
             case UseRV32E => false

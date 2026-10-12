@@ -69,6 +69,7 @@ class ICacheSram(implicit p: Parameters) extends Module {
             new LargeSyncBank(clock, reset, (1 << p(ICacheIndexBits)), UInt((cacheLineWidth).W), "icache_data_mem_way" + index.toString)
         }        
     )
+
     // if1 icache hit, return hit and data
     // if1 icache miss, use itlb resp to construct mshr, if missqueue not full or refill req can merge, send refill req
     // tag read, data0 read, data1 read
@@ -173,8 +174,14 @@ class ICacheSram(implicit p: Parameters) extends Module {
     for(i <- 0 until io.if2_icacheline_resp.length) {
         io.if2_icacheline_resp(i) := if2_memReadResult(if2_hitwayIndex).datas(if2_offsets(i))
     }
+
     for(i <- 0 until io.if2_predecode.length) {
-        io.if2_predecode(i) := if2_predecode_rdata(if2_hitwayIndex)(if2_offsets(i)).asTypeOf(new ICacheBranchMetaInfo)
+        val metaInfoVec = WireInit(VecInit(
+            Seq.fill(p(L1CacheLineLength))(0.U.asTypeOf(new ICacheBranchMetaInfo))
+        ))
+
+        metaInfoVec := if2_predecode_rdata(if2_hitwayIndex).asTypeOf(metaInfoVec)
+        io.if2_predecode(i) := metaInfoVec(if2_offsets(i)).asTypeOf(new ICacheBranchMetaInfo)
     }
 
     io.icacheRefillUpdate.valid := io.icacheReplaceRefillResp.valid

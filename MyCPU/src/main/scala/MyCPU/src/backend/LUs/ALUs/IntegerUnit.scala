@@ -93,6 +93,9 @@ class IntegerUnit(implicit p: Parameters) extends Module {
         }
     }
 
-    result := Mux(io.integer_input_info.is_auipc, io.integer_input_info.pc + io.integer_input_info.imm, result)
+    when(io.integer_input_info.is_auipc) {
+        result := io.integer_input_info.imm
+    }
+    
     io.result := Mux(io.integer_input_info.valid, result, 0.U)
 }

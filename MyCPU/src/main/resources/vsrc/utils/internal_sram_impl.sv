@@ -22,7 +22,8 @@ module internal_sram_impl #(
   input io_reset,
   input io_en,
   input io_wen,
-  input [idx_width - 1: 0] io_addr,
+  input [idx_width - 1: 0] io_raddr,
+  input [idx_width - 1: 0] io_waddr,
   input [data_width - 1: 0] io_mask,
   input [data_width - 1: 0] io_wdata,
   output [data_width - 1: 0] io_rdata
@@ -33,14 +34,14 @@ module internal_sram_impl #(
       raddr <= 0;
     end
     else begin
-      raddr <= io_addr;
+      raddr <= io_raddr;
     end
   end
 
 `ifdef SIM_FLAG
   always @(posedge io_clock) begin
     if(!io_reset) begin
-      sram_write(0, name, io_addr, io_mask, io_wdata);
+      sram_write(0, name, io_waddr, io_mask, io_wdata);
     end
     else begin
       sram_register(0, name, 0, (1 << idx_width));
@@ -57,7 +58,7 @@ module internal_sram_impl #(
       end
     end
     else if(io_en && io_wen) begin
-      sram[io_addr] <= (sram[io_addr] & ~io_mask) | (io_wdata & io_mask);
+      sram[io_waddr] <= (sram[io_waddr] & ~io_mask) | (io_wdata & io_mask);
     end
   end
   assign io_rdata = sram[raddr];

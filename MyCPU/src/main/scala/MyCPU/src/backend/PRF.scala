@@ -8,36 +8,29 @@ import MyCPU.config._
 import MyCPU.io._
 import MyCPU.utils._
 
-// 1 read, bankNum write
-// assume banked write input
-class PRFTable(bankNum: Int, size: Int)(implicit p: Parameters) extends Module {
-    val ptrWidth = log2Ceil(size) // 8bit
-    val perBankSize = size / bankNum // 132 / 6 = 22
-    val perBankPtrWidth = log2Ceil(perBankSize) // 5
-    val bankBits = log2Ceil(bankNum) // 3
-
+// lutram impl
+class PRFTable(size: Int, id: Int)(implicit p: Parameters) extends Module {
+    val bank_num = p(PRF_BANKNUM)
+    val bankBits = log2Ceil(bank_num)
     val io = IO(new Bundle {
-        val ren = Input(Bool())
-        val raddr = Input(UInt(ptrWidth.W))
-        val rdata = Output(UInt(p(DATA_WIDTH).W))
-        val wen = Input(Vec(bankNum, Bool()))
-        val waddr = Input(Vec(bankNum, UInt(ptrWidth.W)))
-        val wdata = Input(Vec(bankNum, UInt(p(DATA_WIDTH).W)))
+        val read_reqs = Input(Vec(2, new PRFReadReq))
+        val read_resps = Output(Vec(2, UInt(p(DATA_WIDTH).W)))
+        val write_req = Input(new PRFWriteReq)
     })
 
-    val bankMems = Seq.fill(bankNum)(Mem(perBankSize, UInt(p(DATA_WIDTH).W)))
+    val pregfiles = Seq.tabulate(2)(
+        i => new LargeBank(clock, reset, size, UInt(p(DATA_WIDTH).W), "prf_bank" + id.toString + "_" + i.toString)
+    )
 
-    val readBank = io.raddr(bankBits - 1, 0)
-    val readRow = io.raddr(ptrWidth - 1, bankBits)
-
-    io.rdata := 0.U
-
-    for(b <- 0 until bankNum) {
-        when((b.U === readBank) && io.ren) {
-            io.rdata := bankMems(b).read(readRow)
+    for(i <- 0 until 2) {
+        when(io.read_reqs(i).pd === io.write_req.pd && io.read_reqs(i).valid && io.write_req.valid) {
+            io.read_resps(i) := io.write_req.result
+        }.otherwise {
+            io.read_resps(i) := Mux(io.read_reqs(i).valid, pregfiles(i).read(io.read_reqs(i).pd(p(PREG_WIDTH) - 1, bankBits)), 0.U)
         }
-        when(io.wen(b)) {
-            bankMems(b).write(io.waddr(b)(ptrWidth - 1, bankBits), io.wdata(b))
+
+        when(io.write_req.valid) {
+            pregfiles(i).write(io.write_req.pd(p(PREG_WIDTH) - 1, bankBits), ~(0.U)(p(DATA_WIDTH).W), io.write_req.result)
         }
     }
 }
@@ -45,136 +38,79 @@ class PRFTable(bankNum: Int, size: Int)(implicit p: Parameters) extends Module {
 // readPorts RegFile Table copy to read all reqs at same cycle
 // bankNum writePorts, write all tables
 class PRF(implicit p: Parameters) extends Module {
-    val realPregNum = 1 << p(PREG_WIDTH)
-    val readPorts = (p(ALU_NUM) + p(STU_NUM) + p(SYS_ALU_NUM)) * 2 + p(LDU_NUM) // 13
-    val bankNum = p(ALU_NUM) + p(LDU_NUM) + p(SYS_ALU_NUM) // 6
+    val preg_num = 1 << p(PREG_WIDTH)
+    val bank_num = p(PRF_BANKNUM)
+    val perBankSize = (preg_num + bank_num - 1) / bank_num
 
-    var prfTableSize = realPregNum / bankNum * bankNum 
-    if(realPregNum % bankNum != 0) {
-        prfTableSize = (realPregNum / bankNum + 1) * bankNum
-    }
-
-    val prfTablePtrWidth = log2Ceil(prfTableSize)
-
-    // 132 x 32bits x 13 = 132x4B = 528B x 13 = 6.5KB total
     val io = IO(new Bundle {
         val flush = Input(Bool())
 
-        val ps1ALUReadValid = Input(Vec(p(ALU_NUM), Bool()))
-        val ps2ALUReadValid = Input(Vec(p(ALU_NUM), Bool()))
-        val ps1ALUReadLoc = Input(Vec(p(ALU_NUM), UInt(p(PREG_WIDTH).W)))
-        val ps2ALUReadLoc = Input(Vec(p(ALU_NUM), UInt(p(PREG_WIDTH).W)))
-        val ps1ALUReadData = Output(Vec(p(ALU_NUM), UInt(p(DATA_WIDTH).W)))
-        val ps2ALUReadData = Output(Vec(p(ALU_NUM), UInt(p(DATA_WIDTH).W)))
+        val prf_read_reqs_1 = Input(Vec(p(PRF_BANKNUM), new PRFReadReq))
+        val prf_read_reqs_2 = Input(Vec(p(PRF_BANKNUM), new PRFReadReq))
 
-        val ps1STUReadValid = Input(Vec(p(STU_NUM), Bool()))
-        val ps2STUReadValid = Input(Vec(p(STU_NUM), Bool()))
-        val ps1STUReadLoc = Input(Vec(p(STU_NUM), UInt(p(PREG_WIDTH).W)))
-        val ps2STUReadLoc = Input(Vec(p(STU_NUM), UInt(p(PREG_WIDTH).W)))
-        val ps1STUReadData = Output(Vec(p(STU_NUM), UInt(p(DATA_WIDTH).W)))
-        val ps2STUReadData = Output(Vec(p(STU_NUM), UInt(p(DATA_WIDTH).W)))
-
-        val ps1LDUReadValid = Input(Vec(p(LDU_NUM), Bool()))
-        val ps1LDUReadLoc = Input(Vec(p(LDU_NUM), UInt(p(PREG_WIDTH).W)))
-        val ps1LDUReadData = Output(Vec(p(LDU_NUM), UInt(p(DATA_WIDTH).W)))
-
-        val ps1SYSEXUReadValid = Input(Vec(p(SYS_ALU_NUM), Bool()))
-        val ps2SYSEXUReadValid = Input(Vec(p(SYS_ALU_NUM), Bool()))
-        val ps1SYSEXUReadLoc = Input(Vec(p(SYS_ALU_NUM), UInt(p(PREG_WIDTH).W)))
-        val ps2SYSEXUReadLoc = Input(Vec(p(SYS_ALU_NUM), UInt(p(PREG_WIDTH).W)))
-        val ps1SYSEXUReadData = Output(Vec(p(SYS_ALU_NUM), UInt(p(DATA_WIDTH).W)))
-        val ps2SYSEXUReadData = Output(Vec(p(SYS_ALU_NUM), UInt(p(DATA_WIDTH).W)))
+        val prf_read_resp_1 = Output(Vec(p(PRF_BANKNUM), UInt(p(DATA_WIDTH).W)))
+        val prf_read_resp_2 = Output(Vec(p(PRF_BANKNUM), UInt(p(DATA_WIDTH).W)))
 
         val aluResult = Input(Vec(p(ALU_NUM), new ALUResult))
         val lduResult = Input(Vec(p(LDU_NUM), new LDUResult))
         val sysResult = Input(Vec(p(SYS_ALU_NUM), new SysResult))
+        val multResult = Input(Vec(p(MULT_NUM), new ALUResult))
+        val divResult = Input(Vec(p(DIV_NUM), new ALUResult))
+        val remResult = Input(Vec(p(DIV_NUM), new ALUResult))
 
         val freeRegIdBufferResp = Input(Vec(p(FETCH_WIDTH), new FreeRegIdBufferReadResp))
         // may account for busytable checkpoint
-        val busyTableCheckPoints = Output(Vec(p(FETCH_WIDTH), UInt(realPregNum.W)))
-        val busyTableCheckPoint = Input(UInt(realPregNum.W)) 
+        val busyTableCheckPoints = Output(Vec(p(FETCH_WIDTH), UInt(preg_num.W)))
+        val busyTableCheckPoint = Input(new CheckPointInfo) 
         // busy table io
-        val busyTable = Output(UInt((realPregNum).W))
+        val busyTable = Output(UInt((preg_num).W))
         // prf wb queue full
-        val wb1_stall = Output(Bool())
+        val stall_wb1_alus = Output(Vec(p(ALU_NUM), Bool()))
+        val stall_wb1_ldus = Output(Vec(p(LDU_NUM), Bool()))
+        val stall_wb1_sys = Output(Vec(p(SYS_ALU_NUM), Bool()))
+        val stall_wb1_mult = Output(Vec(p(MULT_NUM), Bool()))
+        val stall_wb1_div = Output(Vec(p(DIV_NUM), Bool()))
+        val stall_wb1_rem = Output(Vec(p(DIV_NUM), Bool()))
     })
 
-    val pregs = Seq.fill(readPorts)(
-        Module(new PRFTable(bankNum, prfTableSize))
+    val pregs = Seq.tabulate(bank_num)(
+        b => Module(new PRFTable(perBankSize, b))
     )
 
-    val prfWbQueue = Module(new PRFWbQueue(bankNum * bankNum * bankNum, bankNum))
+    val prfWbQueue = Module(new PRFWbQueue)
 
     prfWbQueue.io.aluResult := io.aluResult
     prfWbQueue.io.lduResult := io.lduResult
     prfWbQueue.io.sysResult := io.sysResult
+    prfWbQueue.io.multResult := io.multResult
+    prfWbQueue.io.divResult := io.divResult
+    prfWbQueue.io.remResult := io.remResult
+    prfWbQueue.io.flush := io.flush
 
-    io.wb1_stall := !prfWbQueue.io.enqReady
+    io.stall_wb1_alus := prfWbQueue.io.alu_stalls
+    io.stall_wb1_ldus := prfWbQueue.io.ldu_stalls
+    io.stall_wb1_sys := prfWbQueue.io.sys_stalls
+    io.stall_wb1_mult := prfWbQueue.io.mult_stalls
+    io.stall_wb1_div := prfWbQueue.io.div_stalls
+    io.stall_wb1_rem := prfWbQueue.io.rem_stalls
 
-    for(i <- 0 until p(ALU_NUM)) {
-        val idx1 = i * 2
-        val idx2 = i * 2 + 1
+    for(b <- 0 until bank_num) {
+        pregs(b).io.read_reqs(0) := io.prf_read_reqs_1(b)
+        pregs(b).io.read_reqs(1) := io.prf_read_reqs_2(b)
 
-        io.ps1ALUReadData(i) := pregs(idx1).io.rdata
-        pregs(idx1).io.ren := io.ps1ALUReadValid(i)
-        pregs(idx1).io.raddr := Cat(Fill(prfTablePtrWidth - p(PREG_WIDTH), false.B), io.ps1ALUReadLoc(i))
+        io.prf_read_resp_1(b) := pregs(b).io.read_resps(0)
+        io.prf_read_resp_2(b) := pregs(b).io.read_resps(1)
+
+        pregs(b).io.write_req := prfWbQueue.io.deqs(b)
+    }
     
-        io.ps2ALUReadData(i) := pregs(idx2).io.rdata
-        pregs(idx2).io.ren := io.ps2ALUReadValid(i)
-        pregs(idx2).io.raddr := Cat(Fill(prfTablePtrWidth - p(PREG_WIDTH), false.B), io.ps2ALUReadLoc(i))        
-    }
-
-    for(i <- 0 until p(STU_NUM)) {
-        val idx1 = i * 2 + p(ALU_NUM) * 2
-        val idx2 = i * 2 + 1 + p(ALU_NUM) * 2
-
-        io.ps1STUReadData(i) := pregs(idx1).io.rdata
-        pregs(idx1).io.ren := io.ps1STUReadValid(i)
-        pregs(idx1).io.raddr := Cat(Fill(prfTablePtrWidth - p(PREG_WIDTH), false.B), io.ps1STUReadLoc(i))
-    
-        io.ps2STUReadData(i) := pregs(idx2).io.rdata
-        pregs(idx2).io.ren := io.ps2STUReadValid(i)
-        pregs(idx2).io.raddr := Cat(Fill(prfTablePtrWidth - p(PREG_WIDTH), false.B), io.ps2STUReadLoc(i))         
-    }
-
-    for(i <- 0 until p(LDU_NUM)) {
-        val idx1 = i + p(ALU_NUM) * 2 + p(STU_NUM) * 2
-
-        io.ps1LDUReadData(i) := pregs(idx1).io.rdata
-        pregs(idx1).io.ren := io.ps1LDUReadValid(i)
-        pregs(idx1).io.raddr := Cat(Fill(prfTablePtrWidth - p(PREG_WIDTH), false.B), io.ps1LDUReadLoc(i))   
-    }
-
-    // sys remain to do
-    for(i <- 0 until p(SYS_ALU_NUM)) {
-        val idx1 = i * 2 + p(ALU_NUM) * 2 + p(STU_NUM) * 2 + p(LDU_NUM)
-        val idx2 = i * 2 + 1 + p(ALU_NUM) * 2 + p(STU_NUM) * 2 + p(LDU_NUM)
-
-        io.ps1SYSEXUReadData(i) := pregs(idx1).io.rdata
-        pregs(idx1).io.ren := io.ps1SYSEXUReadValid(i)
-        pregs(idx1).io.raddr := Cat(Fill(prfTablePtrWidth - p(PREG_WIDTH), false.B), io.ps1SYSEXUReadLoc(i))
-    
-        io.ps2SYSEXUReadData(i) := pregs(idx2).io.rdata
-        pregs(idx2).io.ren := io.ps2SYSEXUReadValid(i)
-        pregs(idx2).io.raddr := Cat(Fill(prfTablePtrWidth - p(PREG_WIDTH), false.B), io.ps2SYSEXUReadLoc(i))        
-    }
-
-    // write pregs
-    for(b <- 0 until bankNum) {
-        for(i <- 0 until readPorts) {
-            pregs(i).io.wen(b) := prfWbQueue.io.deq(b).HasRd
-            pregs(i).io.waddr(b) := Cat(Fill(prfTablePtrWidth - p(PREG_WIDTH), false.B), prfWbQueue.io.deq(b).pd)
-            pregs(i).io.wdata(b) := prfWbQueue.io.deq(b).result
-        }
-    }
-
-    val busyTable = RegInit(0.U(realPregNum.W))
+    val busyTable = RegInit(0.U(preg_num.W))
     val busyTableAfterRenameVec = Seq.fill(p(FETCH_WIDTH))(
-        WireInit(0.U(realPregNum.W))
+        WireInit(0.U(preg_num.W))
     )
 
-    val busyTableAfterWb = Seq.fill(bankNum)(
-        WireInit(0.U(realPregNum.W))
+    val busyTableAfterWb = Seq.fill(bank_num)(
+        WireInit(0.U(preg_num.W))
     )
 
     for(i <- 0 until p(FETCH_WIDTH)) {
@@ -182,12 +118,12 @@ class PRF(implicit p: Parameters) extends Module {
         io.busyTableCheckPoints(i) := busyTableAfterRenameVec(i)
     }
 
-    for(i <- 0 until bankNum) {
-        busyTableAfterWb(i) := busyTable ^ (prfWbQueue.io.deq(i).HasRd << prfWbQueue.io.deq(i).pd) 
+    for(i <- 0 until bank_num) {
+        busyTableAfterWb(i) := busyTable ^ (prfWbQueue.io.deqs(i).HasRd << prfWbQueue.io.deqs(i).pd) 
     }
 
     busyTable := Mux(
-        io.flush, io.busyTableCheckPoint, 
+        io.flush, io.busyTableCheckPoint.busyTable, 
         busyTableAfterRenameVec.reduce(_|_) | busyTableAfterWb.reduce(_|_)
     )
 

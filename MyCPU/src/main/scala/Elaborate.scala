@@ -25,7 +25,7 @@ object Elaborate extends App {
     implicit val p: Parameters = 
         new RV64BTBConfig ++ new BaseRV64IConfig ++ 
         new GSharePredictorConfig ++ new L1CacheConfig ++
-        new UseSv32Config ++
+        new UseSv57Config ++
         new UseCustomLibraryConfig ++
         new StoreSetConfig
 
@@ -35,7 +35,7 @@ object Elaborate extends App {
     //     firtoolOptions
     // )
     circt.stage.ChiselStage.emitSystemVerilogFile(
-        new AXI4Crossbar(1, 2),
+        new L1Core,
         Array("--output-annotation-file", "/home/ljk/Arch/ChiselLab/MyCPUAnno.json") ++ args,
         firtoolOptions
     )
